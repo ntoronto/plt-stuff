@@ -4,16 +4,16 @@
          scribble/eval
          scribble/core
          (for-label typed/racket/base
-                    "../bigfloat.rkt"))
+                    "../bigfloat-typed.rkt"))
 
 (provide make-bigfloat-eval
          bfexamples
          (for-label (all-from-out typed/racket/base
-                                  "../bigfloat.rkt")))
+                                  "../bigfloat-typed.rkt")))
 (define (make-bigfloat-eval)
   (define eval (make-base-eval))
   (eval '(require typed/racket/base))
-  (eval '(require "../bigfloat.rkt"))
+  (eval '(require "../bigfloat-typed.rkt"))
   (eval '(require "maybe-rename.rkt"))
   (λ (v)
     (cond [(syntax? v)  (eval #`(maybe-rename #,v))]

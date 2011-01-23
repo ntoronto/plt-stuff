@@ -2,13 +2,6 @@ To do (roughly in priority order)
 ---------------------------------
 make sure argument reduction and computations are done at the input precision
 
-documentation:
- - add error cases
- - finish statistical
- - some functions proved correctly rounded
- - some functions exhaustively tested at low precisions
- - note that bfcanonicalize maintains precision of input, same with bfnext and bfprev (mostly)
-
 deterministic tests
  - all: exercise all execution paths
  - all: exhaustive near condition boundaries
@@ -23,8 +16,6 @@ deterministic tests
  - bfatan, bfasin, bfacos
  - bfsinh, bfcosh, bftanh
  - bfasinh, bfacosh, bfatanh
- - bflog-gamma, bfgamma, bflog-beta, beta
- - bferf, bferf^-1?
 
 random tests
  - all: make sure they exercise all execution paths if they can (i.e. bf> comparisions, but not bf=)
@@ -34,10 +25,12 @@ random tests
  - bfsum
  - bfsinh, bfcosh, bftanh
  - bfasinh, bfacosh, bfatanh
- - bflog-gamma, bfgamma, bflog-beta, beta
- - bferf, bferf^-1?
 
-functions
+documentation:
+ - add error cases
+ - finish statistical
+
+new functions
  - bfprod?
  - log-gamma, gamma, log-beta, beta
  - erf, erf^-1?
@@ -60,4 +53,3 @@ fast exact cases:
  - bflogb, bflog2, bflog10
 
 see if bf/ can use bfsqrt's remainder trick (start with extra bits, adjust the last rounding bit only when the remainder is nonzero)
-

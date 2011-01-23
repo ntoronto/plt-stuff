@@ -6,18 +6,20 @@
 @title{Bigfloat: Arbitrary-precision floating-point numbers and functions}
 @author{@(author+email "Neil Toronto" "neil.toronto@gmail.com")}
 
-@defmodule["../bigfloat.rkt"]
+@defmodule["../bigfloat-typed.rkt"]
 
 @section[#:tag "intro"]{Introduction}
 
-Bigfloat is a pure Racket library for representing and manipulating floating-point numbers with any precision. It is verified through deterministic and randomized testing (but not proved) to correctly implement its operations, and correctly round its results.
+Bigfloat is a pure Racket library for representing and manipulating floating-point numbers with any precision.
 
-Bigfloat is written in Typed Racket. Of course, to untyped Racket programs it looks untyped, with the types automagically converted to contracts.
+Eventually, all of its operations will be verified, through deterministic and randomized testing, to compute the right answers and correctly round them when they can't be exactly represented. Curently, most operations have passed thousands of randomized tests up to 16k bits precision. Arithmetic, square root, comparisons and conversions additionally pass exhaustive tests up to 10 bits precision, and use algorithms that are proven correct. The constants @(racket bf-pi), @(racket bf-e), @(racket bf-log-2) and @(racket bf-log-10) pass exhaustive tests up to 65k bits precision.
+
+Bigfloat is written in Typed Racket but can be used naturally in untyped programs.
 
 @section[#:tag "quick"]{Quick start}
 
 @(itemlist #:style 'ordered
-@item{Require the Bigfloat module with @(racket (require "bigfloat.rkt")).}
+@item{Require the Bigfloat module using @(racket (require "bigfloat-typed.rkt")) or @(racket (require "bigfloat-untyped.rkt")).}
 @item{Set the working precision using @(racket (bf-bits <some-number-of-bits>)).}
 @item{Convert any @(racket Real) value or properly formatted @(racket String) to a @(racket bigfloat) using @(racket (bf <some-real-or-string>)).}
 @item{Operate on @(racket bigfloat) values using ``bf''-prefixed functions like @(racket bf+) and @(racket bfsin).}
@@ -37,9 +39,9 @@ There are a few reasons.
 @(bfexamples (bf-bits 16) (bfsqrt (bf 3))
              (bf-bits 179) (bf-pi))
 
-A flonum has a 53-bit* @margin-note*{* The most significant bit in a flonum's significand is implicit, leaving one more bit for the sign, for a total of 1+11+52=64 bits.} @italic{significand} (we'll say it has 53 bits of @italic{precision}) and an 11-bit @italic{exponent}. A @(racket bigfloat) has an arbitrary precision of at least 2 bits and an unbounded exponent range.
+A flonum has a 53-bit @italic{significand} (we'll say it has 53 bits of @italic{precision}) and an 11-bit @italic{exponent}. A @(racket bigfloat) has an arbitrary precision of at least 2 bits and an unbounded exponent range.
 
-@bold{Reason:} To compute ridiculously large or small numbers with confidence.
+@bold{Reason:} To compute ridiculously large or small numbers with some degree of confidence.
 
 @(bfexamples (bf-bits 64)
              (bfexp (bfexp (bfexp (bf 4))))
@@ -54,16 +56,16 @@ The exponent in the result of @(racket (bfexp (bfexp (bfexp (bf 4))))) is well o
 
 Of course, implementations that don't adhere to the standard may not be so accurate, and implementations that @italic{claim} to adhere to the standard may not, either.
 
-Because Bigfloat has been verified correct, you can use it to verify, in turn, the floating-point implementation on your CPU. For example, on my laptop, evaluating @(racket (exp 400)) results in @(racket 5.221469689764346e+173). But Bigfloat says it should be
+You can use Bigfloat to verify the floating-point implementation on your CPU. For example, on my laptop, evaluating @(racket (exp 400)) results in @(racket 5.221469689764346e+173). Note the last four decimal digits in the significand: @(racket 4346). Bigfloat says the answer should be
 
 @(bfexamples (bf-bits 53)
              (bigfloat->float (bfexp (bf 400))))
 
-My laptop is about 184.2 ulps off, meaning the trailing 7.5 bits are wrong*. @margin-note*{* See @(racket bfulp) for the meaning of @italic{ulp}, and @(racket exact-ulp-error) and @(racket bfulp-error) for measuring error in ulps.} On the other hand, my desktop computes @(racket 5.221469689764144e+173) as it should.
+So the last four decimal digits should be @(racket 4144). On the other hand, my desktop computes @(racket 5.221469689764144e+173) as it should.
 
 @subsection[#:tag "why not bigfloat"]{When shouldn't I use Bigfloat?}
 
-When you need speed. Bigfloat functions can be hundreds to thousands times slower than flonum functions.
+Speed: Bigfloat functions can be hundreds to thousands times slower than flonum functions.
 
 That's not to say that they're @italic{inefficient}. For example, @(racket bflog) implements the algorithm with the best known asymptotic complexity. It just doesn't run directly in silicon, and it can't take shortcuts that implementations using fixed precision can take.
 
@@ -83,23 +85,27 @@ However, it's something that can be done independently and piecemeal, so anyone 
 
 All @italic{bits} but the last should be correct, and the last bit should be correctly rounded. This doesn't guarantee that the last digit will be.
 
-A decimal digit represents, at most, log(10)/log(2) bits, which is about 3.3. Because the decimal/bit boundary never lines up except at the decimal point, when Bigfloat prints fractional digits, it always has to output at least one trailing digit that represents fewer than 3.3 bits. So it's actually rare for the last digit of a @(racket bigfloat)'s string representation to be correct.
+A decimal digit represents, at most, log(10)/log(2) bits, which is about 3.3. Because the decimal/bit boundary never lines up except at the decimal point, the last decimal digit of any @(racket bigfloat) must represent fewer than 3.3 bits. So the last digit of a @(racket bigfloat)'s decimal string is more often wrong than not, and it's not a problem.
+
+@subsection[#:tag "why junk"]{Why are there junk digits on the end of @(racket (bf 1.1)) when it's printed?}
+
+That's approximately the value of flonum @(racket 1.1). Prefixing @(racket 1.1) with @tt{#e} will make it a rational, equivalent to @(racket (bf 11/10)), making most of the junk go away. In general, use exact rationals to create decimal constants.
 
 @section{Bigfloat API}
 
 @defparam[bf-bits precision Exact-Positive-Integer]{
-A @seclink["Parameters" #:doc '(lib "scribblings/reference/parameters.scrbl")]{parameter} that determines the precision of new @(racket bigfloat) values. Return values from Bigfloat library functions are @(racket bigfloat)s with @(racket (bf-bits)) precision, no matter what the precisions of the inputs. (There are a few exceptions to this rule, and none of them are standard mathematical functions. The exceptions are noted in this manual.)
+A @seclink["Parameters" #:doc '(lib "scribblings/reference/parameters.scrbl")]{parameter} that determines the precision of new @(racket bigfloat) values. Return values from Bigfloat library functions are @(racket bigfloat)s with @(racket (bf-bits)) precision, no matter what the precisions of the inputs.* @margin-note*{* There are a handful of exceptions to this rule, and none of them are standard mathematical functions. The exceptions are noted in this manual.}
 
-This parameter has a guard that ensures @(racket (bf-bits)) > @(racket 1) because one-bit floats can't be correctly rounded.
+This parameter has a guard that ensures @(racket (bf-bits) > 1) because one-bit floats can't be correctly rounded.
 }
 
 @defstruct*[bigfloat ([sig Integer] [exp Integer])]{
-@margin-note*{* If you must construct a floating-point number from scratch, consider @(racket new-bigfloat), which rounds the result to @(racket (bf-bits)) bits.}
-Represents an arbitrary-precision floating-point value. Generally, you would not construct @(racket bigfloat)s directly, but use @(racket bf) instead to convert @(racket Real) and @(racket String) values*.
+@margin-note*{* If you must construct a floating-point number from scratch, consider using @(racket new-bigfloat), which rounds the result to @(racket (bf-bits)) bits.}
+Represents an arbitrary-precision floating-point value. Generally, you wouldn't construct @(racket bigfloat)s directly, but use @(racket bf) instead to convert @(racket Real) and @(racket String) values*.
 
-There are no @(racket bigfloat)s that represent @(racket +inf.0), @(racket -inf.0), or @(racket +nan.0). Because exponents are unbounded, infinity rarely comes up. Bigfloat library functions raise exceptions instead of returning NaNs.
+There are no @(racket bigfloat)s corresponding to flonums @(racket +inf.0), @(racket -inf.0) and @(racket +nan.0). Because exponents are unbounded, infinity rarely comes up. Bigfloat library functions raise exceptions instead of returning NaNs.
 
-A @(racket bigfloat) consists of a significand and an exponent, both signed. If @(racket x) = @(racket (bigfloat s e)), its rational value is @(racket (* s (expt 2 e))). Its precision is @(racket (integer-length (abs s))), or @(racket (bigfloat-bits x)).
+A @(racket bigfloat) consists of a significand and an exponent, both signed. If @(racket x = (bigfloat s e)), its rational value is @(racket (* s (expt 2 e))). Its precision is @(racket (integer-length (abs s))), or @(racket (bigfloat-bits x)).
 }
 
 @subsection[#:tag "construction"]{Construction and conversion}
@@ -210,15 +216,17 @@ Returns the precision, in bits, of a @(racket bigfloat).
 @defproc[(bfulp [x bigfloat]) Exact-Rational]{
 Returns the value of the @italic{unit in last place}, or the value of the lowest significant bit in the significand.
 
-Think of an ulp as the smallest change that can possibly be made to a @(racket bigfloat) without changing its exponent. (To actually make these ``smallest changes,'' see @(racket bfnext) and @(racket bfprev).)
+Think of an ulp as the smallest change that can possibly be made to a @(racket bigfloat) without changing its exponent. To actually make these ``smallest changes,'' use @(racket bfnext) and @(racket bfprev).
 
 @(bfexamples (bfulp (bf 1/7))
              (bf (bfulp (bf 1/7)))
              (bf- (bf 1/7) (bfprev (bf 1/7))))
+  
+To measure floating-point error in ulps, use @(racket exact-ulp-error), @(racket bfulp-error) and @(racket bftest-error).
 }
 
 @defproc[(bflog2-ulp [x bigfloat]) Integer]{
-Returns log-base-two of @(racket (bfulp x)). As a happy accident due to how the Bigfloat library represents floating-point numbers, @(racket bflog2-ulp) is a synonym for @(racket bigfloat-exp).
+Returns log-base-two of @(racket (bfulp x)).* @margin-note*{* @(racket bflog2-ulp) is a synonym for @(racket bigfloat-exp) because of how the Bigfloat library represents floating-point numbers.}
 }
 
 @defproc[(bfsgn [x bigfloat]) Fixnum]{
@@ -237,7 +245,7 @@ Predicate versions of @(racket bfsgn).
 }
 
 @defproc[(bfinteger? [x bigfloat]) Boolean]{
-Returns @(racket #t) if and only if @(racket (bigfloat->rational x)) = @(racket (bigfloat->integer x)).
+Returns @(racket #t) if and only if @(racket (bigfloat->rational x) = (bigfloat->integer x)).
 }
 
 @subsection[#:tag "comparison"]{Comparison}
@@ -285,7 +293,7 @@ Equivalent to @(racket (bf* x (bf i))), but a little faster.
 }
 
 @defproc[(bfexact-quotient [x bigfloat] [y bigfloat]) bigfloat]{
-Returns @(racket (bigfloat->integer (bf/ x y))), except it uses enough bits in calculating the result that the result is exact. (It may be that @(racket (bigfloat->integer (bf/ x y))) is so large that it cannot be represented using @(racket (bf-bits)) bits.)
+Returns @(racket (bigfloat->integer (bf/ x y))), except it uses enough bits in calculating the result that the result is exact. (It may be that @(racket (bigfloat->integer (bf/ x y))) is so large that it can't be exactly represented using @(racket (bf-bits)) bits.)
 }
 
 @defproc[(bfremainder [x bigfloat] [y bigfloat]) bigfloat]{
@@ -293,7 +301,7 @@ Returns @(racket (bf- x (bf*i y (bfexact-quotient x y)))), but computed using en
 }
 
 @defproc[(bfsum [xs (Listof bigfloat)]) bigfloat]{
-Returns the sum of the @(racket bigfloat)s in @(racket xs), computed using enough bits that the result is exact. Just using @(racket foldl) or a loop to add will accumulate rounding errors; use @(racket bfsum) instead.
+Returns the sum of the @(racket bigfloat)s in @(racket xs), computed using enough bits that the result is exact. Using @(racket foldl) or a loop to add will accumulate rounding errors, so use @(racket bfsum) instead whenever possible.
 }
 
 @deftogether[(
@@ -304,6 +312,7 @@ Returns the sum of the @(racket bigfloat)s in @(racket xs), computed using enoug
 @defproc[(bf*2^ [x bigfloat] [i Integer]) bigfloat]
 @defproc[(bf/2^ [x bigfloat] [i Integer]) bigfloat])]{
 Equivalent to @(racket (bf* x (bf 2))), @(racket (bf/ x (bf 2))), @(racket (bf* x (bf 4))), @(racket (bf/ x (bf 4))), @(racket (bf* x (bf (expt 2 i)))), and @(racket (bf/ x (bf (expt 2 i)))), but much faster because they only adjust the exponent.
+
 }
 
 @subsection[#:tag "constants"]{Cached constants}
@@ -323,7 +332,7 @@ In addition to binding @(racket id), for debugging purposes, @(racket define-bf-
              (bf-1/7-clear)
              bf-1/7-cache)
 
-Don't write programs that depend on @(racket id-cache)'s type or contents, or on how @(racket id) builds the cache.
+Don't write programs that depend on @(racket id-cache)'s type or contents, or on how or when @(racket id) populates the cache.
 }
 
 @deftogether[(
@@ -364,12 +373,10 @@ Cached constants for pi, @(racket (bflog (bf 2))), @(racket (bflog (bf 10))), an
 @defproc[(bfacosh [x bigfloat]) bigfloat]
 @defproc[(bfatanh [x bigfloat]) bigfloat])]{
 Standard mathematical functions: square root, exponential, exponentials with arbitrary base, logarithm, logarithms with arbitrary base, trigonometric, inverse trigonometric, hyperbolic, and inverse hyperbolic.
-
-(Note: inverse hyperbolic functions aren't implemented yet.)
 }
 
 @defproc[(bfagm [x bigfloat] [y bigfloat]) bigfloat]{
-Computes the @hyperlink["http://en.wikipedia.org/wiki/Arithmetic-geometric_mean"]{arithmetic-geometric mean} of @(racket x) and @(racket y). This is typically not directly useful, but it is integral to some algorithms such as the one that computes @(racket bflog).
+Computes the @hyperlink["http://en.wikipedia.org/wiki/Arithmetic-geometric_mean"]{arithmetic-geometric mean} of @(racket x) and @(racket y). Typically, this isn't directly useful, but it is integral to some asymptotically fast algorithms such as the one that computes @(racket bflog).
 }
 
 @margin-note*{Some Bigfloat functions, like @(racket bf>), use @(racket bfceiling-log2) and @(racket bffloor-log2) to make fast, coarse-grained semidecisions before making relatively computationally intensive, fine-grained decisions.}
@@ -416,7 +423,7 @@ However, Bigfloat functions can't guarantee that @italic{compositions} introduce
 @defproc[(bfulp-error [x bigfloat] [y bigfloat]) bigfloat]{
 Returns the absolute difference, in ulps with respect to @(racket x), between @(racket x) and @(racket r). (For the definition of ulp, see @(racket bfulp).) Assuming that @(racket y) is exact, the result itself is correct within 0.5 ulps. To ensure the result means something, @(racket bfulp-error) requires that @(racket y) have at least as much precision as @(racket x).
 
-Use this when it is not possible to test the accuracy of @(racket x) against an exact value.
+Use this when it isn't possible to test the accuracy of @(racket x) against an exact value.
 
 @(bfexamples (bfulp-error (bfexp (bf 2))
                           (parameterize ([bf-bits  (* 4 (bf-bits))])
@@ -429,7 +436,7 @@ Use this when it is not possible to test the accuracy of @(racket x) against an 
 
 @defform*[[(bftest-error expr)
            (bftest-error expr bits)]]{
-Evaluates @(racket expr) at @(racket (bf-bits)) precision. The first form then evaluates @(racket expr) at @(racket (* 2 (bf-bits))) precision, and returns the difference in ulps as given by @(racket bfulp-error). The second form allows you to set the number of bits for the second evaluation.
+Evaluates @(racket expr) at @(racket (bf-bits)) precision. The first form then evaluates @(racket expr) at @(racket (* 2 (bf-bits))) precision, and returns the difference in ulps as given by @(racket bfulp-error). The second form evaluates @(racket expr) the second time at @(racket bits) precision.
 
 @(bfexamples (bftest-error (bfexp (bf 2)))
              (bftest-error (bfexp (bf 2)) (* 4 (bf-bits))))
@@ -470,11 +477,11 @@ Return the next largest or next smallest @(racket bigfloat) with the same expone
 @(bfexamples (bfnext (bf 1))
              (bfulp-error (bf 1) (bfnext (bf 1))))
 
-@bold{These functions can (rarely) return values with different precisions than their inputs.}
+@bold{These functions don't necessarily return values with @(racket (bf-bits)) precision.} Additionally, they can (rarely) return values with different precisions than their inputs.
 }
 
 @defproc[(bfnormalize [x bigfloat]) bigfloat]{
-Returns a value close to @(racket x) or exactly @(racket x), but with exactly @(racket (bf-bits)) bits precision. If @(racket x) has more precision than @(racket (bf-bits)), it returns @(racket x) rounded to @(racket (bf-bits)) bits.
+Returns the closest @(racket bigfloat) with @(racket (bf-bits)) precision.
 
 @(bfexamples (bf-bits 128)
              (define x (bf 1/7))
@@ -497,10 +504,11 @@ Computes @(racket exprs) with @(racket bits) precision, then converts the result
 @margin-note*{When hashing @(racket bigfloat)s, the Bigfloat library canonicalizes them first to ensure that equality implies an equal hash.}
 Returns a new @(racket bigfloat) with no more bits of precision than are necessary to encode @(racket x) exactly, by removing all low-order zeros from the significand and adjusting the exponent. Two @(racket bigfloat)s are @(racket equal?) (equivalently @(racket bf=)) if and only if their canonicalized forms' struct fields are equal.
 
-Canonicalizing @(racket bigfloat)s will not change answers computed from them, but may change how they convert to strings.
+Canonicalizing @(racket bigfloat)s shouldn't change answers computed from them, but may change how they convert to strings.
 
-@(bfexamples (bf= (bf+ (bf 1/7) (bf 1/4))
-                  (bf+ (bfcanonicalize (bf 1/7)) (bfcanonicalize (bf 1/4))))
-             (bf2^ -2)
+@(bfexamples (bf2^ -2)
+             (equal? (bf2^ -2) (bfcanonicalize (bf2^ -2)))
              (bfcanonicalize (bf2^ -2)))
+  
+@bold{This function doesn't necessarily return a value with @(racket (bf-bits)) precision.}
 }
