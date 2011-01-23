@@ -1,0 +1,63 @@
+To do (roughly in priority order)
+---------------------------------
+make sure argument reduction and computations are done at the input precision
+
+documentation:
+ - add error cases
+ - finish statistical
+ - some functions proved correctly rounded
+ - some functions exhaustively tested at low precisions
+ - note that bfcanonicalize maintains precision of input, same with bfnext and bfprev (mostly)
+
+deterministic tests
+ - all: exercise all execution paths
+ - all: exhaustive near condition boundaries
+ - all: error cases
+ - simple (esp. bfceiling-log2, bffloor-log2)
+ - bfremainder (+ proof of correct rounding?)
+ - bfsum
+ - bfexp, bflog
+ - bfexpt, bfexp2, bfexp10
+ - bflogb, bflog2, bflog10
+ - bfsin, bfcos, bftan
+ - bfatan, bfasin, bfacos
+ - bfsinh, bfcosh, bftanh
+ - bfasinh, bfacosh, bfatanh
+ - bflog-gamma, bfgamma, bflog-beta, beta
+ - bferf, bferf^-1?
+
+random tests
+ - all: make sure they exercise all execution paths if they can (i.e. bf> comparisions, but not bf=)
+ - comparison (bf=, bf<, bf>=, bf!=, bf>, bf<=)
+ - simple (esp. bfceiling-log2, bffloor-log2)
+ - rounding (bfround, bftruncate, bffloor, bfceiling)
+ - bfsum
+ - bfsinh, bfcosh, bftanh
+ - bfasinh, bfacosh, bfatanh
+ - bflog-gamma, bfgamma, bflog-beta, beta
+ - bferf, bferf^-1?
+
+functions
+ - bfprod?
+ - log-gamma, gamma, log-beta, beta
+ - erf, erf^-1?
+ - logsumexp?
+
+testing/verify-fpu.rkt
+
+monitor reported TR bugs, alter code when they get fixed
+
+replace bfquotient with bfexact-quotient, returning an Integer?
+
+collapse all ``standard bf-bits extension, calculate, then round'' into a single, outer one?
+ - or have `with-bf-bits' not round if inside another?
+ - in any case, reduce nested `with-bf-bits' where possible (expt, logb, etc.)
+
+try Paterson-Smith on trig and inverse trig functions?
+
+fast exact cases:
+ - bfexpt, bfexp2, bfexp10
+ - bflogb, bflog2, bflog10
+
+see if bf/ can use bfsqrt's remainder trick (start with extra bits, adjust the last rounding bit only when the remainder is nonzero)
+

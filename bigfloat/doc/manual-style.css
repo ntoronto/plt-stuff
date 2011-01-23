@@ -1,0 +1,40 @@
+.examples {
+  width: 95%;
+  border: 1px solid #E5E5D2;
+  padding: 2px;
+  background-color: #F5F5E0;
+  margin-left: 2.5%;
+}
+
+.defmodule {
+  width: 95%;
+  border: 1px solid #E5E5D2;
+  padding: 2px;
+  background-color: #F5F5E0;
+  margin-left: 2.5%;
+}
+
+.boxed {
+  border: 1px solid #D9D9EF;
+  padding: 2px;
+  /* background-color: #E8E8FF; */
+}
+
+.refcolumn {
+  border: 1px dotted #B7B7A5;
+  padding: 2px;
+  /* background-color: #F5F5DC; */
+}
+
+.tocsub {
+  border: 1px dotted #E1E1D2;
+  padding: 2px;
+  /* background-color: #f0f0e0; */
+}
+
+.tocview {
+  border: 1px dotted #E1E1D2;
+  padding: 2px;
+  /* background-color: #f0f0e0; */
+}
+
