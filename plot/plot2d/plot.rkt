@@ -20,13 +20,12 @@
 (define plot2d-y-max (make-parameter 5))
 
 ;; plot2d : renderer ... -> 2d-plot-snip%
-(define (plot2d #:width [width (plot2d-width)]
+(define (plot2d renderer
+                #:width [width (plot2d-width)]
                 #:height [height (plot2d-height)]
                 #:x-min [x-min #f] #:x-max [x-max #f]
-                #:y-min [y-min #f] #:y-max [y-max #f]
-                . renderers)
-  (match-define (renderer2d f rx-min rx-max ry-min ry-max)
-    (apply mix2d renderers))
+                #:y-min [y-min #f] #:y-max [y-max #f])
+  (match-define (renderer2d f rx-min rx-max ry-min ry-max) renderer)
   (let ([x-min  (if x-min x-min (if rx-min rx-min (plot2d-x-min)))]
         [x-max  (if x-max x-max (if rx-max rx-max (plot2d-x-max)))]
         [y-min  (if y-min y-min (if ry-min ry-min (plot2d-y-min)))]
@@ -42,14 +41,15 @@
     (f (send snip get-area))
     snip))
 
-(define (plot2d/file name kind #:quality [quality 75]
-                     #:width [width (plot2d-width)]
-                     #:height [height (plot2d-height)]
-                     #:x-min [x-min #f] #:x-max [x-max #f]
-                     #:y-min [y-min #f] #:y-max [y-max #f]
-                     . renderers)
-  (match-define (renderer2d f rx-min rx-max ry-min ry-max)
-    (apply mix2d renderers))
+(define (plot2d->bitmap-file renderer output kind #:quality [quality 75]
+                             #:width [width (plot2d-width)]
+                             #:height [height (plot2d-height)]
+                             #:x-min [x-min #f] #:x-max [x-max #f]
+                             #:y-min [y-min #f] #:y-max [y-max #f])
+  (when (not (member kind '(png jpeg xmb xpm bmp)))
+    (raise-type-error 'plot2d->bitmap-file "one of (png jpeg xmb xpm bmp)" 
+                      kind))
+  (match-define (renderer2d f rx-min rx-max ry-min ry-max) renderer)
   (let ([x-min  (if x-min x-min (if rx-min rx-min (plot2d-x-min)))]
         [x-max  (if x-max x-max (if rx-max rx-max (plot2d-x-max)))]
         [y-min  (if y-min y-min (if ry-min ry-min (plot2d-y-min)))]
@@ -67,4 +67,67 @@
     (send area decorate-plot)
     (f area)
     (send area clip-to-whole)
-    (send bm save-file name kind quality)))
+    (send bm save-file output kind quality)))
+
+(define (plot2d->vector-file renderer output kind #:interactive [interactive #f]
+                             #:width [width (plot2d-width)]
+                             #:height [height (plot2d-height)]
+                             #:x-min [x-min #f] #:x-max [x-max #f]
+                             #:y-min [y-min #f] #:y-max [y-max #f])
+  (match-define (renderer2d f rx-min rx-max ry-min ry-max) renderer)
+  (let ([x-min  (if x-min x-min (if rx-min rx-min (plot2d-x-min)))]
+        [x-max  (if x-max x-max (if rx-max rx-max (plot2d-x-max)))]
+        [y-min  (if y-min y-min (if ry-min ry-min (plot2d-y-min)))]
+        [y-max  (if y-max y-max (if ry-max ry-max (plot2d-y-max)))])
+    (define x-size (- x-max x-min))
+    (define y-size (- y-max y-min))
+    (define dc
+      (case kind
+        [(ps)  (new post-script-dc%
+                    [interactive interactive]
+                    [parent #f] [use-paper-bbox #f] [as-eps #t]
+                    [width width] [height height] [output output])]
+        [(pdf)  (new pdf-dc%
+                     [interactive interactive]
+                     [parent #f] [use-paper-bbox #f]
+                     [width width] [height height] [output output])]
+        [(svg)  (new svg-dc%
+                     [width width] [height height] [output output] 
+                     [exists 'truncate/replace])]
+        [else  (raise-type-error 'plot2d->vector-file "one of (ps pdf svg)"
+                                 kind)]))
+    (send dc set-background (bg-color))
+    (send dc set-font (make-object font% (font-size) 'roman))
+    (send dc set-pen (fg-color) (pen-width) 'solid)
+    (send dc start-doc "Rendering plot")
+    (send dc start-page)
+    (send dc set-smoothing 'smoothed)
+    (define area (make-object 2d-plot-area% x-min x-max y-min y-max dc))
+    (send area decorate-plot)
+    (f area)
+    (send area clip-to-whole)
+    (send dc end-page)
+    (send dc end-doc)))
+
+
+(define (plot2d->file renderer output kind
+                      #:quality [quality 75]
+                      #:interactive [interactive #f]
+                      #:width [width (plot2d-width)]
+                      #:height [height (plot2d-height)]
+                      #:x-min [x-min #f] #:x-max [x-max #f]
+                      #:y-min [y-min #f] #:y-max [y-max #f])
+  (case kind
+    [(png jpeg xbm xpm bmp)
+     (plot2d->bitmap-file renderer output kind #:quality quality
+                          #:width width #:height height
+                          #:x-min x-min #:x-max x-max
+                          #:y-min y-min #:y-max y-max)]
+    [(ps pdf svg)
+     (plot2d->vector-file renderer output kind #:interactive interactive
+                          #:width width #:height height
+                          #:x-min x-min #:x-max x-max
+                          #:y-min y-min #:y-max y-max)]
+    [else  (raise-type-error 'plot2d->file
+                             "one of (png jpeg xmb xpm bmp ps pdf svg)"
+                             kind)]))

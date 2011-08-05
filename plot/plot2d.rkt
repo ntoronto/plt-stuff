@@ -50,9 +50,9 @@ Fill lowest contour level using clear
                  #:sym 'leftarrow #:x-min 0 #:x-max 1 #:y-min 0 #:y-max 1)))
 
 (time
- (plot2d (function sin -1/2 1)
-         (parametric cos sin -2 1
-                     #:color "blue")))
+ (plot2d (mix (function sin -1/2 1)
+              (parametric cos sin -2 1
+                          #:color "blue"))))
 
 (time
  (plot2d (vector-field values #:style 'scaled)
@@ -62,7 +62,7 @@ Fill lowest contour level using clear
 ; contour shading should line up with contour lines, no matter how weird
 (parameterize ([contour-samples  10])
   (define (f x y) (sqr (sin (- x y))))
-  (time (plot2d (shade f) (contour f))))
+  (time (plot2d (mix (shade f) (contour f)))))
 
 (define (norm mx my x y)
   (exp (* -1/2 (+ (sqr (- x mx)) (sqr (- y my))))))
@@ -72,10 +72,29 @@ Fill lowest contour level using clear
      (* 2 (norm 1 1 x y))
      (* 1.5 (norm 2 -2 x y))))
 
-(time (plot2d (shade f1) (contour f1)))
+(time (plot2d (mix (shade f1) (contour f1))))
 
 (time
  (parameterize ([title-string  "Survival Rate of Torsion Widgets"]
                 [x-axis-string "Torsion"]
                 [y-axis-string "Widgetyness"])
-   (plot2d/file "contour-test.png" 'png (contour f1))))
+   (plot2d->file (contour f1) "contour-test.png" 'png)))
+
+(time
+ (parameterize ([title-string  "Survival Rate of Torsion Widgets"]
+                [x-axis-string "Torsion"]
+                [y-axis-string "Widgetyness"])
+   (plot2d->file (contour f1) "contour-test.ps" 'ps)))
+
+(time
+ (parameterize ([title-string  "Survival Rate of Torsion Widgets"]
+                [x-axis-string "Torsion"]
+                [y-axis-string "Widgetyness"])
+   (plot2d->file (mix (shade f1) (contour f1))
+                 "contour-test.pdf" 'pdf)))
+
+(time
+ (parameterize ([title-string  "Survival Rate of Torsion Widgets"]
+                [x-axis-string "Torsion"]
+                [y-axis-string "Widgetyness"])
+   (plot2d->file (contour f1) "contour-test.svg" 'svg)))
