@@ -1,1 +1,0 @@
-("5.1.2" ("f76fe02c6d436b0b955bd77183b176bca531dbfa" . "c76e18eccfd0523870f2b71e58c7fff22535876d") (collects #"racket" #"base.rkt") (collects #"racket" #"flonum.rkt") (collects #"racket" #"fixnum.rkt") (collects #"racket" #"list.rkt") (collects #"racket" #"match.rkt") (collects #"racket" #"base" #"lang" #"reader.rkt"))
