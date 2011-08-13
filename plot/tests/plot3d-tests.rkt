@@ -2,6 +2,9 @@
 
 (require "../plot3d.rkt")
 
+(time
+ (plot3d (parametric3d (λ (t) (vector t t t)) 0 8000)))
+
 (let ()
   (define xs (build-list 10000 (λ (n) (/ 1 (- (random) 0.5)))))
   (define ys (build-list 10000 (λ (n) (/ 1 (- (random) 0.5)))))

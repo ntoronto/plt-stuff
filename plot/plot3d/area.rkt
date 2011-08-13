@@ -30,7 +30,7 @@
 (define plot3d-fg-color (make-parameter "black"))
 (define plot3d-bg-color (make-parameter "white"))
 
-(define plot3d-font-size (make-parameter 8))
+(define plot3d-font-size (make-parameter 11))
 (define plot3d-font-family (make-parameter 'roman))
 
 (define plot3d-pen-width (make-parameter 1))
@@ -41,7 +41,8 @@
 
 (define 3d-plot-area%
   (class plot-area%
-    (init-field x-min x-max y-min y-max z-min z-max)
+    (init-field x-tick-fun y-tick-fun z-tick-fun
+                x-min x-max y-min y-max z-min z-max)
     (init the-dc)
     
     (super-make-object the-dc)
@@ -74,23 +75,49 @@
       (when rz-min (set! clip-z-min (max z-min rz-min)))
       (when rz-max (set! clip-z-max (min z-max rz-max))))
     
-    (define-values (dc-x-size dc-y-size) (send this get-size))
-    (define char-width (send this get-char-width))
+    (define x-ticks (x-tick-fun x-min x-max))
+    (define y-ticks (y-tick-fun y-min y-max))
+    (define z-ticks (z-tick-fun z-min z-max))
+    
+    (define max-x-tick-label-width
+      (apply max (map (λ (t) (send this get-text-width (tick-label t)))
+                      x-ticks)))
+    
+    (define max-y-tick-label-width
+      (apply max (map (λ (t) (send this get-text-width (tick-label t)))
+                      y-ticks)))
+    
+    (define max-z-tick-label-width
+      (apply max (map (λ (t) (send this get-text-width (tick-label t)))
+                      z-ticks)))
+    
+    (define max-tick-label-width
+      (max max-x-tick-label-width
+           max-y-tick-label-width
+           max-z-tick-label-width))
+    
+    (define max-bottom-tick-label-width
+      (max max-x-tick-label-width
+           max-y-tick-label-width))
+    
     (define char-height (send this get-char-height))
+
+    (define-values (dc-x-size dc-y-size) (send this get-size))
     
     (define x-margin
-      (+ (* 10 char-width)
-         (plot3d-pen-gap)
-         (* 1/2 (plot3d-tick-size))))
+      (+ (* 3/2 char-height)                            ; x/y axis label
+         max-tick-label-width                           ; x/y/z tick labels
+         (plot3d-pen-gap) (* 1/2 (plot3d-tick-size))))  ; x/y/z axis ticks
     
     (define area-x-size
-      (- dc-x-size (* 2 x-margin)))
+      (- dc-x-size x-margin
+         (* 3/2 char-height)                            ; x/y axis label
+         max-bottom-tick-label-width                    ; x/y tick labels
+         (plot3d-pen-gap) (* 1/2 (plot3d-tick-size))))  ; x/y axis ticks
     
     (define y-margin
-      (+ (* 1/2 (plot3d-tick-size))
-         (plot3d-pen-gap)
-         char-height
-         (* 2 char-height)))
+      (+ (* 1/2 (plot3d-tick-size)) (plot3d-pen-gap)  ; x/y axis ticks
+         (* 3 char-height)))
     
     (define area-y-size
       (- dc-y-size
@@ -99,7 +126,6 @@
          (if (plot3d-title)
              (* 3/2 char-height)
              0)))
-    
     
     (define/public (get-x-min) x-min)
     (define/public (get-x-max) x-max)
@@ -222,11 +248,11 @@
         (add-line (vector x-max y-max z1) (vector x-max y-max z2))
         (add-line (vector x-min y-max z1) (vector x-min y-max z2))))
     
-    (define (add-x-ticks ticks)
+    (define (add-x-ticks)
       (define x-tick-half (dc->plot/y-size (* 1/2 (plot3d-tick-size))))
       (define x-tick-label-offset
         (dc->plot/y-size (+ (plot3d-pen-gap) (* 1/2 (plot3d-tick-size)))))
-      (for ([t  (in-list ticks)])
+      (for ([t  (in-list x-ticks)])
         (match-define (tick x x-str major?) t)
         (if major? (set-major-pen) (set-minor-pen))
         (add-line (vector x (+ y-min x-tick-half) z-min)
@@ -250,23 +276,11 @@
                (if (positive? (cos theta)) 'left 'right)]))
           (add-text x-str (vector x y z-min) anchor))))
     
-    (define (add-x-label)
-      (define x (* 1/2 (+ x-min x-max)))
-      (define offset
-        (dc->plot/y-size (+ (* 1/2 (plot3d-tick-size))
-                            (plot3d-pen-gap)
-                            (* 2 char-height))))
-      (define-values (y angle-offset)
-        (cond [(positive? (cos theta))  (values (- y-min offset) 0)]
-              [else                     (values (+ y-max offset) pi)]))
-      (define angle (+ angle-offset (plot-dir->dc-angle (vector 1 0 0))))
-      (add-text (plot3d-x-label) (vector x y z-min) 'top angle))
-    
-    (define (add-y-ticks ticks)
+    (define (add-y-ticks)
       (define y-tick-half (dc->plot/x-size (* 1/2 (plot3d-tick-size))))
       (define y-tick-label-offset
         (dc->plot/x-size (+ (plot3d-pen-gap) (* 1/2 (plot3d-tick-size)))))
-      (for ([t  (in-list ticks)])
+      (for ([t  (in-list y-ticks)])
         (match-define (tick y y-str major?) t)
         (if major? (set-major-pen) (set-minor-pen))
         (add-line (vector (+ x-min y-tick-half) y z-min)
@@ -290,19 +304,31 @@
                (if (negative? (sin theta)) 'right 'left)]))
           (add-text y-str (vector x y z-min) anchor))))
     
-    (define (add-y-label)
-      (define y (* 1/2 (+ y-min y-max)))
+    (define (add-x-label)
+      (define angle-offset (if (positive? (cos theta)) 0 pi))
+      (define x-axis-angle (+ angle-offset (plot-dir->dc-angle (vector 1 0 0))))
+      (define y-axis-angle (+ angle-offset (plot-dir->dc-angle (vector 0 1 0))))
       (define offset
-        (dc->plot/x-size (+ (* 1/2 (plot3d-tick-size))
-                            (plot3d-pen-gap)
-                            (* 2 char-height))))
-      (define-values (x angle-offset)
-        (cond [(negative? (sin theta))  (values (+ x-max offset) 0)]
-              [else                     (values (- x-min offset) pi)]))
-      (define angle (+ angle-offset (plot-dir->dc-angle (vector 0 1 0))))
-      (add-text (plot3d-y-label) (vector x y z-min) 'top angle))
+        (dc->plot/y-size (+ (* 1/2 (plot3d-tick-size)) (plot3d-pen-gap)
+                            (* (abs (cos y-axis-angle)) max-x-tick-label-width)
+                            (* (abs (sin y-axis-angle)) char-height)
+                            (* 1/2 char-height))))
+      (define y (if (positive? (cos theta)) (- y-min offset) (+ y-max offset)))
+      (add-text (plot3d-x-label) (vector x-mid y z-min) 'top x-axis-angle))
     
-    (define (add-z-ticks ticks)
+    (define (add-y-label)
+      (define angle-offset (if (negative? (sin theta)) 0 pi))
+      (define x-axis-angle (+ angle-offset (plot-dir->dc-angle (vector 1 0 0))))
+      (define y-axis-angle (+ angle-offset (plot-dir->dc-angle (vector 0 1 0))))
+      (define offset
+        (dc->plot/x-size (+ (* 1/2 (plot3d-tick-size)) (plot3d-pen-gap)
+                            (* (abs (cos x-axis-angle)) max-y-tick-label-width)
+                            (* (abs (sin x-axis-angle)) char-height)
+                            (* 1/2 char-height))))
+      (define x (if (negative? (sin theta)) (+ x-max offset) (- x-min offset)))
+      (add-text (plot3d-y-label) (vector x y-mid z-min) 'top y-axis-angle))
+    
+    (define (add-z-ticks)
       (define half (dc->plot/horiz-size (* 1/2 (plot3d-tick-size))))
       (define offset (dc->plot/horiz-size (+ (plot3d-pen-gap)
                                              (* 1/2 (plot3d-tick-size)))))
@@ -312,7 +338,7 @@
       (match-define (vector ldx ldy) (v* horiz offset))
       (define x (if (positive? (cos theta)) x-min x-max))
       (define y (if (negative? (sin theta)) y-min y-max))
-      (for ([t  (in-list ticks)])
+      (for ([t  (in-list z-ticks)])
         (match-define (tick z z-str major?) t)
         (if major? (set-major-pen) (set-minor-pen))
         (add-line (vector (- x dx) (- y dy) z)
@@ -326,7 +352,7 @@
                       [else                     x-max]))
       (define y (cond [(negative? (sin theta))  y-min]
                       [else                     y-max]))
-      (add-text (plot3d-z-label) (vector x y (+ z-max offset)) 'bottom))
+      (add-text (plot3d-z-label) (vector x y (+ z-max offset)) 'bl))
     
     (define render-list empty)
     
@@ -339,22 +365,20 @@
           (send this get-text-extent (plot3d-title)))
         (send this draw-text/raw (plot3d-title) (* 1/2 dc-x-size) 0 'top)))
     
-    (define/public (start-plot x-ticks y-ticks z-ticks)
+    (define/public (start-plot)
       (send this clear)
       (add-title)
       
       (set! render-list empty)
       (add-borders)
-      (add-x-ticks (x-ticks x-min x-max))
-      (add-y-ticks (y-ticks y-min y-max))
-      (add-z-ticks (z-ticks z-min z-max))
+      (add-x-ticks)
+      (add-y-ticks)
+      (add-z-ticks)
       (add-x-label)
       (add-y-label)
       (add-z-label))
     
-    (define light (plot->view (vector (* 1/2 (+ x-min x-max))
-                                      (* 1/2 (+ y-min y-max))
-                                      (+ z-max (* 5 (- z-max z-min))))))
+    (define light (plot->view (vector x-mid y-mid (+ z-max (* 5 z-size)))))
     
     (define (get-light-values s)
       (let/ec return

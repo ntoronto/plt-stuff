@@ -7,11 +7,10 @@
 
 (time
  (plot2d (mix (histogram '((a . -1) (b . 2.6) (c . 4) (d . 3.1))
-                         1 2
                          #:bar-color "blue"
                          #:line-color "white" #:line-style 'long-dash)
               (histogram '((a . 1) (b . 2.6) (c . 4) (d . 3.1))
-                         2.1 3.1 0
+                         0 #:x-min 2.1 #:x-max 3.1
                          #:bar-color "red"
                          #:line-color "black" #:line-width 3))
          #:title "Widgetyness of Widgets"

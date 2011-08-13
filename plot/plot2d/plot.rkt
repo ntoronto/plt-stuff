@@ -7,7 +7,7 @@
 (provide (all-defined-out))
 
 (define plot2d-width (make-parameter 400))
-(define plot2d-height (make-parameter 350))
+(define plot2d-height (make-parameter 400))
 
 (define plot2d-x-min (make-parameter -5))
 (define plot2d-x-max (make-parameter 5))
@@ -37,11 +37,12 @@
     (parameterize ([plot2d-title    title]
                    [plot2d-x-label  x-label]
                    [plot2d-y-label  y-label])
-      (define area (make-object 2d-plot-area% x-min x-max y-min y-max dc))
-      (send area start-plot x-ticks y-ticks)
+      (define area (make-object 2d-plot-area%
+                     x-ticks y-ticks x-min x-max y-min y-max dc))
+      (send area start-plot)
       (f area)
-      (send area end-plot)
-      bm)))
+      (send area end-plot))
+    bm))
 
 ;; plot2d : renderer2d -> image-snip%
 (define (plot2d renderer
@@ -104,17 +105,18 @@
                      [exists 'truncate/replace])]
         [else  (raise-type-error 'plot2d->vector-file "one of (ps pdf svg)"
                                  kind)]))
-    (define area (make-object 2d-plot-area% x-min x-max y-min y-max dc))
     (send dc start-doc "Rendering plot")
     (send dc start-page)
     (parameterize ([plot2d-title    title]
                    [plot2d-x-label  x-label]
                    [plot2d-y-label  y-label])
-      (send area start-plot x-ticks y-ticks)
+      (define area (make-object 2d-plot-area%
+                     x-ticks y-ticks x-min x-max y-min y-max dc))
+      (send area start-plot)
       (f area)
-      (send area end-plot)
-      (send dc end-page)
-      (send dc end-doc))))
+      (send area end-plot))
+    (send dc end-page)
+    (send dc end-doc)))
 
 (define (plot2d->file
          renderer output kind

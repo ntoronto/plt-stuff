@@ -38,7 +38,8 @@
                              (any->tick-label (vector-ref vec i))
                              #t))))
 
-(define (histogram cat-vals [x-min 1] [x-max 2] [y-min #f] [y-max #f]
+(define (histogram cat-vals [y-min #f] [y-max #f]
+                   #:x-min [x-min 1] #:x-max [x-max 2]
                    #:bar-color [bar-color (histogram-bar-color)]
                    #:bar-style [bar-style (histogram-bar-style)]
                    #:line-color [line-color (histogram-line-color)]

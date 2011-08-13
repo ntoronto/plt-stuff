@@ -11,9 +11,9 @@
 (define plot-area%
   (class object%
     (init-field dc)
-
+    
     (super-new)
-
+    
     (define/abstract view->dc)
     
     (send dc set-smoothing 'smoothed)
@@ -30,7 +30,7 @@
     
     (define background-color '(255 255 255))
     
-    (define font-size 8)
+    (define font-size 11)
     (define font-family 'roman)
     (define text-foreground '(0 0 0))
     
@@ -108,7 +108,7 @@
     
     (define (get-font)
       (send font-list find-or-create-font
-            font-size font-family 'normal 'normal))
+            font-size font-family 'normal 'normal #f 'default #t))
     
     (define (set-dc-font)
       (send dc set-font (get-font)))
@@ -123,6 +123,10 @@
     
     (define/public (get-text-extent str)
       (send dc get-text-extent str (get-font) #t 0))
+    
+    (define/public (get-text-width str)
+      (define-values (w _1 _2 _3) (get-text-extent str))
+      w)
     
     ;; text attributes: color
     

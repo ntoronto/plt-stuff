@@ -16,7 +16,7 @@
 
 (define plot2d-fg-color (make-parameter (make-object color% 0 0 0)))
 (define plot2d-bg-color (make-parameter (make-object color% 255 255 255)))
-(define plot2d-font-size (make-parameter 8))
+(define plot2d-font-size (make-parameter 11))
 (define plot2d-font-family (make-parameter 'roman))
 (define plot2d-pen-width (make-parameter 1))
 
@@ -24,7 +24,7 @@
 
 (define 2d-plot-area%
   (class plot-area%
-    (init-field x-min x-max y-min y-max)
+    (init-field x-tick-fun y-tick-fun x-min x-max y-min y-max)
     (init the-dc)
     
     (super-make-object the-dc)
@@ -36,20 +36,32 @@
     (send this set-background (plot2d-bg-color))
     (send this set-alpha 1.0)
     
-    (define-values (dc-x-size dc-y-size) (send this get-size))
-    (define char-width (send this get-char-width))
+    (define x-ticks (x-tick-fun x-min x-max))
+    (define y-ticks (y-tick-fun y-min y-max))
+    
+    (define max-y-tick-label-width
+      (for/fold ([max-w 0]) ([t  (in-list y-ticks)])
+        (define-values (w h _1 _2)  (send this get-text-extent (tick-label t)))
+        (values (max max-w w))))
+    
     (define char-height (send this get-char-height))
     
+    (define last-x-tick-label-width
+      (let-values ([(w h _1 _2)  (send this get-text-extent
+                                       (tick-label (argmax tick-p x-ticks)))])
+        w))
+    
+    (define-values (dc-x-size dc-y-size) (send this get-size))
+      
     (define x-margin
-      (+ (* 10 char-width)
-         (plot2d-pen-gap)
-         (* 3/2 char-height)))
+      (+ (* 2 char-height)                              ; y label
+         max-y-tick-label-width                         ; y tick labels
+         (plot2d-pen-gap) (* 1/2 (plot2d-tick-size))))  ; y axis ticks
     
     (define area-x-size
-      (- dc-x-size
-         x-margin
-         (max (* 5 char-width)
-              (* 1/2 (plot2d-tick-size)))))
+      (- dc-x-size x-margin
+         (max (* 1/2 last-x-tick-label-width)  ; protruding x tick label
+              (* 1/2 (plot2d-tick-size)))))    ; y axis ticks
     
     (define y-margin
       (+ (* 1/2 (plot2d-tick-size))
@@ -58,8 +70,7 @@
          (* 3/2 char-height)))
     
     (define area-y-size
-      (- dc-y-size
-         y-margin
+      (- dc-y-size y-margin
          (max (* 1/2 char-height)
               (* 1/2 (plot2d-tick-size)))
          (if (plot2d-title)
@@ -116,11 +127,11 @@
       (add-line (vector x-max y-max) (vector x-max y-min))
       (add-line (vector x-max y-min) (vector x-min y-min)))
     
-    (define/private (add-x-ticks ticks)
+    (define/private (add-x-ticks)
       (define half (dc->view/y-size (* 1/2 (plot2d-tick-size))))
       (define y-offset
         (dc->view/y-size (+ (plot2d-pen-gap) (* 1/2 (plot2d-tick-size)))))
-      (for ([t  (in-list ticks)])
+      (for ([t  (in-list x-ticks)])
         (match-define (tick x x-str major?) t)
         (if major? (set-major-pen) (set-minor-pen))
         (add-line (vector x (- y-min half))
@@ -137,12 +148,12 @@
         (view->dc (vector (* 1/2 (+ x-min x-max)) 0)))
       (send this draw-text/raw (plot2d-x-label) x dc-y-size 'bottom))
     
-    (define/private (add-y-ticks ticks)
+    (define/private (add-y-ticks)
       (define half (dc->view/x-size (* 1/2 (plot2d-tick-size))))
       (define x-offset
         (dc->view/x-size (+ (plot2d-pen-gap) (* 1/2 (plot2d-tick-size)))))
       (define y-offset (* 1/2 (dc->view/y-size char-height)))
-      (for ([t  (in-list ticks)])
+      (for ([t  (in-list y-ticks)])
         (match-define (tick y y-str major?) t)
         (if major? (set-major-pen) (set-minor-pen))
         (add-line (vector (- x-min half) y)
@@ -167,6 +178,7 @@
     
     (define/private (add-axes)
       (clip-to-bounds x-min x-max y-min y-max)
+      (set-minor-pen)
       ; horizontal
       (define y-tick-half (dc->view/x-size (* 1/2 (plot2d-tick-size))))
       (add-line (vector (+ x-min y-tick-half) 0)
@@ -176,12 +188,12 @@
       (add-line (vector 0 (+ y-min x-tick-half))
                 (vector 0 (- y-max x-tick-half))))
     
-    (define/public (start-plot x-ticks y-ticks)
+    (define/public (start-plot)
       (send this clear)
       (add-title)
       (add-borders)
-      (add-x-ticks (x-ticks x-min x-max))
-      (add-y-ticks (y-ticks y-min y-max))
+      (add-x-ticks)
+      (add-y-ticks)
       (add-x-label)
       (add-y-label)
       (add-axes))

@@ -8,7 +8,7 @@
 (provide (all-defined-out))
 
 (define plot3d-width (make-parameter 400))
-(define plot3d-height (make-parameter 350))
+(define plot3d-height (make-parameter 400))
 
 (define plot3d-x-min (make-parameter -5))
 (define plot3d-x-max (make-parameter 5))
@@ -52,11 +52,12 @@
                    [plot3d-y-label   y-label]
                    [plot3d-z-label   z-label])
       (define area
-        (make-object 3d-plot-area% x-min x-max y-min y-max z-min z-max dc))
-      (send area start-plot x-ticks y-ticks z-ticks)
+        (make-object 3d-plot-area%
+          x-ticks y-ticks z-ticks x-min x-max y-min y-max z-min z-max dc))
+      (send area start-plot)
       (f area)
-      (send area end-plot)
-      bm)))
+      (send area end-plot))
+    bm))
 
 ;; plot3d : renderer3d -> image-snip%
 (define (plot3d
@@ -142,6 +143,8 @@
                      [exists 'truncate/replace])]
         [else  (raise-type-error 'plot2d->vector-file "one of (ps pdf svg)"
                                  kind)]))
+    (send dc start-doc "Rendering plot")
+    (send dc start-page)
     (parameterize ([plot3d-angle     angle]
                    [plot3d-altitude  altitude]
                    [plot3d-title     title]
@@ -149,14 +152,13 @@
                    [plot3d-y-label   y-label]
                    [plot3d-z-label   z-label])
       (define area
-        (make-object 3d-plot-area% x-min x-max y-min y-max z-min z-max dc))
-      (send dc start-doc "Rendering plot")
-      (send dc start-page)
-      (send area start-plot x-ticks y-ticks z-ticks)
+        (make-object 3d-plot-area%
+          x-ticks y-ticks z-ticks x-min x-max y-min y-max z-min z-max dc))
+      (send area start-plot)
       (f area)
-      (send area end-plot)
-      (send dc end-page)
-      (send dc end-doc))))
+      (send area end-plot))
+    (send dc end-page)
+    (send dc end-doc)))
 
 (define (plot3d->file
          renderer output kind
