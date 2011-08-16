@@ -1,7 +1,7 @@
 #lang racket/base
 
-(require racket/string racket/list
-         "math.rkt" "list.rkt")
+(require racket/string racket/list racket/contract
+         "math.rkt" "list.rkt" "contract.rkt")
 
 (provide (all-defined-out))
 
@@ -13,8 +13,10 @@
   (for/list ([n  (in-range (length ps))])
     (= (remainder n major-skip) zero-idx-rem)))
 
-;; default-range->ticks : real real -> (listof tick)
 (define ((default-range->ticks major-skip) x-min x-max)
+  (when (x-min . >= . x-max)
+    (error 'default-range->ticks
+           "expected x-min < x-max; got x-min = ~e and x-max = ~e" x-min x-max))
   (let ([x-min  (inexact->exact x-min)]
         [x-max  (inexact->exact x-max)])
     (define e (floor-log10 (- x-max x-min)))

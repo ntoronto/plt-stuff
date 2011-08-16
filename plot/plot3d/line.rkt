@@ -41,10 +41,10 @@
 (define (parametric3d
          fxyz t-min t-max
          [x-min #f] [x-max #f] [y-min #f] [y-max #f] [z-min #f] [z-max #f]
-                    #:color [color (line3d-color)]
-                    #:width [width (line3d-width)]
-                    #:style [style (line3d-style)]
-                    #:alpha [alpha (line3d-alpha)])
+         #:color [color (line3d-color)]
+         #:width [width (line3d-width)]
+         #:style [style (line3d-style)]
+         #:alpha [alpha (line3d-alpha)])
   (define ts (real-seq t-min t-max (line3d-samples)))
   (line3d (match fxyz
             [(vector fx fy fz)  (map vector

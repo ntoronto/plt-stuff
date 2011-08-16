@@ -55,6 +55,8 @@
                            (cons (cons (car vs) (car rst)) (cdr rst))]
         [else  (cons null (vreg-sublists (cdr vs)))]))
 
+;; returns the center of the smallest axial bounding rectangle containing the
+;; points
 (define (center-coord vs)
   (define ((ref n) v) (vector-ref v n))
   (define x-min (apply min (map (ref 0) vs)))
@@ -70,12 +72,13 @@
 (define default-normal (vector 0 -1 0))
 
 (define (surface-normal vs)
-  (let/ec return
-    (for ([v1  (in-list vs)]
-          [v2  (in-list (append (cdr vs) vs))]
-          [v3  (in-list (append (cddr vs) vs))])
-      (define norm (vcross (v- v2 v1) (v- v3 v1)))
-      (define d^2 (vmag^2 norm))
-      (when (not (zero? d^2))
-        (return (v/ norm (sqrt d^2)))))
-    default-normal))
+  (define norms
+    (for/list ([v1  (in-list vs)]
+               [v2  (in-list (append (cdr vs) vs))]
+               [v3  (in-list (append (cddr vs) vs))])
+      (vcross (v- v2 v1) (v- v3 v1))))
+  (define n (foldl v+ (vector 0 0 0) norms))
+  (define d^2 (vmag^2 n))
+  (if (d^2 . > . 0)
+      (v/ n (sqrt d^2))
+      default-normal))

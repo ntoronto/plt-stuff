@@ -9,9 +9,17 @@ Comments
 
 Contracts
 
+Documentation
+
 Test cases
 
 Compatibility layer
+
+Checks for axis-min < axis-max (or contracts?)
+
+Test: polynomial at [big..big+epsilon] (support for exact rational functions)
+
+Look into inherit-*
 
 
 3D only

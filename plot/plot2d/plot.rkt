@@ -15,8 +15,8 @@
 (define plot2d-y-max (make-parameter 5))
 
 (define plot2d-jpeg-quality (make-parameter 90))
-(define plot2d-ps-interactive (make-parameter #f))
-(define plot2d-pdf-interactive (make-parameter #f))
+(define plot2d-ps-interactive? (make-parameter #f))
+(define plot2d-pdf-interactive? (make-parameter #f))
 
 (define (plot2d->bitmap renderer
                         #:width [width (plot2d-width)]
@@ -93,11 +93,11 @@
     (define dc
       (case kind
         [(ps)  (new post-script-dc%
-                    [interactive (plot2d-ps-interactive)]
+                    [interactive (plot2d-ps-interactive?)]
                     [parent #f] [use-paper-bbox #f] [as-eps #t]
                     [width width] [height height] [output output])]
         [(pdf)  (new pdf-dc%
-                     [interactive (plot2d-pdf-interactive)]
+                     [interactive (plot2d-pdf-interactive?)]
                      [parent #f] [use-paper-bbox #f]
                      [width width] [height height] [output output])]
         [(svg)  (new svg-dc%
@@ -142,4 +142,5 @@
                           #:title title #:x-label x-label #:y-label y-label)]
     [else  (raise-type-error 'plot2d->file
                              "one of (png jpeg xmb xpm bmp ps pdf svg)"
-                             kind)]))
+                             kind)])
+  (void))

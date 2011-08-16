@@ -13,6 +13,9 @@
 
 (define surface3d-samples (make-parameter 41))
 
+(define (get-surface3d-samples)
+  (ceiling (* (if (plot3d-animating?) 1/4 1) (surface3d-samples))))
+
 (define surface3d-color (make-parameter "white"))
 (define surface3d-line-color (make-parameter "black"))
 (define surface3d-line-width (make-parameter 1/3))
@@ -43,9 +46,9 @@
   (define y-min (send area get-y-min))
   (define y-max (send area get-y-max))
   (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (surface3d-samples)))
+    (sample-2d-function f x-min x-max y-min y-max (get-surface3d-samples)))
   (send area set-alpha alpha)
-  (send area set-brush color 'solid)
+  (send area set-brush color 'solid #;(if (plot3d-animating?) 'transparent 'solid))
   (send area set-pen line-color line-width line-style)
   (for ([ya  (in-list ys)]
         [yb  (in-list (rest ys))]
@@ -97,7 +100,7 @@
   (define z-max (send area get-z-max))
   
   (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (surface3d-samples)))
+    (sample-2d-function f x-min x-max y-min y-max (get-surface3d-samples)))
   
   (define levels
     (case (contour3d-levels)
@@ -164,7 +167,7 @@
   (define z-max (send area get-z-max))
   
   (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (surface3d-samples)))
+    (sample-2d-function f x-min x-max y-min y-max (get-surface3d-samples)))
   
   (define levels
     (case (contour3d-levels)
@@ -183,7 +186,7 @@
   (for ([za  (in-list levels)]
         [zb  (in-list (rest levels))]
         [color  (in-cycle colors)])
-    (send area set-brush color 'solid)
+    (send area set-brush color 'solid #;(if (plot3d-animating?) 'transparent 'solid))
     (send area set-pen line-color line-width line-style)
     (for ([ya  (in-list ys)]
           [yb  (in-list (rest ys))]

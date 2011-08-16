@@ -3,7 +3,7 @@
 (require racket/match racket/gui
          "../common/math.rkt")
 
-(provide (all-defined-out))
+(provide (except-out (all-defined-out) mix*))
 
 (struct renderer2d (f x-ticks y-ticks x-min x-max y-min y-max) #:transparent
         #:guard (λ (f x-ticks y-ticks x-min x-max y-min y-max _)

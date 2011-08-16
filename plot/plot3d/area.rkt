@@ -12,6 +12,8 @@
 
 (define plot3d-samples (make-parameter 40))
 
+(define plot3d-animating? (make-parameter #f))
+
 (define plot3d-angle (make-parameter 30))
 (define plot3d-altitude (make-parameter 60))
 
@@ -138,8 +140,13 @@
     (define y-mid (* 1/2 (+ y-min y-max)))
     (define z-mid (* 1/2 (+ z-min z-max)))
     
-    (define theta (degrees->radians (plot3d-angle)))
-    (define rho (degrees->radians (plot3d-altitude)))
+    (define angle (plot3d-angle))
+    (define altitude (plot3d-altitude))
+    ; FP HACK: adding an epsilon to the angle ensures, when it is 90, 180
+    ; or 270, that the x or y labels are drawn on the left side and that the
+    ; z labels are drawn on the left
+    (define theta (+ (degrees->radians angle) 0.00001))
+    (define rho (degrees->radians altitude))
     
     (define cos-theta (cos theta))
     (define sin-theta (sin theta))
@@ -266,14 +273,14 @@
           (define anchor
             (cond
               [((sin theta) . < . (sin (degrees->radians -67.5)))
-               (if (positive? (cos theta)) 'right 'left)]
+               (if (positive? (cos theta)) 'top-right 'top-left)]
               [((sin theta) . < . (sin (degrees->radians -22.5)))
                (if (positive? (cos theta)) 'top-right 'top-left)]
               [((sin theta) . < . (sin (degrees->radians 22.5)))   'top]
               [((sin theta) . < . (sin (degrees->radians 67.5)))
                (if (positive? (cos theta)) 'top-left 'top-right)]
               [else
-               (if (positive? (cos theta)) 'left 'right)]))
+               (if (positive? (cos theta)) 'top-left 'top-right)]))
           (add-text x-str (vector x y z-min) anchor))))
     
     (define (add-y-ticks)
@@ -294,14 +301,14 @@
           (define anchor
             (cond
               [((cos theta) . > . (cos (degrees->radians 22.5)))
-               (if (negative? (sin theta)) 'left 'right)]
+               (if (negative? (sin theta)) 'top-left 'top-right)]
               [((cos theta) . > . (cos (degrees->radians 67.5)))
                (if (negative? (sin theta)) 'top-left 'top-right)]
               [((cos theta) . > . (cos (degrees->radians 112.5)))  'top]
               [((cos theta) . > . (cos (degrees->radians 157.5)))
                (if (negative? (sin theta)) 'top-right 'top-left)]
               [else
-               (if (negative? (sin theta)) 'right 'left)]))
+               (if (negative? (sin theta)) 'top-right 'top-left)]))
           (add-text y-str (vector x y z-min) anchor))))
     
     (define (add-x-label)
@@ -344,7 +351,7 @@
         (add-line (vector (- x dx) (- y dy) z)
                   (vector (+ x dx) (+ y dy) z))
         (when major?
-          (add-text z-str (vector (- x ldx) (- y ldy) z) 'right))))
+          (add-text z-str (vector (- x ldx) (- y ldy) z) 'bottom-right))))
     
     (define (add-z-label)
       (define offset (dc->plot/z-size (* 1/2 char-height)))
@@ -365,6 +372,13 @@
           (send this get-text-extent (plot3d-title)))
         (send this draw-text/raw (plot3d-title) (* 1/2 dc-x-size) 0 'top)))
     
+    (define (add-angles)
+      (send this draw-text/raw
+            (format "angle = ~a, altitude = ~a"
+                    (real->tick-label angle)
+                    (real->tick-label altitude))
+            0 dc-y-size 'bottom-left))
+    
     (define/public (start-plot)
       (send this clear)
       (add-title)
@@ -376,14 +390,17 @@
       (add-z-ticks)
       (add-x-label)
       (add-y-label)
-      (add-z-label))
+      (add-z-label)
+      (when (plot3d-animating?)
+        (add-angles)))
     
     (define light (plot->view (vector x-mid y-mid (+ z-max (* 5 z-size)))))
     
     (define (get-light-values s)
       (let/ec return
-        (when (and (not (plot3d-diffuse-light?))
-                   (not (plot3d-specular-light?)))
+        (when (or #;(plot3d-animating?)
+                  (and (not (plot3d-diffuse-light?))
+                       (not (plot3d-specular-light?))))
           (return 1.0 0.0))
         ; common lighting values
         (define light-dir (let ([center  (shape-center s)])

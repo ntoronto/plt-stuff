@@ -3,6 +3,7 @@
 (require racket/gui racket/match
          "../common/math.rkt"
          "area.rkt"
+         "snip.rkt"
          "renderer.rkt")
 
 (provide (all-defined-out))
@@ -18,8 +19,8 @@
 (define plot3d-z-max (make-parameter 5))
 
 (define plot3d-jpeg-quality (make-parameter 90))
-(define plot3d-ps-interactive (make-parameter #f))
-(define plot3d-pdf-interactive (make-parameter #f))
+(define plot3d-ps-interactive? (make-parameter #f))
+(define plot3d-pdf-interactive? (make-parameter #f))
 
 (define (plot3d->bitmap
          renderer
@@ -73,15 +74,19 @@
          #:x-min [x-min #f] #:x-max [x-max #f]
          #:y-min [y-min #f] #:y-max [y-max #f]
          #:z-min [z-min #f] #:z-max [z-max #f])
-  (make-object image-snip% 
-    (plot3d->bitmap renderer
-                    #:width width #:height height
-                    #:angle angle #:altitude altitude
-                    #:title title #:x-label x-label
-                    #:y-label y-label #:z-label z-label
-                    #:x-min x-min #:x-max x-max
-                    #:y-min y-min #:y-max y-max
-                    #:z-min z-min #:z-max z-max)))
+  (make-object 3d-plot-snip%
+    (λ (angle altitude animating?)
+      (parameterize ([plot3d-animating?
+                      (if animating? #t (plot3d-animating?))])
+        (plot3d->bitmap renderer
+                        #:width width #:height height
+                        #:angle angle #:altitude altitude
+                        #:title title #:x-label x-label
+                        #:y-label y-label #:z-label z-label
+                        #:x-min x-min #:x-max x-max
+                        #:y-min y-min #:y-max y-max
+                        #:z-min z-min #:z-max z-max)))
+    angle altitude))
 
 (define (plot3d->bitmap-file
          renderer output kind
@@ -131,11 +136,11 @@
     (define dc
       (case kind
         [(ps)  (new post-script-dc%
-                    [interactive (plot3d-ps-interactive)]
+                    [interactive (plot3d-ps-interactive?)]
                     [parent #f] [use-paper-bbox #f] [as-eps #t]
                     [width width] [height height] [output output])]
         [(pdf)  (new pdf-dc%
-                     [interactive (plot3d-pdf-interactive)]
+                     [interactive (plot3d-pdf-interactive?)]
                      [parent #f] [use-paper-bbox #f]
                      [width width] [height height] [output output])]
         [(svg)  (new svg-dc%
@@ -194,4 +199,5 @@
                           #:z-min z-min #:z-max z-max)]
     [else  (raise-type-error 'plot3d->file
                              "one of (png jpeg xmb xpm bmp ps pdf svg)"
-                             kind)]))
+                             kind)])
+  (void))

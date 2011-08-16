@@ -2,8 +2,13 @@
 
 (require "../plot3d.rkt")
 
-(time
- (plot3d (parametric3d (λ (t) (vector t t t)) 0 8000)))
+(let ()
+  (define xs (build-list 200 (λ (n) (/ 1 (- (random) 0.5)))))
+  (define ys (build-list 200 (λ (n) (/ 1 (- (random) 0.5)))))
+  (define zs (build-list 200 (λ (n) (/ 1 (- (random) 0.5)))))
+  (time
+   (plot3d (points3d (map vector xs ys zs) -20 20 -20 20 -20 20)
+           #:angle 15)))
 
 (let ()
   (define xs (build-list 10000 (λ (n) (/ 1 (- (random) 0.5)))))

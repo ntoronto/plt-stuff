@@ -58,7 +58,7 @@
   (foldl maybe-max* #f xs))
 
 (define (floor-log10 x)
-  (inexact->exact (floor (/ (log x) (log 10)))))
+  (inexact->exact (floor (/ (log (abs x)) (log 10)))))
 
 (define (ceiling-log10 x)
   (inexact->exact (ceiling (/ (log (abs x)) (log 10)))))

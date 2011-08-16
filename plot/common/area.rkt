@@ -72,8 +72,10 @@
       (match-define (list r g b) (map real->color-byte brush-color))
       (define brush (send dc get-brush))
       (define c (send brush get-color))
-      (unless (and (= r (send c red)) (= g (send c green)) (= b (send c blue))
-               (symbol=? brush-style (send brush get-style)))
+      (unless (or (and (symbol=? 'transparent brush-style)
+                       (symbol=? 'transparent (send brush get-style)))
+                  (and (= r (send c red)) (= g (send c green)) (= b (send c blue))
+                       (symbol=? brush-style (send brush get-style))))
         (send dc set-brush (make-object color% r g b) brush-style)))
     
     ;; alpha
