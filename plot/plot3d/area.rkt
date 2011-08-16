@@ -109,25 +109,26 @@
     (define x-margin
       (+ (* 3/2 char-height)                            ; x/y axis label
          max-tick-label-width                           ; x/y/z tick labels
-         (plot3d-pen-gap) (* 1/2 (plot3d-tick-size))))  ; x/y/z axis ticks
+         (plot3d-pen-gap) (* 1/2 (plot3d-tick-size))    ; x/y/z axis ticks
+         ))
     
     (define area-x-size
       (- dc-x-size x-margin
          (* 3/2 char-height)                            ; x/y axis label
          max-bottom-tick-label-width                    ; x/y tick labels
-         (plot3d-pen-gap) (* 1/2 (plot3d-tick-size))))  ; x/y axis ticks
+         (plot3d-pen-gap) (* 1/2 (plot3d-tick-size))    ; x/y axis ticks
+         ))
     
     (define y-margin
-      (+ (* 1/2 (plot3d-tick-size)) (plot3d-pen-gap)  ; x/y axis ticks
-         (* 3 char-height)))
+      (+ (* 3/2 char-height)                          ; x/y axis label
+         char-height                                  ; x/y tick labels
+         (* 1/2 (plot3d-tick-size)) (plot3d-pen-gap)  ; x/y axis ticks
+         ))
     
     (define area-y-size
-      (- dc-y-size
-         y-margin
-         (* 3/2 char-height)  ; z axis label
-         (if (plot3d-title)
-             (* 3/2 char-height)
-             0)))
+      (- dc-y-size y-margin
+         (* 3/2 char-height)  ; z axis label / plot title
+         ))
     
     (define/public (get-x-min) x-min)
     (define/public (get-x-max) x-max)
@@ -351,7 +352,8 @@
         (add-line (vector (- x dx) (- y dy) z)
                   (vector (+ x dx) (+ y dy) z))
         (when major?
-          (add-text z-str (vector (- x ldx) (- y ldy) z) 'bottom-right))))
+          (add-text z-str (vector (- x ldx) (- y ldy) z)
+                    'right))))
     
     (define (add-z-label)
       (define offset (dc->plot/z-size (* 1/2 char-height)))

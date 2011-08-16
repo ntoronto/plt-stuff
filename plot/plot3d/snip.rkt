@@ -69,12 +69,12 @@
     (define (new-angle)
       (let* ([angle  (+ angle (* (- drag-x click-x) (/ 180 width)))]
              [angle  (- angle (* (floor (/ angle 360)) 360))])
-        (/ (round (* angle 10)) 10)))
+        (/ (round (* angle 2)) 2)))
     
     (define (new-altitude)
       (let* ([alt  (+ altitude (* (- drag-y click-y) (/ 180 height)))]
              [alt  (if (alt . < . 0) 0 (if (alt . > . 90) 90 alt))])
-        (/ (round (* alt 10)) 10)))
+        (/ (round (* alt 2)) 2)))
     
     (define draw? #t)
     (define timer #f)

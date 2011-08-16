@@ -5,6 +5,8 @@ Handle more error cases
  - +inf.0 / -inf.0
  - Empty lists
 
+Open a window to show plots when not running in DrRacket
+
 Comments
 
 Contracts
@@ -19,7 +21,7 @@ Checks for axis-min < axis-max (or contracts?)
 
 Test: polynomial at [big..big+epsilon] (support for exact rational functions)
 
-Look into inherit-*
+Use inherit
 
 
 3D only
@@ -27,6 +29,10 @@ Look into inherit-*
 Handle nans and infs
 
 More efficiently find z-min and z-max?
+
+Cache more in animated plots
+
+Precision problem in dc->plot/x-size, etc. (need to rotate but not translate)
 
 Graph types
  - Vector cloud?

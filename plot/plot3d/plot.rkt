@@ -2,6 +2,7 @@
 
 (require racket/gui racket/match
          "../common/math.rkt"
+         "../common/gui.rkt"
          "area.rkt"
          "snip.rkt"
          "renderer.rkt")
@@ -17,6 +18,8 @@
 (define plot3d-y-max (make-parameter 5))
 (define plot3d-z-min (make-parameter -5))
 (define plot3d-z-max (make-parameter 5))
+
+(define plot3d-new-window? (make-parameter #f))
 
 (define plot3d-jpeg-quality (make-parameter 90))
 (define plot3d-ps-interactive? (make-parameter #f))
@@ -74,19 +77,27 @@
          #:x-min [x-min #f] #:x-max [x-max #f]
          #:y-min [y-min #f] #:y-max [y-max #f]
          #:z-min [z-min #f] #:z-max [z-max #f])
-  (make-object 3d-plot-snip%
-    (λ (angle altitude animating?)
-      (parameterize ([plot3d-animating?
-                      (if animating? #t (plot3d-animating?))])
-        (plot3d->bitmap renderer
-                        #:width width #:height height
-                        #:angle angle #:altitude altitude
-                        #:title title #:x-label x-label
-                        #:y-label y-label #:z-label z-label
-                        #:x-min x-min #:x-max x-max
-                        #:y-min y-min #:y-max y-max
-                        #:z-min z-min #:z-max z-max)))
-    angle altitude))
+  (define snip
+    (make-object 3d-plot-snip%
+      (λ (angle altitude animating?)
+        (parameterize ([plot3d-animating?
+                        (if animating? #t (plot3d-animating?))])
+          (plot3d->bitmap renderer
+                          #:width width #:height height
+                          #:angle angle #:altitude altitude
+                          #:title title #:x-label x-label
+                          #:y-label y-label #:z-label z-label
+                          #:x-min x-min #:x-max x-max
+                          #:y-min y-min #:y-max y-max
+                          #:z-min z-min #:z-max z-max)))
+      angle altitude))
+  (cond [(plot3d-new-window?)
+         (send
+          (make-snip-frame
+           snip width height (if title (format "Plot: ~a" title) "Plot"))
+          show #t)
+         (void)]
+        [else  snip]))
 
 (define (plot3d->bitmap-file
          renderer output kind
