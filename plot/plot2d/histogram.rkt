@@ -18,9 +18,8 @@
 (define histogram-line-style (make-parameter 'solid))
 (define histogram-alpha (make-parameter 1.0))
 
-(define ((add-histogram cat-vals x-min x-max bar-color bar-style
+(define ((add-histogram cats ys x-min x-max bar-color bar-style
                         line-color line-width line-style alpha) area)
-  (define ys (map cdr cat-vals))
   (define n (length ys))
   (define step (/ (- x-max x-min) n))
   (send area set-pen line-color line-width line-style)
@@ -34,23 +33,26 @@
   (define vec (list->vector cats))
   (define n (vector-length vec))
   (define step (/ (- x-max x-min) n))
-  (build-list n (λ (i) (tick (+ x-min (* i step) (* 1/2 step))
-                             (any->tick-label (vector-ref vec i))
-                             #t))))
+  (for/list ([cat  (in-list cats)] [i  (in-naturals)])
+    (tick (+ x-min (* i step) (* 1/2 step))
+          (any->tick-label cat)
+          #t)))
 
 (define (histogram cat-vals [y-min #f] [y-max #f]
-                   #:x-min [x-min 1] #:x-max [x-max 2]
+                   #:x-min [x-min 0] #:x-max [x-max #f]
                    #:bar-color [bar-color (histogram-bar-color)]
                    #:bar-style [bar-style (histogram-bar-style)]
                    #:line-color [line-color (histogram-line-color)]
                    #:line-width [line-width (histogram-line-width)]
                    #:line-style [line-style (histogram-line-style)]
                    #:alpha [alpha (histogram-alpha)])
-  (let* ([ys     (delay (map cdr cat-vals))]
-         [y-min  (if y-min y-min (reg-min* (force ys)))]
-         [y-max  (if y-max y-max (reg-max* (force ys)))])
-    (renderer2d (add-histogram cat-vals x-min x-max bar-color bar-style
-                               line-color line-width line-style alpha)
-                (histogram-ticks (map car cat-vals) x-min x-max)
-                (default-range->ticks (plot2d-tick-skip))
-                x-min x-max y-min y-max)))
+  (match-define (list (vector cats ys) ...) cat-vals)
+  (let ([x-max  (if x-max x-max (+ x-min (length ys)))]
+        [y-min  (if y-min y-min (apply regular-min ys))]
+        [y-max  (if y-max y-max (apply regular-max ys))])
+    (make-renderer2d (add-histogram cats ys x-min x-max bar-color bar-style
+                                    line-color line-width line-style alpha)
+                     (histogram-ticks cats x-min x-max)
+                     (default-range->ticks (plot2d-tick-skip))
+                     values
+                     x-min x-max y-min y-max)))

@@ -28,43 +28,30 @@
 (define (vmag v) (sqrt (vmag^2 v)))
 (define (vnormalize v) (v/ v (vmag v)))
 
-(define (vnan? v)
+(define (vall-regular? v)
   (let/ec return
     (for ([x  (in-vector v)])
-      (when (nan? x)
-        (return #t)))
-    #f))
-
-(define (vinf? v)
-  (let/ec return
-    (for ([x  (in-vector v)])
-      (when (inf? x)
-        (return #t)))
-    #f))
-
-(define (vreg? v)
-  (let/ec return
-    (for ([x  (in-vector v)])
-      (when (not (reg? x))
+      (when (not (regular? x))
         (return #f)))
     #t))
 
-(define (vreg-sublists vs)
+(define (vregular-sublists vs)
   (cond [(null? vs)  (list null)]
-        [(vreg? (car vs))  (define rst (vreg-sublists (cdr vs)))
-                           (cons (cons (car vs) (car rst)) (cdr rst))]
-        [else  (cons null (vreg-sublists (cdr vs)))]))
+        [(vall-regular? (car vs))  (define rst (vregular-sublists (cdr vs)))
+                                   (cons (cons (car vs) (car rst)) (cdr rst))]
+        [else  (cons null (vregular-sublists (cdr vs)))]))
+
+(define (bounding-box vs)
+  (match-define (list (vector xs ys zs) ...) vs)
+  (values (apply min xs) (apply max xs)
+          (apply min ys) (apply max ys)
+          (apply min zs) (apply max zs)))
 
 ;; returns the center of the smallest axial bounding rectangle containing the
 ;; points
 (define (center-coord vs)
-  (define ((ref n) v) (vector-ref v n))
-  (define x-min (apply min (map (ref 0) vs)))
-  (define x-max (apply max (map (ref 0) vs)))
-  (define y-min (apply min (map (ref 1) vs)))
-  (define y-max (apply max (map (ref 1) vs)))
-  (define z-min (apply min (map (ref 2) vs)))
-  (define z-max (apply max (map (ref 2) vs)))
+  (define-values (x-min x-max y-min y-max z-min z-max)
+    (bounding-box vs))
   (vector (* 1/2 (+ x-min x-max))
           (* 1/2 (+ y-min y-max))
           (* 1/2 (+ z-min z-max))))

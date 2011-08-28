@@ -5,6 +5,7 @@
          "../common/color.rkt"
          "../common/marching-squares.rkt"
          "../common/ticks.rkt"
+         "../common/contract.rkt"
          "area.rkt"
          "renderer.rkt")
 
@@ -12,29 +13,34 @@
                      add-contour
                      (struct-out fast-rect) add-shade))
 
-(define contour-levels (make-parameter 10))
-(define contour-samples (make-parameter 50))
-(define contour-color (make-parameter "black"))
-(define contour-width (make-parameter 1))
-(define contour-style (make-parameter 'solid))
-(define contour-alpha (make-parameter 1.0))
+(defparam contour-levels levels positive-integer/c 10)
+(defparam contour-samples samples positive-integer/c 51)
+(defparam contour-color color plot-color/c "black")
+(defparam contour-width width nonnegative-real/c 1)
+(defparam contour-style style pen-style/c 'solid)
+(defparam contour-alpha alpha (real-in 0 1) 1)
 
-(define (default-shade-color-function z-min z-max levels)
+(defproc (default-shade-color-function
+           [z-min real?] [z-max real?] [levels positive-integer/c]
+           ) (listof plot-color/c)
   (color-seq* (list "blue" "white" "red") levels))
 
-(define shade-color-function (make-parameter default-shade-color-function))
+(defparam shade-color-function function
+  color-function/c default-shade-color-function)
 
 ;; =============================================================================
 ;; Drawing contour lines using marching squares
 
-(define ((add-contour f color width style alpha) area)
+(define ((add-contour f samples color width style alpha) area)
   (define x-min (send area get-x-min))
   (define x-max (send area get-x-max))
   (define y-min (send area get-y-min))
   (define y-max (send area get-y-max))
   
-  (define-values (xs ys zss z-min z-max)
-    (sample-2d-function f x-min x-max y-min y-max (contour-samples)))
+  (match-define (list xs ys zss) (f x-min x-max samples y-min y-max samples))
+  (define-values (z-min z-max)
+    (let ([zs  (2d-sample->list zss)])
+      (values (apply regular-min zs) (apply regular-max zs))))
   
   (define levels (sub1 (contour-levels)))
   (define ticks (take (rest (real-seq z-min z-max (+ 2 levels))) levels))
@@ -62,28 +68,33 @@
             (vector (denormalize-t u2 xb xa) (denormalize-t v2 yb ya))))))
 
 (define (contour f [x-min #f] [x-max #f] [y-min #f] [y-max #f]
+                 #:samples [samples (contour-samples)]
                  #:color [color (contour-color)]
                  #:width [width (contour-width)]
                  #:style [style (contour-style)]
                  #:alpha [alpha (contour-alpha)])
-  (renderer2d (add-contour f color width style alpha)
-              (default-range->ticks (plot2d-tick-skip))
-              (default-range->ticks (plot2d-tick-skip))
-              x-min x-max y-min y-max))
+  (define g (memoize-sample-2d-function f))
+  (make-renderer2d (add-contour g samples color width style alpha)
+                   (default-range->ticks (plot2d-tick-skip))
+                   (default-range->ticks (plot2d-tick-skip))
+                   values
+                   x-min x-max y-min y-max))
 
 ;; =============================================================================
 ;; Drawing contour areas using marching squares
 
 (struct fast-rect (xa ya xb yb) #:transparent)
 
-(define ((add-shade f color-function) area)
+(define ((add-shade f samples color-function) area)
   (define x-min (send area get-x-min))
   (define x-max (send area get-x-max))
   (define y-min (send area get-y-min))
   (define y-max (send area get-y-max))
   
-  (define-values (xs ys zss z-min z-max)
-    (sample-2d-function f x-min x-max y-min y-max (contour-samples)))
+  (match-define (list xs ys zss) (f x-min x-max samples y-min y-max samples))
+  (define-values (z-min z-max)
+    (let ([zs  (2d-sample->list zss)])
+      (values (apply regular-min zs) (apply regular-max zs))))
   
   (define levels (real-seq z-min z-max (+ 1 (contour-levels))))
   (define colors (color-function z-min z-max (contour-levels)))
@@ -160,8 +171,11 @@
       [_  (void)])))
 
 (define (shade f [x-min #f] [x-max #f] [y-min #f] [y-max #f]
+               #:samples [samples (contour-samples)]
                #:colors [color-function (shade-color-function)])
-  (renderer2d (add-shade f color-function)
-              (default-range->ticks (plot2d-tick-skip))
-              (default-range->ticks (plot2d-tick-skip))
-              x-min x-max y-min y-max))
+  (define g (memoize-sample-2d-function f))
+  (make-renderer2d (add-shade g samples color-function)
+                   (default-range->ticks (plot2d-tick-skip))
+                   (default-range->ticks (plot2d-tick-skip))
+                   values
+                   x-min x-max y-min y-max))

@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require racket/gui racket/flonum
+(require racket/class racket/match racket/list racket/promise racket/flonum
          "../common/math.rkt"
          "../common/vector.rkt"
          "../common/marching-squares.rkt"
@@ -12,9 +12,6 @@
                      add-surface3d add-contour3d add-shade3d))
 
 (define surface3d-samples (make-parameter 41))
-
-(define (get-surface3d-samples)
-  (ceiling (* (if (plot3d-animating?) 1/4 1) (surface3d-samples))))
 
 (define surface3d-color (make-parameter "white"))
 (define surface3d-line-color (make-parameter "black"))
@@ -28,27 +25,35 @@
 (define contour3d-line-style (make-parameter 'solid))
 (define contour3d-alpha (make-parameter 1.0))
 
-(define (default-shade3d-color-function z-min z-max num)
+(define (default-shade3d-colors z-min z-max num)
   (list "white" '(224 240 255)))
 
-(define shade3d-color-function (make-parameter default-shade3d-color-function))
-(define shade3d-line-color (make-parameter "black"))
+(define shade3d-colors (make-parameter default-shade3d-colors))
+(define shade3d-line-colors (make-parameter (λ _ '("black"))))
 (define shade3d-line-width (make-parameter 1/3))
 (define shade3d-line-style (make-parameter 'solid))
 (define shade3d-alpha (make-parameter 1.0))
 
+(define (samples/animating? samples)
+  (if (plot3d-animating?) (ceiling (* 1/4 samples)) samples))
+
 ;; =============================================================================
 ;; surface3d
 
-(define ((add-surface3d f color line-color line-width line-style alpha) area)
+(define ((add-surface3d f samples color
+                        line-color line-width line-style alpha)
+         area)
   (define x-min (send area get-x-min))
   (define x-max (send area get-x-max))
   (define y-min (send area get-y-min))
   (define y-max (send area get-y-max))
-  (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (get-surface3d-samples)))
+  
+  (match-define (list xs ys zss)
+    (f x-min x-max (samples/animating? samples)
+       y-min y-max (samples/animating? samples)))
+  
   (send area set-alpha alpha)
-  (send area set-brush color 'solid #;(if (plot3d-animating?) 'transparent 'solid))
+  (send area set-brush color 'solid)
   (send area set-pen line-color line-width line-style)
   (for ([ya  (in-list ys)]
         [yb  (in-list (rest ys))]
@@ -67,31 +72,40 @@
     (define v4 (vector xb yb z4))
     (send area add-polygon (list v1 v2 v4 v3))))
 
-(define (surface3d
-         f [x-min #f] [x-max #f] [y-min #f] [y-max #f] [z-min #f] [z-max #f]
-         #:color [color (surface3d-color)]
-         #:line-color [line-color (surface3d-line-color)]
-         #:line-width [line-width (surface3d-line-width)]
-         #:line-style [line-style (surface3d-line-style)]
-         #:alpha [alpha (surface3d-alpha)])
-  (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (surface3d-samples)))
-  (let* ([z-min  (if (and (not z-min) x-min x-max y-min y-max)
-                     fz-min
-                     z-min)]
-         [z-max  (if (and (not z-max) x-min x-max y-min y-max)
-                     fz-max
-                     z-max)])
-    (renderer3d (add-surface3d f color line-color line-width line-style alpha)
-                (default-range->ticks (plot3d-tick-skip))
-                (default-range->ticks (plot3d-tick-skip))
-                (default-range->ticks (plot3d-tick-skip))
-                x-min x-max y-min y-max z-min z-max)))
+
+(define ((surface3d-bounds f samples)
+         x-min x-max y-min y-max z-min z-max)
+  (define zs (delay (2d-sample->list
+                     (third (f x-min x-max samples y-min y-max samples)))))
+  (let ([z-min  (if (and (not z-min) x-min x-max y-min y-max)
+                    (apply regular-min (force zs))
+                    z-min)]
+        [z-max  (if (and (not z-max) x-min x-max y-min y-max)
+                    (apply regular-max (force zs))
+                    z-max)])
+    (values x-min x-max y-min y-max z-min z-max)))
+
+(define (surface3d f [x-min #f] [x-max #f] [y-min #f] [y-max #f]
+                   #:z-min [z-min #f] #:z-max [z-max #f]
+                   #:samples [samples (surface3d-samples)]
+                   #:color [color (surface3d-color)]
+                   #:line-color [line-color (surface3d-line-color)]
+                   #:line-width [line-width (surface3d-line-width)]
+                   #:line-style [line-style (surface3d-line-style)]
+                   #:alpha [alpha (surface3d-alpha)])
+  (define g (memoize-sample-2d-function f))
+  (make-renderer3d
+   (add-surface3d g samples color line-color line-width line-style alpha)
+   (default-range->ticks (plot3d-tick-skip))
+   (default-range->ticks (plot3d-tick-skip))
+   (default-range->ticks (plot3d-tick-skip))
+   (surface3d-bounds g samples)
+   x-min x-max y-min y-max z-min z-max))
 
 ;; =============================================================================
 ;; contour3d
 
-(define ((add-contour3d f line-color line-width line-style alpha) area)
+(define ((add-contour3d f samples line-color line-width line-style alpha) area)
   (define x-min (send area get-x-min))
   (define x-max (send area get-x-max))
   (define y-min (send area get-y-min))
@@ -99,8 +113,9 @@
   (define z-min (send area get-z-min))
   (define z-max (send area get-z-max))
   
-  (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (get-surface3d-samples)))
+  (match-define (list xs ys zss)
+    (f x-min x-max (samples/animating? samples)
+       y-min y-max (samples/animating? samples)))
   
   (define levels
     (case (contour3d-levels)
@@ -134,30 +149,27 @@
                                     (vector xa yb z3) (vector xb yb z4))))
       (send area add-line/center a b c))))
 
-(define (contour3d
-         f [x-min #f] [x-max #f] [y-min #f] [y-max #f] [z-min #f] [z-max #f]
-         #:line-color [line-color (contour3d-line-color)]
-         #:line-width [line-width (contour3d-line-width)]
-         #:line-style [line-style (contour3d-line-style)]
-         #:alpha [alpha (contour3d-alpha)])
-  (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (surface3d-samples)))
-  (let* ([z-min  (if (and (not z-min) x-min x-max y-min y-max)
-                     fz-min
-                     z-min)]
-         [z-max  (if (and (not z-max) x-min x-max y-min y-max)
-                     fz-max
-                     z-max)])
-    (renderer3d (add-contour3d f line-color line-width line-style alpha)
-                (default-range->ticks (plot3d-tick-skip))
-                (default-range->ticks (plot3d-tick-skip))
-                (default-range->ticks (plot3d-tick-skip))
-                x-min x-max y-min y-max z-min z-max)))
+(define (contour3d f [x-min #f] [x-max #f] [y-min #f] [y-max #f]
+                   #:z-min [z-min #f] #:z-max [z-max #f]
+                   #:samples [samples (surface3d-samples)]
+                   #:line-color [line-color (contour3d-line-color)]
+                   #:line-width [line-width (contour3d-line-width)]
+                   #:line-style [line-style (contour3d-line-style)]
+                   #:alpha [alpha (contour3d-alpha)])
+  (define g (memoize-sample-2d-function f))
+  (make-renderer3d
+   (add-contour3d g samples line-color line-width line-style alpha)
+   (default-range->ticks (plot3d-tick-skip))
+   (default-range->ticks (plot3d-tick-skip))
+   (default-range->ticks (plot3d-tick-skip))
+   (surface3d-bounds g samples)
+   x-min x-max y-min y-max z-min z-max))
 
 ;; =============================================================================
 ;; shade3d
 
-(define ((add-shade3d f color-function line-color line-width line-style alpha)
+(define ((add-shade3d f samples shade-colors
+                      line-colors line-width line-style alpha)
          area)
   (define x-min (send area get-x-min))
   (define x-max (send area get-x-max))
@@ -166,8 +178,9 @@
   (define z-min (send area get-z-min))
   (define z-max (send area get-z-max))
   
-  (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (get-surface3d-samples)))
+  (match-define (list xs ys zss)
+    (f x-min x-max (samples/animating? samples)
+       y-min y-max (samples/animating? samples)))
   
   (define levels
     (case (contour3d-levels)
@@ -180,14 +193,16 @@
          levels)]
       [else    (real-seq z-min z-max (+ 1 (contour3d-levels)))]))
   
-  (define colors (color-function z-min z-max (sub1 (length levels))))
+  (define brush-colors (shade-colors z-min z-max (sub1 (length levels))))
+  (define pen-colors (line-colors z-min z-max (sub1 (length levels))))
   
   (send area set-alpha alpha)
   (for ([za  (in-list levels)]
         [zb  (in-list (rest levels))]
-        [color  (in-cycle colors)])
-    (send area set-brush color 'solid #;(if (plot3d-animating?) 'transparent 'solid))
-    (send area set-pen line-color line-width line-style)
+        [brush-color  (in-cycle brush-colors)]
+        [pen-color    (in-cycle pen-colors)])
+    (send area set-brush brush-color 'solid)
+    (send area set-pen pen-color line-width line-style)
     (for ([ya  (in-list ys)]
           [yb  (in-list (rest ys))]
           [j   (in-naturals)]
@@ -215,24 +230,19 @@
                (vector (denormalize-t u xb xa) (denormalize-t v yb ya) z))]))
         (send area add-polygon/center poly c)))))
 
-(define (shade3d
-         f [x-min #f] [x-max #f] [y-min #f] [y-max #f] [z-min #f] [z-max #f]
-         #:colors [color-function (shade3d-color-function)]
-         #:line-color [line-color (shade3d-line-color)]
-         #:line-width [line-width (shade3d-line-width)]
-         #:line-style [line-style (shade3d-line-style)]
-         #:alpha [alpha (shade3d-alpha)])
-  (define-values (xs ys zss fz-min fz-max)
-    (sample-2d-function f x-min x-max y-min y-max (surface3d-samples)))
-  (let* ([z-min  (if (and (not z-min) x-min x-max y-min y-max)
-                     fz-min
-                     z-min)]
-         [z-max  (if (and (not z-max) x-min x-max y-min y-max)
-                     fz-max
-                     z-max)])
-    (renderer3d (add-shade3d f color-function
-                             line-color line-width line-style alpha)
-                (default-range->ticks (plot3d-tick-skip))
-                (default-range->ticks (plot3d-tick-skip))
-                (default-range->ticks (plot3d-tick-skip))
-                x-min x-max y-min y-max z-min z-max)))
+(define (shade3d f [x-min #f] [x-max #f] [y-min #f] [y-max #f]
+                 #:z-min [z-min #f] #:z-max [z-max #f]
+                 #:samples [samples (surface3d-samples)]
+                 #:colors [colors (shade3d-colors)]
+                 #:line-colors [line-colors (shade3d-line-colors)]
+                 #:line-width [line-width (shade3d-line-width)]
+                 #:line-style [line-style (shade3d-line-style)]
+                 #:alpha [alpha (shade3d-alpha)])
+  (define g (memoize-sample-2d-function f))
+  (make-renderer3d
+   (add-shade3d g samples colors line-colors line-width line-style alpha)
+   (default-range->ticks (plot3d-tick-skip))
+   (default-range->ticks (plot3d-tick-skip))
+   (default-range->ticks (plot3d-tick-skip))
+   (surface3d-bounds g samples)
+   x-min x-max y-min y-max z-min z-max))

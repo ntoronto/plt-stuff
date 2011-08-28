@@ -1,9 +1,10 @@
 #lang racket/base
 
-(require racket/match racket/gui
-         "vector.rkt" "area.rkt")
+(require racket/match racket/draw racket/class racket/math
+         "vector.rkt"
+         "area.rkt")
 
-(provide add-points)
+(provide add-points known-point-symbols)
 
 (define full-glyph-hash
   #hash((fullcircle . circle)
@@ -15,12 +16,22 @@
         (fulltriangleleft . triangleleft)
         (fulltriangleright . triangleright)))
 
+(define known-point-symbols
+  '(dot point pixel plus times asterisk 5asterisk
+        odot opoint opixel oplus otimes oasterisk o5asterisk
+        circle square diamond triangle
+        fullcircle fullsquare fulldiamond fulltriangle
+        triangleup triangledown triangleleft triangleright
+        fulltriangleup fulltriangledown fulltriangleleft fulltriangleright
+        rightarrow leftarrow uparrow downarrow
+        5star 6star full5star))
+
 (define ((add-points vs label color size line-width alpha) area)
   (send area set-alpha alpha)
   (match label
     [(? string?)  (send area set-text-foreground color)
                   (send area set-font-size size)
-                  (for ([v  (in-list vs)] #:when (vreg? v))
+                  (for ([v  (in-list vs)] #:when (vall-regular? v))
                     (send area add-text-glyph v label))]
     [(? symbol?)
      (send area set-pen color line-width 'solid)
@@ -32,7 +43,7 @@
              [else
               (send area set-brush color 'transparent)
               label]))
-     (for ([v  (in-list vs)] #:when (vreg? v))
+     (for ([v  (in-list vs)] #:when (vall-regular? v))
        (case new-label
          ; circles
          [(circle)  (send area add-circle-glyph v r)]
@@ -71,5 +82,7 @@
          [(leftarrow)   (send area add-arrow-glyph v (+ 1 r) pi)]
          [(uparrow)     (send area add-arrow-glyph v (+ 1 r) (* -1/2 pi))]
          [(downarrow)   (send area add-arrow-glyph v (+ 1 r) (* 1/2 pi))]
-         [else     (error 'points "unknown point symbol ~e" label)]))]
+         [else
+          (raise-type-error 'points (format "symbol in ~a" known-point-symbols)
+                            label)]))]
     [_  (raise-type-error 'add-points "string or symbol" label)]))

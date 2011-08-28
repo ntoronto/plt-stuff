@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require racket/string racket/list racket/contract
+(require racket/string racket/list racket/contract racket/pretty
          "math.rkt" "list.rkt" "contract.rkt")
 
 (provide (all-defined-out))
@@ -56,4 +56,4 @@
                                       (any->tick-label (cdr a)) ")")]
         [(boolean? a)  (if a "true" "false")]
         [(char? a)     (list->string (list a))]
-        [else  (error 'any->tick-label "cannot render as tick label: ~e" a)]))
+        [else          (pretty-format a)]))

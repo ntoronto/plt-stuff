@@ -25,14 +25,14 @@
                                 [else             0.0])]))
 
 (define (nan? x) (eqv? x +nan.0))
-(define (inf? x) (or (eqv? x +inf.0) (eqv? x -inf.0)))
-(define (reg? x) (and (not (nan? x)) (not (inf? x))))
+(define (infinite? x) (or (eqv? x +inf.0) (eqv? x -inf.0)))
+(define (regular? x) (and (real? x) (not (nan? x)) (not (infinite? x))))
 
-(define (reg-min* xs)
-  (apply min (filter reg? xs)))
+(define (regular-min . xs)
+  (apply min (filter regular? xs)))
 
-(define (reg-max* xs)
-  (apply max (filter reg? xs)))
+(define (regular-max . xs)
+  (apply max (filter regular? xs)))
 
 (define 180/pi (fl/ 180.0 pi))
 (define pi/180 (fl/ pi 180.0))
@@ -43,19 +43,15 @@
 (define (radians->degrees r)
   (fl* (exact->inexact r) 180/pi))
 
-(define (maybe-min* x y)
-  (if x (if y (min x y) x)
-      (if y y #f)))
-
 (define (maybe-min . xs)
-  (foldl maybe-min* #f xs))
-
-(define (maybe-max* x y)
-  (if x (if y (max x y) x)
-      (if y y #f)))
+  (for/fold ([x  (car xs)]) ([y  (in-list (cdr xs))])
+    (if x (if y (min x y) x)
+        (if y y #f))))
 
 (define (maybe-max . xs)
-  (foldl maybe-max* #f xs))
+  (for/fold ([x  (car xs)]) ([y  (in-list (cdr xs))])
+    (if x (if y (max x y) x)
+        (if y y #f))))
 
 (define (floor-log10 x)
   (inexact->exact (floor (/ (log (abs x)) (log 10)))))
@@ -72,19 +68,24 @@
           [(char=? #\. (string-ref str (sub1 x)))  (substring str 0 (sub1 x))]
           [else  (substring str 0 x)])))
 
-(define (sample-2d-function f x-min x-max y-min y-max samples)
-  (define xs (real-seq (exact->inexact x-min) (exact->inexact x-max) samples))
-  (define ys (real-seq (exact->inexact y-min) (exact->inexact y-max) samples))
-  
-  ; cache every (f x y) in a vector of flvectors
+(define (sample-2d-function f x-min x-max x-samples y-min y-max y-samples)
+  (define xs (real-seq (exact->inexact x-min) (exact->inexact x-max) x-samples))
+  (define ys (real-seq (exact->inexact y-min) (exact->inexact y-max) y-samples))
   (define zss
-    (for/vector #:length samples ([y  (in-list ys)])
-      (for/flvector #:length samples ([x  (in-list xs)])
+    (for/vector #:length x-samples ([y  (in-list ys)])
+      (for/flvector #:length y-samples ([x  (in-list xs)])
         (exact->inexact (f x y)))))
-  
-  (define-values (z-min z-max)
-    (for*/fold ([z-min +inf.0] [z-max -inf.0]) ([zs  (in-vector zss)]
-                                                [z   (in-flvector zs)])
-        (values (flmin z z-min) (flmax z z-max))))
-  
-  (values xs ys zss z-min z-max))
+  (list xs ys zss))
+
+(define (memoize-sample-2d-function f)
+  (define memo (make-hash))
+  (λ (x-min x-max x-samples y-min y-max y-samples)
+    (hash-ref!
+     memo (vector x-min x-max x-samples y-min y-max y-samples)
+     (λ ()
+       (sample-2d-function f x-min x-max x-samples y-min y-max y-samples)))))
+
+(define (2d-sample->list zss)
+  (for*/list ([zs  (in-vector zss)]
+              [z   (in-flvector zs)])
+    z))

@@ -1,6 +1,6 @@
 #lang racket/base
 
-(require racket/match racket/gui
+(require racket/match racket/draw racket/class racket/list
          "math.rkt")
 
 (provide (all-defined-out))

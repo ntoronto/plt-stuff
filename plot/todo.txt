@@ -1,61 +1,87 @@
 2D and 3D
 ---------
-Handle more error cases
- - +nan.0
- - +inf.0 / -inf.0
- - Empty lists
+Start separate GUI event thread when opening window to show plots?
 
-Open a window to show plots when not running in DrRacket
+Parameterize default-range->ticks
+
+Parameterize real-seq? (would allow logarithmic transform of renderers)
+
+More color functions (contour, contour3d, surface3d, etc.)
+Flexible: allow color, listof color, function of color, whenever any makes sense
 
 Comments
-
-Contracts
 
 Documentation
 
 Test cases
 
-Compatibility layer
+Plot options:
+Exclude axes
 
-Checks for axis-min < axis-max (or contracts?)
+Legends
+
+Compatibility layer
 
 Test: polynomial at [big..big+epsilon] (support for exact rational functions)
 
-Use inherit
+Check all positive-integer/c contracts for value 1 (guess: divide by zero)
+
+Remove all references to parameters in render functions (should be passed in upon renderer creation)
+
+One tick function in a renderer (in case y ticks depend on x range, etc.)
+
+Fix point label sizes when using string
 
 
 3D only
 -------
-Handle nans and infs
-
-More efficiently find z-min and z-max?
-
-Cache more in animated plots
-
 Precision problem in dc->plot/x-size, etc. (need to rotate but not translate)
 
-Graph types
- - Vector cloud?
- - Histogram?
- - Isosurface
- - Concentric, transparent isosurfaces ("contour volumes"?)
+Depth sorting
+Bucket the sorted shapes and then sort by occlusion, default to min z first
+Divide intersecting polygons?
+Global subdivision parameter (plot3d-samples)
+
+Graph types:
+Histogram (vector a b height)
+Isosurface
+Concentric, transparent isosurfaces ("contour volumes"?)
 
 
 2D only
 -------
 error-bars
 
-'points' symbols:
-  integers -1..127
-  5star
-  6star
-  full5star
+Plot types:
+Functions: filling under/between curves
+1D KDE (using FFT!)
+Parametric regions
+Logarithmic (with adaptive or with parameterized subdivision, this could be a transform)
+Polar and polar axes
 
-Graph types
- - Inverted function
+Function extensions:
+Detect and handle visible discontinuities?
+Manually exclude discontinuous points?
+Adaptive sampling?
+Doc example: step function with discontinuities shown with circles?
+
+Histogram changes:
+Color function
+histogram-list?
+
+More 'points' symbols:
+integers -1..127
+5star
+6star
+full5star
 
 
-Compatibility layer junk
+plot/custom
+-----------
+Contracts for everything
+
+
+Compatibility layer info
 ------------------------
 Symbol to fraction of current glyph size:
 circle1 -> 3/6

@@ -1,53 +1,64 @@
 #lang racket/base
 
-(require racket/gui racket/match
+(require racket/gui/base racket/class racket/match racket/bool
+         racket/async-channel
+         "../common/gui.rkt"
          "area.rkt")
 
-(provide 3d-plot-snip%)    
+(provide 3d-plot-snip%)
 
-(struct render-thread (state channel thread) #:mutable #:transparent)
+(struct render-thread (state command-channel response-channel thread)
+        #:mutable #:transparent)
+
+(struct draw-command (angle altitude animating?) #:transparent)
+(struct copy-command () #:transparent)
 
 (define (make-render-thread make-bm)
-  (define ch (make-channel))
+  (define com-ch (make-channel))
+  (define res-ch (make-async-channel))
   (define th
     (thread
      (λ ()
        (let loop ()
-         (match (channel-get ch)
-           [(list angle altitude animating?)
-            (channel-put ch (make-bm angle altitude animating?))]
-           ['copy  (channel-put ch (make-render-thread make-bm))])
+         (match (channel-get com-ch)
+           [(draw-command angle altitude animating?)
+            (define bm
+              (with-handlers ([exn?  (λ (e) (async-channel-put res-ch e))])
+                (make-bm angle altitude animating?)))
+            (async-channel-put res-ch bm)]
+           [(copy-command)
+            (async-channel-put res-ch (make-render-thread make-bm))])
          (loop)))))
-  (render-thread 'wait ch th))
+  (render-thread 'wait com-ch res-ch th))
 
 (define (render-thread-get-bitmap r)
-  (match-define (render-thread state ch th) r)
-  (define bm (channel-get ch))
+  (match-define (render-thread state com-ch res-ch th) r)
+  (define res (async-channel-get res-ch))
   (set-render-thread-state! r 'wait)
-  bm)
+  (if (exn? res) (raise res) res))
 
 (define (render-thread-try-get-bitmap r)
-  (match-define (render-thread state ch th) r)
-  (define bm (channel-try-get ch))
-  (when bm (set-render-thread-state! r 'wait))
-  bm)
+  (match-define (render-thread state com-ch res-ch th) r)
+  (define res (async-channel-try-get res-ch))
+  (when res (set-render-thread-state! r 'wait))
+  (if (exn? res) (raise res) res))
 
 (define (render-thread-wait r)
-  (match-define (render-thread state ch th) r)
+  (match-define (render-thread state com-ch res-ch th) r)
   (when (symbol=? state 'drawing)
     (render-thread-get-bitmap r)))
 
 (define (render-thread-draw r angle altitude animating?)
   (render-thread-wait r)
-  (match-define (render-thread state ch th) r)
-  (channel-put ch (list angle altitude animating?))
+  (match-define (render-thread state com-ch res-ch th) r)
+  (channel-put com-ch (draw-command angle altitude animating?))
   (set-render-thread-state! r 'drawing))
 
 (define (render-thread-copy r)
   (render-thread-wait r)
-  (match-define (render-thread state ch th) r)
-  (channel-put ch 'copy)
-  (channel-get ch))
+  (match-define (render-thread state com-ch res-ch th) r)
+  (channel-put com-ch (copy-command))
+  (async-channel-get res-ch))
 
 (define 3d-plot-snip%
   (class image-snip%
@@ -84,10 +95,10 @@
         (case (render-thread-state rth)
           [(wait)  #t]
           [(drawing)  (define new-bm (render-thread-try-get-bitmap rth))
-                      (cond [new-bm  (set! bm new-bm)
-                                     (set-bitmap bm)
-                                     #t]
-                            [else    #f])]))
+                      (cond [(is-a? new-bm bitmap%)  (set! bm new-bm)
+                                                     (set-bitmap bm)
+                                                     #t]
+                            [else  #f])]))
       (when (and draw? can-draw?)
         (set! draw? #f)
         (render-thread-draw rth (new-angle) (new-altitude) animating?)))
@@ -99,13 +110,13 @@
     
     (define (start-timer)
       (stop-timer)
-      (set! timer (new timer%
-                       [notify-callback (update #t)]
-                       [interval 20])))
+      (set! timer (make-object timer% (update #t) 20)))
     
     (define/override (on-event dc x y editorx editory evt)
       (case (send evt get-event-type)
         [(left-down)  (render-thread-wait rth)
+                      (set! angle (new-angle))
+                      (set! altitude (new-altitude))
                       (set! click-x (send evt get-x))
                       (set! click-y (send evt get-y))
                       (set! drag-x click-x)
@@ -119,10 +130,16 @@
                       (set! drag-y (send evt get-y))
                       (set! angle (new-angle))
                       (set! altitude (new-altitude))
+                      (set! click-x 0)
+                      (set! click-y 0)
+                      (set! drag-x 0)
+                      (set! drag-y 0)
                       (render-thread-draw rth angle altitude #f)
-                      (set! bm (render-thread-get-bitmap rth))
-                      (set-bitmap bm)]
-        [(motion)     (when timer
+                      (define new-bm (render-thread-get-bitmap rth))
+                      (when (is-a? new-bm bitmap%)
+                        (set! bm new-bm)
+                        (set-bitmap bm))]
+        [(motion)     (when (and timer (send evt get-left-down))
                         (set! drag-x (send evt get-x))
                         (set! drag-y (send evt get-y))
                         (set! draw? #t))]))
@@ -132,12 +149,9 @@
         make-bm angle altitude bm (render-thread-copy rth)))
     
     (define cross-cursor (make-object cursor% 'cross))
-    (define blank-cursor (make-object cursor% 'blank))
     
     (define/override (adjust-cursor dc x y editorx editory evt)
-      (if (send evt get-left-down)
-          blank-cursor
-          cross-cursor))
+      cross-cursor)
     
     (send this set-flags
-          (cons 'handles-all-mouse-events (send this get-flags)))))
+          (list* 'handles-events (send this get-flags)))))

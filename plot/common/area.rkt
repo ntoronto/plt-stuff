@@ -1,7 +1,7 @@
 #lang racket/base
 
-(require racket/gui
-         "color.rkt" "gui.rkt" "math.rkt")
+(require racket/draw racket/class racket/match racket/math racket/bool
+         "color.rkt" "draw.rkt" "math.rkt")
 
 (provide plot-area%)
 
@@ -18,6 +18,8 @@
     
     (send dc set-smoothing 'smoothed)
     (send dc set-text-mode 'transparent)
+    
+    (define/public (get-dc) dc)
     
     ;; fields
     
@@ -115,10 +117,6 @@
     (define (set-dc-font)
       (send dc set-font (get-font)))
     
-    (define/public (get-char-width)
-      (set-dc-font)
-      (send dc get-char-width))
-    
     (define/public (get-char-height)
       (set-dc-font)
       (send dc get-char-height))
@@ -137,16 +135,6 @@
     
     (define (set-dc-text-foreground)
       (send dc set-text-foreground (color->color% text-foreground)))
-    
-    ;; clipping
-    
-    (define/public (clip-to-rect x-min x-max y-min y-max)
-      (match-define (vector x1 y1) (view->dc (vector x-min y-max)))
-      (match-define (vector x2 y2) (view->dc (vector x-max y-min)))
-      (send dc set-clipping-rect x1 y1 (- x2 x1) (- y2 y1)))
-    
-    (define/public (clip-to-none)
-      (send dc set-clipping-region #f))
     
     ;; drawing primitives
     
@@ -194,18 +182,28 @@
         (set-dc-alpha)
         (send dc draw-rectangle x1 y1 (- x2 x1) (- y2 y1))))
     
-    (define/public (draw-text str v [anchor 'tl] [angle 0])
+    (define/public (get-text-corners str v [anchor 'tl] [angle 0])
       (match-define (vector x y) (view->dc v))
+      (get-text-corners/anchor dc str x y anchor #t 0 angle))
+    
+    (define/public (draw-text/raw str x y [anchor 'tl] [angle 0]
+                                  #:outline? [outline? #f])
       (set-dc-font)
-      (set-dc-text-foreground)
       (set-dc-alpha)
+      (when outline?
+        (define fg (get-text-foreground))
+        (set-text-foreground (get-background))
+        (set-dc-text-foreground)
+        (for* ([dx  (list -1 0 1)] [dy  (list -1 0 1)])
+          (draw-text/anchor dc str (+ x dx) (+ y dy) anchor #t 0 angle))
+        (set-text-foreground fg))
+      (set-dc-text-foreground)
       (draw-text/anchor dc str x y anchor #t 0 angle))
     
-    (define/public (draw-text/raw str x y [anchor 'tl] [angle 0])
-      (set-dc-font)
-      (set-dc-text-foreground)
-      (set-dc-alpha)
-      (draw-text/anchor dc str x y anchor #t 0 angle))
+    (define/public (draw-text str v [anchor 'tl] [angle 0]
+                              #:outline? [outline? #f])
+      (match-define (vector x y) (view->dc v))
+      (draw-text/raw str x y anchor angle #:outline? outline?))
     
     ;; drawing glyphs
     

@@ -1,6 +1,8 @@
 #lang racket/base
 
-(require "../common/vector.rkt")
+(require racket/match
+         "../common/vector.rkt"
+         "../common/math.rkt")
 
 (provide (all-defined-out))
 
@@ -36,11 +38,13 @@
         [(shape? s)    (list (shape-center s))]))
 
 (define (draw-before? s1 s2)
-  (define c1 (vector-ref (shape-center s1) 1))
-  (define c2 (vector-ref (shape-center s2) 1))
-  (or (c1 . > . c2)
-      (and (polygon? s1) (not (polygon? s2))
-           (c1 . = . c2))))
+  (match-define (vector x1 y1 z1) (shape-center s1))
+  (match-define (vector x2 y2 z2) (shape-center s2))
+  (or (y1 . > . y2)
+      (and (y1 . = . y2)
+           (if (z1 . = . z2)
+               (and (polygon? s1) (not (polygon? s2)))
+               (z1 . < . z2)))))
 
 (define (depth-sort shapes)
   (sort shapes draw-before?))

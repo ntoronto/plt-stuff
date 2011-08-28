@@ -27,3 +27,5 @@
                             (match-define (vector x y) xy)
                             (vector (* 5 x) (* 5 y)))
                           #:style 'scaled)))
+
+(time (plot (error-bars '(#(1 2 0.1) #(2 3 0.2) #(3 4 0.3)))))
