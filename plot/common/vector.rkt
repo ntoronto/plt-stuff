@@ -1,7 +1,7 @@
 #lang racket/base
 
-(require racket/match racket/vector racket/math
-         "math.rkt")
+(require racket/match racket/vector racket/math racket/list
+         "math.rkt" "ticks.rkt")
 
 (provide (all-defined-out))
 
@@ -22,6 +22,7 @@
 (define (vneg v) (vector-map - v))
 (define (v* v c) (vector-map (λ (x) (* x c)) v))
 (define (v/ v c) (vector-map (λ (x) (/ x c)) v))
+(define (vround v) (vector-map round v))
 
 (define (vmag^2 v) (apply + (vector->list (vector-map sqr v))))
 (define (vdot v1 v2) (apply + (vector->list (vector-map * v1 v2))))
@@ -41,6 +42,11 @@
                                    (cons (cons (car vs) (car rst)) (cdr rst))]
         [else  (cons null (vregular-sublists (cdr vs)))]))
 
+(define (bounding-box/2d vs)
+  (match-define (list (vector xs ys) ...) vs)
+  (values (apply min xs) (apply max xs)
+          (apply min ys) (apply max ys)))
+
 (define (bounding-box vs)
   (match-define (list (vector xs ys zs) ...) vs)
   (values (apply min xs) (apply max xs)
@@ -50,22 +56,46 @@
 ;; returns the center of the smallest axial bounding rectangle containing the
 ;; points
 (define (center-coord vs)
-  (define-values (x-min x-max y-min y-max z-min z-max)
-    (bounding-box vs))
+  (define-values (x-min x-max y-min y-max z-min z-max) (bounding-box vs))
   (vector (* 1/2 (+ x-min x-max))
           (* 1/2 (+ y-min y-max))
           (* 1/2 (+ z-min z-max))))
 
 (define default-normal (vector 0 -1 0))
 
+(define (v= a b)
+  (andmap = (vector->list a) (vector->list b)))
+
+(define (remove-degenerate-edges vs)
+  (cond
+    [(empty? vs)  empty]
+    [else
+     (let*-values ([(last vs)
+                    (for/fold ([last  (first vs)] [vs  (list (first vs))])
+                              ([v  (in-list (rest vs))])
+                      (cond [(v= last v)  (values v vs)]
+                            [else         (values v (cons v vs))]))]
+                   [(vs)  (reverse vs)])
+       (cond [(v= last (first vs))  (rest vs)]
+             [else  vs]))]))
+
 (define (surface-normal vs)
-  (define norms
-    (for/list ([v1  (in-list vs)]
-               [v2  (in-list (append (cdr vs) vs))]
-               [v3  (in-list (append (cddr vs) vs))])
-      (vcross (v- v2 v1) (v- v3 v1))))
-  (define n (foldl v+ (vector 0 0 0) norms))
-  (define d^2 (vmag^2 n))
-  (if (d^2 . > . 0)
-      (v/ n (sqrt d^2))
-      default-normal))
+  (let ([vs  (remove-degenerate-edges vs)])
+    (cond
+      [((length vs) . < . 3)  default-normal]
+      [else
+       (let* ([vs  (append vs (take vs 2))]
+              [n   (for/fold ([n  (vector 0 0 0)])
+                             ([v1  (in-list vs)]
+                              [v2  (in-list (rest vs))]
+                              [v3  (in-list (rest (rest vs)))])
+                     (v+ n (vcross (v- v3 v2) (v- v1 v2))))]
+              [m   (vmag^2 n)])
+         (cond [(m . > . 0)  (v/ n (sqrt m))]
+               [else  default-normal]))])))
+
+(define (tesselate vs)
+  (cond [(= (length vs) 3)  (list vs)]
+        [else
+         (cons (take vs 3) (tesselate (list* (first vs) (third vs)
+                                             (drop vs 3))))]))

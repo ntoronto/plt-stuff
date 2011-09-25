@@ -1,38 +1,98 @@
 #lang racket/base
 
-(require racket/math racket/flonum)
+(require racket/math racket/flonum racket/match racket/list racket/sequence)
 
 (provide (all-defined-out))
 
-(define (real-seq start stop num)
-  (define size (- stop start))
-  (define step (/ size (sub1 num)))
-  (build-list num (λ (n) (+ start (* n step)))))
+(define -pi (- pi))
+(define 2pi (* 2 pi))
+(define -1/2pi (* -1/2 pi))
+(define 1/2pi (* 1/2 pi))
 
-;; atan2 : real real -> real
-;; Like atan, but accepts rise and run instead of slope so it can return values
-;; in the range [-pi,pi].
-(define (atan2 y x)
-  (angle (make-rectangular x y)))
+(define (real-modulo x y) (- x (* y (floor (/ x y)))))
 
-;; flatan2 : flonum flonum -> flonum
-(define (flatan2 y x)
-  (cond [(x . fl> . 0.0)  (flatan (fl/ y x))]
-        [(x . fl< . 0.0)  (cond [(y . fl< . 0.0)  (fl- (flatan (fl/ y x)) pi)]
-                                [else             (fl+ (flatan (fl/ y x)) pi)])]
-        [else             (cond [(y . fl< . 0.0)  (fl* pi -0.5)]
-                                [(y . fl> . 0.0)  (fl* pi  0.5)]
-                                [else             0.0])]))
+(define (flmodulo x y) (fl- x (fl* y (flfloor (fl/ x y)))))
+(define (fldist2 x y) (flsqrt (fl+ (fl* x x) (fl* y y))))
+(define (fldist3 x y z) (flsqrt (fl+ (fl* x x) (fl+ (fl* y y) (fl* z z)))))
+
+(define (alpha-blend x1 x2 a)
+  (+ (* a x1) (* (- 1 a) x2)))
+
+(define (build-linear-seq start step num)
+  (for/list ([n  (in-range num)])
+    (+ start (* n step))))
+
+(define (linear-seq start end num #:start? [start? #t] #:end? [end? #t])
+  (cond
+    [(zero? num)  empty]
+    ; ambiguous request: arbitrarily return start
+    [(and start? end? (= 1 num))  (list start)]
+    [else
+     (define size (- end start))
+     (define step (/ size (cond [(and start? end?)  (- num 1)]
+                                [(or start? end?)   (- num 1/2)]
+                                [else               num])))
+     (define real-start
+       (cond [start?  start]
+             [else    (+ start (* 1/2 step))]))
+     
+     (build-linear-seq real-start step num)]))
+
+#;
+(begin
+  (require rackunit)
+  (check-equal? (linear-seq 0 1 2 #:start? #t #:end? #t) '(0 1))
+  (check-equal? (linear-seq 0 1 2 #:start? #t #:end? #f) '(0 2/3))
+  (check-equal? (linear-seq 0 1 2 #:start? #f #:end? #t) '(1/3 1))
+  (check-equal? (linear-seq 0 1 2 #:start? #f #:end? #f) '(1/4 3/4)))
+
+(define (linear-seq* points num #:start? [start? #t] #:end? [end? #t])
+  (let/ec return
+    (when (empty? points) (raise-type-error 'linear-seq* "nonempty (listof real?)" points))
+    
+    (define pts (list->vector points))
+    (define len (vector-length pts))
+    
+    (define indexes (linear-seq 0 (sub1 len) num #:start? start? #:end? end?))
+    (define int-parts (map floor indexes))
+    (define frac-parts (map - indexes int-parts))
+    (map (λ (i f)
+           (if (= i (sub1 len))
+               (vector-ref pts i)
+               (alpha-blend (vector-ref pts (add1 i)) (vector-ref pts i) f)))
+         int-parts frac-parts)))
 
 (define (nan? x) (eqv? x +nan.0))
 (define (infinite? x) (or (eqv? x +inf.0) (eqv? x -inf.0)))
 (define (regular? x) (and (real? x) (not (nan? x)) (not (infinite? x))))
 
-(define (regular-min . xs)
-  (apply min (filter regular? xs)))
+(define (min2 x y)
+  (cond [(x . < . y)  x]
+        [(y . < . x)  y]
+        [(exact? x)  x]
+        [else  y]))
 
-(define (regular-max . xs)
-  (apply max (filter regular? xs)))
+(define (max2 x y)
+  (cond [(x . > . y)  x]
+        [(y . > . x)  y]
+        [(exact? x)  x]
+        [else  y]))
+
+(define (clamp x mn mx) (min (max x mn) mx))
+(define (clamp* x mn mx) (min2 (max2 x mn) mx))
+
+(define (min* x . xs) (foldl min2 x xs))
+(define (max* x . xs) (foldl max2 x xs))
+
+(define (maybe-min x . xs)
+  (for/fold ([x x]) ([y  (in-list xs)])
+    (if x (if y (min* x y) x)
+        (if y y #f))))
+
+(define (maybe-max x . xs)
+  (for/fold ([x x]) ([y  (in-list xs)])
+    (if x (if y (max* x y) x)
+        (if y y #f))))
 
 (define 180/pi (fl/ 180.0 pi))
 (define pi/180 (fl/ pi 180.0))
@@ -42,16 +102,6 @@
 
 (define (radians->degrees r)
   (fl* (exact->inexact r) 180/pi))
-
-(define (maybe-min . xs)
-  (for/fold ([x  (car xs)]) ([y  (in-list (cdr xs))])
-    (if x (if y (min x y) x)
-        (if y y #f))))
-
-(define (maybe-max . xs)
-  (for/fold ([x  (car xs)]) ([y  (in-list (cdr xs))])
-    (if x (if y (max x y) x)
-        (if y y #f))))
 
 (define (floor-log10 x)
   (inexact->exact (floor (/ (log (abs x)) (log 10)))))
@@ -68,24 +118,17 @@
           [(char=? #\. (string-ref str (sub1 x)))  (substring str 0 (sub1 x))]
           [else  (substring str 0 x)])))
 
-(define (sample-2d-function f x-min x-max x-samples y-min y-max y-samples)
-  (define xs (real-seq (exact->inexact x-min) (exact->inexact x-max) x-samples))
-  (define ys (real-seq (exact->inexact y-min) (exact->inexact y-max) y-samples))
-  (define zss
-    (for/vector #:length x-samples ([y  (in-list ys)])
-      (for/flvector #:length y-samples ([x  (in-list xs)])
-        (exact->inexact (f x y)))))
-  (list xs ys zss))
+(define (digits-for-range x-min x-max [extra-digits 3])
+  (define range (- x-max x-min))
+  (+ extra-digits (if (zero? range) 0 (max 0 (- (floor-log10 range))))))
 
-(define (memoize-sample-2d-function f)
-  (define memo (make-hash))
-  (λ (x-min x-max x-samples y-min y-max y-samples)
-    (hash-ref!
-     memo (vector x-min x-max x-samples y-min y-max y-samples)
-     (λ ()
-       (sample-2d-function f x-min x-max x-samples y-min y-max y-samples)))))
-
-(define (2d-sample->list zss)
-  (for*/list ([zs  (in-vector zss)]
-              [z   (in-flvector zs)])
-    z))
+(define ((flnewton-invert f f-diff f-inv-guess n) y)
+  (let ([y  (exact->inexact y)])
+    (let loop ([x  (f-inv-guess y)] [n n])
+      (let/ec return
+        (when (zero? n) (return x))
+        
+        (define dx (fl/ (fl- y (f x)) (f-diff x)))
+        (when (zero? dx) (return x))
+        
+        (loop (fl- x dx) (sub1 n))))))

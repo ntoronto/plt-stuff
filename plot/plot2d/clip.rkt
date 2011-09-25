@@ -1,15 +1,22 @@
 #lang racket/base
 
-(require racket/match racket/list)
+(require racket/match racket/list
+         "../common/vector.rkt")
 
 (provide point-in-bounds? clip-line clip-rectangle clip-lines clip-polygon)
 
 ;; Small library for clipping lines and polygons against axial planes
 
+;; =============================================================================
+;; Point clipping
+
 (define (point-in-bounds? v x-min x-max y-min y-max)
   (match-define (vector x y) v)
   (and (x . >= . x-min) (x . <= . x-max) 
        (y . >= . y-min) (y . <= . y-max)))
+
+;; =============================================================================
+;; Line clipping
 
 (define (clip-line-x start-in-bounds? x x1 y1 x2 y2)
   (define t (/ (- x x1) (- x2 x1)))
@@ -76,6 +83,9 @@
          [(x1 y1 x2 y2)  (clip-line-y-max y-max x1 y1 x2 y2)])
       (values (vector x1 y1) (vector x2 y2)))))
 
+;; =============================================================================
+;; Rectangle clipping
+
 (define (clip-rectangle v1 v2 x-min x-max y-min y-max)
   (let/ec return
     ; early accept: both endpoints in bounds
@@ -96,6 +106,9 @@
           [y2  (max (min y2 y-max) y-min)])
       (values (vector x1 y1) (vector x2 y2)))))
 
+;; =============================================================================
+;; Polygon clipping
+
 (define ((make-clip-polygon idx test? clip-line) val vs)
   (reverse
    (for/fold ([res empty]) ([v1  (in-list (cons (last vs) vs))]
@@ -104,14 +117,14 @@
      (define v2-in-bounds? (test? (vector-ref v2 idx) val))
      (cond [(and v1-in-bounds? v2-in-bounds?)  (cons v2 res)]
            [(and (not v1-in-bounds?) (not v2-in-bounds?))  res]
-            [else
-             (match-define (vector x1 y1) v1)
-             (match-define (vector x2 y2) v2)
-             (let-values ([(x1 y1 x2 y2)
-                           (clip-line v1-in-bounds? val x1 y1 x2 y2)])
-               (if v2-in-bounds?
-                   (list* (vector x2 y2) (vector x1 y1) res)
-                   (cons (vector x2 y2) res)))]))))
+           [else
+            (match-define (vector x1 y1) v1)
+            (match-define (vector x2 y2) v2)
+            (let-values ([(x1 y1 x2 y2)
+                          (clip-line v1-in-bounds? val x1 y1 x2 y2)])
+              (if v2-in-bounds?
+                  (list* (vector x2 y2) (vector x1 y1) res)
+                  (cons (vector x2 y2) res)))]))))
 
 (define clip-polygon-x-min (make-clip-polygon 0 >= clip-line-x))
 (define clip-polygon-x-max (make-clip-polygon 0 <= clip-line-x))
@@ -126,8 +139,7 @@
     (when (andmap (λ (v) (point-in-bounds? v x-min x-max y-min y-max))
                   vs)
       (return vs))
-    (define xs (map (λ (v) (vector-ref v 0)) vs))
-    (define ys (map (λ (v) (vector-ref v 1)) vs))
+    (match-define (list (vector xs ys) ...) vs)
     ; early reject: all endpoints on the outside of the same plane
     (when (or (andmap (λ (x) (x . < . x-min)) xs)
               (andmap (λ (x) (x . > . x-max)) xs)
@@ -143,6 +155,9 @@
            [vs  (clip-polygon-y-max y-max vs)])
       vs)))
 
+;; =============================================================================
+;; Lines clipping
+
 (define (join-lines lines [current-line empty])
   (cond [(empty? lines)         (list (reverse current-line))]
         [(empty? current-line)  (join-lines (rest lines)
@@ -156,16 +171,18 @@
 
 #;
 (join-lines
-   '((#(1 2) #(3 4))
-     (#(3 4) #(5 6))
-     (#(5 7) #(7 8))
-     (#(7 8) #(9 10))))
+ '((#(1 2) #(3 4))
+   (#(3 4) #(5 6))
+   (#(5 7) #(7 8))
+   (#(7 8) #(9 10))))
 
 (define (clip-lines vs x-min x-max y-min y-max)
-  (join-lines
-   (reverse
-    (for/fold ([res empty]) ([v1  (in-list vs)] [v2  (in-list (rest vs))])
-      (let-values ([(v1 v2)  (clip-line v1 v2 x-min x-max y-min y-max)])
-        (if (and v1 v2)
-            (cons (list v1 v2) res)
-            res))))))
+  (if (empty? vs)
+      empty
+      (join-lines
+       (reverse
+        (for/fold ([res empty]) ([v1  (in-list vs)] [v2  (in-list (rest vs))])
+          (let-values ([(v1 v2)  (clip-line v1 v2 x-min x-max y-min y-max)])
+            (if (and v1 v2)
+                (cons (list v1 v2) res)
+                res)))))))

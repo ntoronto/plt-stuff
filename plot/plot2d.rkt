@@ -1,35 +1,29 @@
 #lang racket/base
 
-(require racket/contract
-         "common/contract.rkt"
-         (only-in "plot2d/renderer.rkt" renderer2d?))
+(require "plot2d/sample.rkt")
+(provide
+ ; parameters
+ plot2d-x-transform plot2d-x-transform:doc
+ plot2d-y-transform plot2d-y-transform:doc)
 
 
 (require "plot2d/area.rkt")
-
 (provide
- plot2d-tick-skip plot2d-tick-skip:doc
+ ; parameters
  plot2d-tick-size plot2d-tick-size:doc
  plot2d-title plot2d-title:doc
  plot2d-x-label plot2d-x-label:doc
- plot2d-y-label plot2d-y-label:doc
- plot2d-foreground plot2d-foreground:doc
- plot2d-background plot2d-background:doc
- plot2d-font-size plot2d-font-size:doc
- plot2d-font-family plot2d-font-family:doc
- plot2d-pen-width plot2d-pen-width:doc)
+ plot2d-y-label plot2d-y-label:doc)
+
+
+(require "plot2d/ticks.rkt")
+(provide
+ ; parameters
+  plot2d-tick-skip plot2d-tick-skip:doc)
 
 
 (require "plot2d/plot.rkt")
-
-(provide 
- ; parameters
- plot2d-width plot2d-width:doc
- plot2d-height plot2d-height:doc
- plot2d-new-window? plot2d-new-window?:doc
- plot2d-jpeg-quality plot2d-jpeg-quality:doc
- plot2d-ps-interactive? plot2d-ps-interactive?:doc
- plot2d-pdf-interactive? plot2d-pdf-interactive?:doc
+(provide
  ; functions
  plot2d/dc plot2d/dc:doc
  plot2d->bitmap plot2d->bitmap:doc
@@ -38,12 +32,11 @@
  plot2d plot2d:doc
  plot2d->file plot2d->file:doc)
 
-(require "plot2d/points.rkt"
-         (only-in "common/points.rkt" known-point-symbols))
 
+(require "plot2d/point.rkt")
 (provide
  ; parameters
- point-label point-label:doc
+ point-symbol point-symbol:doc
  point-color point-color:doc
  point-size point-size:doc
  point-line-width point-line-width:doc
@@ -52,17 +45,20 @@
  vector-field-color vector-field-color:doc
  vector-field-line-width vector-field-line-width:doc
  vector-field-line-style vector-field-line-style:doc
- vector-field-arrow-length vector-field-arrow-length:doc
+ vector-field-arrow-scale vector-field-arrow-scale:doc
  vector-field-alpha vector-field-alpha:doc
- ; functions
+ error-bar-width error-bar-width:doc
+ error-bar-line-color error-bar-line-color:doc
+ error-bar-line-width error-bar-line-width:doc
+ error-bar-line-style error-bar-line-style:doc
+ error-bar-alpha error-bar-alpha:doc
+ ; renderers
  points points:doc
  vector-field vector-field:doc
- error-bars error-bars:doc
- known-point-symbols)
+ error-bars error-bars:doc)
 
 
 (require "plot2d/line.rkt")
-
 (provide
  ; parameters
  line-samples line-samples:doc
@@ -70,53 +66,81 @@
  line-width line-width:doc
  line-style line-style:doc
  line-alpha line-alpha:doc
- ; functions
+ ; renderers
  lines lines:doc
  parametric parametric:doc
+ polar polar:doc
  function function:doc
  inverse inverse:doc)
 
 
-(require "plot2d/contour.rkt")
-
+(require "plot2d/interval.rkt")
 (provide
+ ; parameters
+ interval-samples interval-samples:doc
+ interval-color interval-color:doc
+ interval-style interval-style:doc
+ interval-alpha interval-alpha:doc
+ ; renderers
+ lines-interval lines-interval:doc
+ parametric-interval parametric-interval:doc
+ polar-interval polar-interval:doc
+ function-interval function-interval:doc
+ inverse-interval inverse-interval:doc)
+
+
+(require "plot2d/contour.rkt")
+(provide
+ default-contour-line-colors default-contour-line-colors:doc
+ default-contour-fill-colors default-contour-fill-colors:doc
+ ; parameters
  contour-levels contour-levels:doc
  contour-samples contour-samples:doc
- contour-color contour-color:doc
- contour-width contour-width:doc
- contour-style contour-style:doc
- contour-alpha contour-alpha:doc
- shade-color-function shade-color-function:doc)
-
-(provide/contract
- [contour
-  (->* ((real? real? . -> . real?))
-       ((or/c real? #f) (or/c real? #f) (or/c real? #f) (or/c real? #f)
-        #:samples positive-integer/c
-        #:color plot-color/c #:width nonnegative-real/c
-        #:style pen-style/c #:alpha (real-in 0 1))
-       renderer2d?)]
- [shade
-  (->* ((real? real? . -> . real?))
-       ((or/c real? #f) (or/c real? #f) (or/c real? #f) (or/c real? #f)
-        #:samples positive-integer/c
-        #:colors (real? real? positive-integer/c . -> . plot-color/c))
-       renderer2d?)])
+ contour-colors contour-colors:doc
+ contour-widths contour-widths:doc
+ contour-styles contour-styles:doc
+ contour-alphas contour-alphas:doc
+ contour-interval-colors contour-interval-colors:doc
+ contour-interval-alphas contour-interval-alphas:doc
+ ; renderers
+ contours contours:doc
+ contour-intervals contour-intervals:doc)
 
 
 (require "plot2d/histogram.rkt")
+(provide
+ ; parameters
+ histogram-color histogram-color:doc
+ histogram-style histogram-style:doc
+ histogram-line-color histogram-line-color:doc
+ histogram-line-width histogram-line-width:doc
+ histogram-line-style histogram-line-style:doc
+ histogram-alpha histogram-alpha:doc
+ ; renderers
+ histogram histogram:doc)
 
-(provide/contract
- [histogram-bar-color   (parameter/c plot-color/c)]
- [histogram-bar-style   (parameter/c brush-style/c)]
- [histogram-line-color  (parameter/c plot-color/c)]
- [histogram-line-width  (parameter/c nonnegative-real/c)]
- [histogram-line-style  (parameter/c pen-style/c)]
- [histogram-alpha       (parameter/c (real-in 0 1))]
- [histogram
-  (->* ((listof (vector/c any/c real?)))
-       ((or/c real? #f) (or/c real? #f) #:x-min real? #:x-max (or/c real? #f)
-        #:bar-color plot-color/c #:bar-style brush-style/c
-        #:line-color plot-color/c #:line-width nonnegative-real/c
-        #:line-style pen-style/c #:alpha (real-in 0 1))
-       renderer2d?)])
+
+(require "plot2d/decoration.rkt")
+(provide
+ ; parameters
+ x-axis-ticks? x-axis-ticks?:doc
+ y-axis-ticks? y-axis-ticks?:doc
+ polar-axes-number polar-axes-number:doc
+ polar-axes-ticks? polar-axes-ticks?:doc
+ label-anchor label-anchor:doc
+ label-angle label-angle:doc
+ label-alpha label-alpha:doc
+ ; axis and tick renderers
+ x-axis x-axis:doc
+ y-axis y-axis:doc
+ axes axes:doc
+ polar-axes polar-axes:doc
+ x-tick-lines x-tick-lines:doc
+ y-tick-lines y-tick-lines:doc
+ tick-grid tick-grid:doc
+ ; label renderers
+ point-label point-label:doc
+ parametric-label parametric-label:doc
+ polar-label polar-label:doc
+ function-label function-label:doc
+ inverse-label inverse-label:doc)

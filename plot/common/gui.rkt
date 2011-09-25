@@ -28,10 +28,8 @@
   (define frame (new frame% [width width] [height height] [label label]))
   (define text (new read-only-text%))
   (define canvas (new editor-canvas% [parent frame] [editor text]
-                      [horizontal-inset 0] [vertical-inset 0]
-                      [horiz-margin 0] [vert-margin 0]
-                      [enabled #t]
-                      [style '(no-hscroll no-vscroll no-border)]))
+                      [horizontal-inset 0] [vertical-inset 0] [horiz-margin 0] [vert-margin 0]
+                      [enabled #t] [style '(no-hscroll no-vscroll no-border)]))
   (send text insert snip)
   (send text set-writable #f)
   frame)

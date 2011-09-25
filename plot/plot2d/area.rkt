@@ -1,72 +1,66 @@
 #lang racket/base
 
-(require racket/draw racket/class racket/contract racket/match racket/math
-         racket/list
+(require racket/draw racket/class racket/contract racket/match racket/math racket/list
          "../common/area.rkt"
          "../common/ticks.rkt"
          "../common/vector.rkt"
          "../common/contract.rkt"
-         "clip.rkt")
+         "../common/math.rkt"
+         "../common/transform.rkt"
+         "../common/legend.rkt"
+         "clip.rkt"
+         "sample.rkt")
 
 (provide (all-defined-out))
 
-(defparam plot2d-tick-skip skip positive-integer/c 2)
-(defparam plot2d-tick-size size nonnegative-real/c 10)
+(defparam plot2d-tick-size (real>=/c 0) 10)
 
-(defparam plot2d-title title (or/c string? #f) #f)
-(defparam plot2d-x-label label (or/c string? #f) "x axis")
-(defparam plot2d-y-label label (or/c string? #f) "y axis")
+(defparam plot2d-title (or/c string? #f) #f)
+(defparam plot2d-x-label (or/c string? #f) #f)
+(defparam plot2d-y-label (or/c string? #f) #f)
 
-(defparam plot2d-foreground color plot-color/c "black")
-(defparam plot2d-background color plot-color/c "white")
-(defparam plot2d-font-size size (integer-in 1 255) 11)
-(defparam plot2d-font-family family font-family/c 'roman)
-(defparam plot2d-pen-width width nonnegative-real/c 1)
-
-(define (plot2d-pen-gap) (* 2 (plot2d-pen-width)))
+(defparam plot2d-x-scaling (one-of/c 'linear 'log) 'linear)
+(defparam plot2d-y-scaling (one-of/c 'linear 'log) 'linear)
 
 (define 2d-plot-area%
   (class plot-area%
     (init-field x-ticks y-ticks x-min x-max y-min y-max)
-    (init the-dc)
+    (init dc)
+    (inherit
+      set-alpha set-pen set-brush set-background set-font set-text-foreground
+      get-text-width get-text-extent get-char-height
+      get-size set-clipping-rect clear-clipping-rect reset-drawing-params
+      clear draw-polygon draw-rectangle draw-line draw-lines draw-text
+      draw-glyphs draw-arrow-glyph draw-legend)
     
-    (inherit set-font set-text-foreground set-pen set-brush set-background
-             set-alpha get-text-width get-text-extent get-char-height get-size
-             clear draw-text/raw draw-line draw-lines draw-polygon draw-text
-             draw-rectangle draw-point draw-circle-glyph draw-polygon-glyph
-             draw-flare-glyph draw-arrow-glyph draw-text-glyph)
-    
-    (super-make-object the-dc)
-    
-    (define (reset-drawing-params)
-      (set-font (plot2d-font-size) (plot2d-font-family))
-      (set-text-foreground (plot2d-foreground))
-      (set-pen (plot2d-foreground) (plot2d-pen-width) 'solid)
-      (set-brush (plot2d-background) 'solid)
-      (set-background (plot2d-background))
-      (set-alpha 1.0))
+    (super-make-object dc)
     
     (reset-drawing-params)
     
     (define max-y-tick-label-width
       (for/fold ([max-w 0]) ([t  (in-list y-ticks)])
-        (define-values (w h _1 _2)  (get-text-extent (tick-label t)))
-        (values (max max-w w))))
+        (cond [(tick-major? t)  (define-values (w h _1 _2)
+                                  (get-text-extent (tick-label t)))
+                                (max max-w w)]
+              [else  max-w])))
     
     (define char-height (get-char-height))
     
+    (define last-x-tick (argmax tick-p x-ticks))
     (define last-x-tick-label-width
-      (let-values ([(w h _1 _2)  (get-text-extent
-                                  (tick-label (argmax tick-p x-ticks)))])
-        w))
+      (cond [(tick-major? last-x-tick)  (define-values (w _1 _2 _3)
+                                          (get-text-extent
+                                           (tick-label last-x-tick)))
+                                        w]
+            [else  0]))
     
     (define-values (dc-x-size dc-y-size) (get-size))
-      
+    
     (define x-margin
       (+ (* 1/2 (plot2d-tick-size))                   ; y ticks
-         (plot2d-pen-gap) max-y-tick-label-width      ; y tick labels
+         (pen-gap) max-y-tick-label-width             ; y tick labels
          (if (plot2d-y-label) (* 3/2 char-height) 0)  ; y label
-         ))  
+         ))
     
     (define area-x-size
       (- dc-x-size x-margin
@@ -76,7 +70,7 @@
     
     (define y-margin
       (+ (* 1/2 (plot2d-tick-size))                   ; x ticks
-         (plot2d-pen-gap) char-height                 ; x tick labels
+         (pen-gap) char-height                 ; x tick labels
          (if (plot2d-x-label) (* 3/2 char-height) 0)  ; x label
          ))
     
@@ -86,6 +80,13 @@
               (* 1/2 (plot2d-tick-size)))           ; x ticks
          (if (plot2d-title) (* 3/2 char-height) 0)  ; title
          ))
+    
+    (define area-x-min x-margin)
+    (define area-x-max (+ x-margin area-x-size))
+    (define area-y-max (- dc-y-size y-margin))
+    (define area-y-min (- area-y-max area-y-size))
+    (define area-x-mid (* 1/2 (+ area-x-min area-x-max)))
+    (define area-y-mid (* 1/2 (+ area-y-min area-y-max)))
     
     (define x-size (- x-max x-min))
     (define y-size (- y-max y-min))
@@ -98,14 +99,14 @@
     
     (define/public (clip-to-bounds rx-min rx-max ry-min ry-max)
       (set! clipping? #t)
-      (define cx-min (if rx-min (max x-min rx-min) x-min))
-      (define cx-max (if rx-max (min x-max rx-max) x-max))
-      (define cy-min (if ry-min (max y-min ry-min) y-min))
-      (define cy-max (if ry-max (min y-max ry-max) y-max))
-      (let ([cx-min  (min cx-min cx-max)]
-            [cx-max  (max cx-min cx-max)]
-            [cy-min  (min cy-min cy-max)]
-            [cy-max  (max cy-min cy-max)])
+      (define cx-min (if rx-min (max* x-min rx-min) x-min))
+      (define cx-max (if rx-max (min* x-max rx-max) x-max))
+      (define cy-min (if ry-min (max* y-min ry-min) y-min))
+      (define cy-max (if ry-max (min* y-max ry-max) y-max))
+      (let ([cx-min  (min* cx-min cx-max)]
+            [cx-max  (max* cx-min cx-max)]
+            [cy-min  (min* cy-min cy-max)]
+            [cy-max  (max* cy-min cy-max)])
         (set! clip-x-min cx-min)
         (set! clip-x-max cx-max)
         (set! clip-y-min cy-min)
@@ -114,190 +115,248 @@
     (define/public (clip-to-none)
       (set! clipping? #f))
     
+    (define/public (get-x-ticks) x-ticks)
+    (define/public (get-y-ticks) y-ticks)
     (define/public (get-x-min) x-min)
     (define/public (get-x-max) x-max)
     (define/public (get-y-min) y-min)
     (define/public (get-y-max) y-max)
+    (define/public (get-bounds) (values x-min x-max y-min y-max))
     
-    (define/public (dc->plot/x-size x)
-      (* x (/ x-size area-x-size)))
+    (define/public (get-area-x-min) area-x-min)
+    (define/public (get-area-x-max) area-x-max)
+    (define/public (get-area-y-min) area-y-min)
+    (define/public (get-area-y-max) area-y-max)
+    (define/public (get-clip-x-min) (if clipping? clip-x-min x-min))
+    (define/public (get-clip-x-max) (if clipping? clip-x-max x-max))
+    (define/public (get-clip-y-min) (if clipping? clip-y-min y-min))
+    (define/public (get-clip-y-max) (if clipping? clip-y-max y-max))
     
-    (define/public (dc->plot/y-size y)
-      (* y (/ y-size area-y-size)))
-    
-    (define/public (plot->dc/x-size x)
+    (define/public (view->dc/x-size x)
       (* x (/ area-x-size x-size)))
     
-    (define/public (plot->dc/y-size y)
+    (define/public (view->dc/y-size y)
       (* y (/ area-y-size y-size)))
     
-    (define/public (plot->dc/size xy)
+    (define/public (view->dc/angle a)
+      (- (atan (view->dc/y-size (sin a))
+               (view->dc/x-size (cos a)))))
+    
+    (define/public (view->dc/angle+mag a m)
+      (define dx (view->dc/x-size (* m (cos a))))
+      (define dy (view->dc/y-size (* m (sin a))))
+      (values (atan (- dy) dx) (sqrt (+ (sqr dx) (sqr dy)))))
+    
+    (define/public (dc->view/x-size x)
+      (* x (/ x-size area-x-size)))
+    
+    (define/public (dc->view/y-size y)
+      (* y (/ y-size area-y-size)))
+    
+    (define/public (dc->view/angle a)
+      (- (atan (dc->view/y-size (sin a))
+               (dc->view/x-size (cos a)))))
+    
+    (define x-zero (view->dc/x-size (- x-min)))
+    (define y-zero (view->dc/y-size (- y-min)))
+    
+    (define/public (view->dc xy)
       (match-define (vector x y) xy)
-      (vector (plot->dc/x-size x) (plot->dc/y-size y)))
+      (vector (+ area-x-min (+ x-zero (view->dc/x-size x)))
+              (- area-y-max (+ y-zero (view->dc/y-size y)))))
     
-    (define (plot->dc xy)
-      (match-define (vector x y) xy)
-      (define x-zero (plot->dc/x-size (- x-min)))
-      (define y-zero (plot->dc/y-size (- y-min)))
-      (vector (+ x-margin (+ x-zero (plot->dc/x-size x)))
-              (- dc-y-size (+ y-margin (+ y-zero (plot->dc/y-size y))))))
+    (define identity-transforms?
+      (and (equal? (plot2d-x-transform) id-transform)
+           (equal? (plot2d-y-transform) id-transform)))
     
-    ; in 2D, plot coordinates are view coordinates
-    (define/override (view->dc xy) (plot->dc xy))
+    (define plot->view
+      (cond [identity-transforms?  (λ (v) v)]
+            [else
+             (match-define (invertible-fun fx _) ((plot2d-x-transform) x-min x-max))
+             (match-define (invertible-fun fy _) ((plot2d-y-transform) y-min y-max))
+             (λ (v)
+               (match-define (vector x y) v)
+               (vector (fx x) (fy y)))]))
     
-    (define (set-major-pen)
-      (set-pen (plot2d-foreground) (plot2d-pen-width) 'solid))
+    (define/public (plot->dc v)
+      (view->dc (plot->view v)))
     
-    (define (set-minor-pen)
-      (set-pen (plot2d-foreground) (* 1/2 (plot2d-pen-width)) 'solid))
+    (define/public (set-major-pen [style 'solid])
+      (set-pen (plot-foreground) (plot-pen-width) style))
     
-    (define/private (add-borders)
+    (define/public (set-minor-pen [style 'solid])
+      (set-pen (plot-foreground) (* 1/2 (plot-pen-width)) style))
+    
+    ;; -------------------------------------------------------------------------
+    ;; Plot decoration
+    
+    (define/private (draw-borders)
       (set-minor-pen)
-      (add-line (vector x-min y-min) (vector x-min y-max))
-      (add-line (vector x-min y-max) (vector x-max y-max))
-      (add-line (vector x-max y-max) (vector x-max y-min))
-      (add-line (vector x-max y-min) (vector x-min y-min)))
+      (draw-rectangle (vector area-x-min area-y-min)
+                      (vector area-x-max area-y-max)))
     
-    (define/private (add-axes)
-      (clip-to-bounds x-min x-max y-min y-max)
-      (set-minor-pen)
-      ; horizontal
-      (define y-tick-half (dc->plot/x-size (* 1/2 (plot2d-tick-size))))
-      (add-line (vector (+ x-min y-tick-half) 0)
-                (vector (- x-max y-tick-half) 0))
-      ; vertical
-      (define x-tick-half (dc->plot/y-size (* 1/2 (plot2d-tick-size))))
-      (add-line (vector 0 (+ y-min x-tick-half))
-                (vector 0 (- y-max x-tick-half))))
-    
-    (define/private (add-x-ticks)
-      (define half (dc->plot/y-size (* 1/2 (plot2d-tick-size))))
-      (define y-offset
-        (dc->plot/y-size (+ (plot2d-pen-gap) (* 1/2 (plot2d-tick-size)))))
+    (define/private (draw-x-ticks)
+      (define half (* 1/2 (plot2d-tick-size)))
       (for ([t  (in-list x-ticks)])
         (match-define (tick x x-str major?) t)
         (if major? (set-major-pen) (set-minor-pen))
-        (add-line (vector x (- y-min half))
-                  (vector x (+ y-min half)))
-        (add-line (vector x (- y-max half))
-                  (vector x (+ y-max half)))
+        (match-define (vector x1 _y1) (plot->dc (vector x y-min)))
+        (match-define (vector x2 _y2) (plot->dc (vector x y-max)))
+        (draw-line (vector x1 (- area-y-max half))
+                   (vector x1 (+ area-y-max half)))
+        (draw-line (vector x2 (- area-y-min half))
+                   (vector x2 (+ area-y-min half)))
         (when major?
-          (define str-width (dc->plot/x-size (get-text-width x-str)))
-          (add-text x-str (vector (- x (* 1/2 str-width))
-                                  (- y-min y-offset))))))
+          (draw-text x-str (vector x1 (+ area-y-max half (pen-gap))) 'top))))
     
-    (define/private (add-y-ticks)
-      (define half (dc->plot/x-size (* 1/2 (plot2d-tick-size))))
-      (define x-offset
-        (dc->plot/x-size (+ (plot2d-pen-gap) (* 1/2 (plot2d-tick-size)))))
-      (define y-offset (* 1/2 (dc->plot/y-size char-height)))
+    (define/private (draw-y-ticks)
+      (define half (* 1/2 (plot2d-tick-size)))
       (for ([t  (in-list y-ticks)])
         (match-define (tick y y-str major?) t)
+        (match-define (vector _x1 y1) (plot->dc (vector x-min y)))
+        (match-define (vector _x2 y2) (plot->dc (vector x-max y)))
         (if major? (set-major-pen) (set-minor-pen))
-        (add-line (vector (- x-min half) y)
-                  (vector (+ x-min half) y))
-        (add-line (vector (- x-max half) y)
-                  (vector (+ x-max half) y))
+        (draw-line (vector (- area-x-min half) y1)
+                   (vector (+ area-x-min half) y1))
+        (draw-line (vector (- area-x-max half) y2)
+                   (vector (+ area-x-max half) y2))
         (when major?
-          (define str-width (dc->plot/x-size (get-text-width y-str)))
-          (add-text y-str (vector (- x-min (+ str-width x-offset))
-                                  (+ y y-offset))))))
+          (draw-text y-str (vector (- area-x-min half (pen-gap)) y1) 'right))))
     
-    (define/private (add-title)
+    (define/private (draw-title)
       (define-values (title-x-size _1 _2 _3)
         (get-text-extent (plot2d-title)))
-      (draw-text/raw (plot2d-title) (/ dc-x-size 2) 0 'top))
+      (draw-text (plot2d-title) (vector (/ dc-x-size 2) 0) 'top))
     
-    (define/private (add-x-label)
+    (define/private (draw-x-label)
       (match-define (vector x _)
-        (plot->dc (vector (* 1/2 (+ x-min x-max)) 0)))
-      (draw-text/raw (plot2d-x-label) x dc-y-size 'bottom))
+        (view->dc (vector (* 1/2 (+ x-min x-max)) 0)))
+      (draw-text (plot2d-x-label) (vector x dc-y-size) 'bottom))
     
-    (define/private (add-y-label)
+    (define/private (draw-y-label)
       (match-define (vector _ y)
-        (plot->dc (vector 0 (* 1/2 (+ y-min y-max)))))
-      (draw-text/raw (plot2d-y-label) 0 y 'bottom (/ pi -2)))
+        (view->dc (vector 0 (* 1/2 (+ y-min y-max)))))
+      (draw-text (plot2d-y-label) (vector 0 y) 'bottom (/ pi -2)))
+    
+    ;; -------------------------------------------------------------------------
+    ;; Drawing
     
     (define/public (start-plot)
       (clear)
-      (add-borders)
-      (add-x-ticks)
-      (add-y-ticks)
-      (add-axes))
+      (draw-borders)
+      (draw-x-ticks)
+      (draw-y-ticks))
     
     (define/public (end-plot)
-      (reset-drawing-params)
+      (clear-clipping-rect)
       (clip-to-none)
-      (when (plot2d-title) (add-title))
-      (when (plot2d-x-label) (add-x-label))
-      (when (plot2d-y-label) (add-y-label)))
+      (reset-drawing-params)
+      (when (plot2d-title) (draw-title))
+      (when (plot2d-x-label) (draw-x-label))
+      (when (plot2d-y-label) (draw-y-label)))
     
-    (define/public (add-line v1 v2)
-      (when (and (vall-regular? v1) (vall-regular? v2))
-        (let-values ([(v1 v2)  (if clipping?
-                                   (clip-line v1 v2 clip-x-min clip-x-max
-                                              clip-y-min clip-y-max)
-                                   (values v1 v2))])
-          (when (and v1 v2)
-            (draw-line v1 v2)))))
+    (define/public (put-legend legend-entries)
+      (define gap-size (+ (pen-gap) (* 1/2 (plot2d-tick-size))))
+      (draw-legend legend-entries
+                   (+ area-x-min gap-size) (- area-x-max gap-size)
+                   (+ area-y-min gap-size) (- area-y-max gap-size)))
     
-    (define/public (add-lines vs)
+    (define (subdivide-line v1 v2)
+      (let/ec return
+        (match-define (vector dc-x1 dc-y1) (plot->dc v1))
+        (match-define (vector dc-x2 dc-y2) (plot->dc v2))
+        (define dc-dx (- dc-x2 dc-x1))
+        (define dc-dy (- dc-y2 dc-y1))
+        (when (or (zero? dc-dx) (zero? dc-dy)) (return (list v1 v2)))
+        
+        (match-define (vector x1 y1) v1)
+        (match-define (vector x2 y2) v2)
+        (cond [((abs dc-dx) . > . (abs dc-dy))
+               (define num (+ 1 (inexact->exact (ceiling (* 1/3 (abs dc-dx))))))
+               (define xs (nonlinear-seq x1 x2 num (plot2d-x-transform)))
+               (define m (/ (- y2 y1) (- x2 x1)))
+               (define b (- y1 (* m x1)))
+               (define ys (map (λ (x) (+ (* m x) b)) xs))
+               (map vector xs ys)]
+              [else
+               (define num (+ 1 (inexact->exact (ceiling (* 1/3 (abs dc-dy))))))
+               (define ys (nonlinear-seq y1 y2 num (plot2d-y-transform)))
+               (define m (/ (- x2 x1) (- y2 y1)))
+               (define b (- x1 (* m y1)))
+               (define xs (map (λ (y) (+ (* m y) b)) ys))
+               (map vector xs ys)])))
+    
+    (define (subdivide-lines vs)
+      (append
+       (append*
+        (for/list ([v1  (in-list vs)] [v2  (in-list (rest vs))])
+          (define line-vs (subdivide-line v1 v2))
+          (take line-vs (sub1 (length line-vs)))))
+       (list (last vs))))
+    
+    (define (subdivide-polygon vs)
+      (subdivide-lines (append vs (list (first vs)))))
+    
+    (define/public (put-lines vs)
       (for ([vs  (vregular-sublists vs)])
         (for ([vs  (if clipping?
                        (in-list (clip-lines vs clip-x-min clip-x-max
                                             clip-y-min clip-y-max))
                        (in-value vs))])
           (when (not (empty? vs))
-            (draw-lines vs)))))
+            (let ([vs  (if identity-transforms? vs (subdivide-lines vs))])
+              (draw-lines (map (λ (v) (plot->dc v)) vs)))))))
     
-    (define/public (add-polygon vs)
+    (define/public (put-line v1 v2)
+      (when (and (vall-regular? v1) (vall-regular? v2))
+        (let-values ([(v1 v2)  (if clipping?
+                                   (clip-line v1 v2 clip-x-min clip-x-max
+                                              clip-y-min clip-y-max)
+                                   (values v1 v2))])
+          (when (and v1 v2)
+            (if identity-transforms?
+                (draw-line (plot->dc v1) (plot->dc v2))
+                (draw-lines (map (λ (v) (plot->dc v))
+                                 (subdivide-line v1 v2))))))))
+    
+    (define/public (put-polygon vs)
       (when (andmap vall-regular? vs)
         (let* ([vs  (if clipping?
                         (clip-polygon vs clip-x-min clip-x-max
                                       clip-y-min clip-y-max)
                         vs)])
           (when (not (empty? vs))
-            (draw-polygon vs)))))
+            (if identity-transforms?
+                (draw-polygon (map (λ (v) (plot->dc v)) vs))
+                (draw-polygon (map (λ (v) (plot->dc v))
+                                   (subdivide-polygon vs))))))))
     
-    (define/public (add-rectangle v1 v2)
+    (define/public (put-rectangle v1 v2)
       (when (and (vall-regular? v1) (vall-regular? v2))
         (let-values ([(v1 v2)  (if clipping?
                                    (clip-rectangle v1 v2 clip-x-min clip-x-max
                                                    clip-y-min clip-y-max)
                                    (values v1 v2))])
           (when (and v1 v2)
-            (draw-rectangle v1 v2)))))
+            (draw-rectangle (plot->dc v1) (plot->dc v2))))))
     
     (define (in-bounds? v)
       (or (not clipping?)
           (point-in-bounds? v clip-x-min clip-x-max
                             clip-y-min clip-y-max)))
     
-    (define/public (add-text str v [anchor 'tl] [angle 0])
+    (define/public (put-text str v [anchor 'top-left] [angle 0]
+                             #:outline? [outline? #f])
       (when (and (vall-regular? v) (in-bounds? v))
-        (draw-text str v anchor angle)))
+        (draw-text str (plot->dc v) anchor angle #:outline? outline?)))
     
-    (define/public (add-point v)
-      (when (and (vall-regular? v) (in-bounds? v))
-        (draw-point v)))
+    (define/public (put-glyphs vs symbol size)
+      (draw-glyphs (map (λ (v) (plot->dc v))
+                        (filter (λ (v) (and (vall-regular? v) (in-bounds? v)))
+                                vs))
+                   symbol size))
     
-    (define/public (add-circle-glyph v r)
+    (define/public (put-arrow-glyph v r angle)
       (when (and (vall-regular? v) (in-bounds? v))
-        (draw-circle-glyph v r)))
-    
-    (define/public (add-polygon-glyph v r sides start-angle)
-      (when (and (vall-regular? v) (in-bounds? v))
-        (draw-polygon-glyph v r sides start-angle)))
-    
-    (define/public (add-flare-glyph v r sticks start-angle)
-      (when (and (vall-regular? v) (in-bounds? v))
-        (draw-flare-glyph v r sticks start-angle)))
-    
-    (define/public (add-arrow-glyph v r angle)
-      (when (and (vall-regular? v) (in-bounds? v))
-        (draw-arrow-glyph v r angle)))
-    
-    (define/public (add-text-glyph v str)
-      (when (and (vall-regular? v) (in-bounds? v))
-        (draw-text-glyph v str)))
+        (draw-arrow-glyph (plot->dc v) r angle)))
     ))

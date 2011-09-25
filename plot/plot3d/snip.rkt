@@ -3,12 +3,12 @@
 (require racket/gui/base racket/class racket/match racket/bool
          racket/async-channel
          "../common/gui.rkt"
+         "../common/math.rkt"
          "area.rkt")
 
 (provide 3d-plot-snip%)
 
-(struct render-thread (state command-channel response-channel thread)
-        #:mutable #:transparent)
+(struct render-thread (state command-channel response-channel thread) #:mutable #:transparent)
 
 (struct draw-command (angle altitude animating?) #:transparent)
 (struct copy-command () #:transparent)
@@ -22,12 +22,10 @@
        (let loop ()
          (match (channel-get com-ch)
            [(draw-command angle altitude animating?)
-            (define bm
-              (with-handlers ([exn?  (λ (e) (async-channel-put res-ch e))])
-                (make-bm angle altitude animating?)))
+            (define bm (with-handlers ([exn?  (λ (e) (async-channel-put res-ch e))])
+                         (make-bm angle altitude animating?)))
             (async-channel-put res-ch bm)]
-           [(copy-command)
-            (async-channel-put res-ch (make-render-thread make-bm))])
+           [(copy-command)  (async-channel-put res-ch (make-render-thread make-bm))])
          (loop)))))
   (render-thread 'wait com-ch res-ch th))
 
@@ -77,28 +75,20 @@
     (define drag-x 0)
     (define drag-y 0)
     
-    (define (new-angle)
-      (let* ([angle  (+ angle (* (- drag-x click-x) (/ 180 width)))]
-             [angle  (- angle (* (floor (/ angle 360)) 360))])
-        (/ (round (* angle 2)) 2)))
-    
-    (define (new-altitude)
-      (let* ([alt  (+ altitude (* (- drag-y click-y) (/ 180 height)))]
-             [alt  (if (alt . < . 0) 0 (if (alt . > . 90) 90 alt))])
-        (/ (round (* alt 2)) 2)))
+    (define (new-angle) (real-modulo (+ angle (* (- drag-x click-x) (/ 180 width))) 360))
+    (define (new-altitude) (clamp (+ altitude (* (- drag-y click-y) (/ 180 height))) 0 90))
     
     (define draw? #t)
     (define timer #f)
     
     (define ((update animating?))
-      (define can-draw?
-        (case (render-thread-state rth)
-          [(wait)  #t]
-          [(drawing)  (define new-bm (render-thread-try-get-bitmap rth))
-                      (cond [(is-a? new-bm bitmap%)  (set! bm new-bm)
-                                                     (set-bitmap bm)
-                                                     #t]
-                            [else  #f])]))
+      (define can-draw? (case (render-thread-state rth)
+                          [(wait)  #t]
+                          [(drawing)  (define new-bm (render-thread-try-get-bitmap rth))
+                                      (cond [(is-a? new-bm bitmap%)  (set! bm new-bm)
+                                                                     (set-bitmap bm)
+                                                                     #t]
+                                            [else  #f])]))
       (when (and draw? can-draw?)
         (set! draw? #f)
         (render-thread-draw rth (new-angle) (new-altitude) animating?)))
@@ -145,13 +135,9 @@
                         (set! draw? #t))]))
     
     (define/override (copy)
-      (make-object 3d-plot-snip%
-        make-bm angle altitude bm (render-thread-copy rth)))
+      (make-object 3d-plot-snip% make-bm angle altitude bm (render-thread-copy rth)))
     
     (define cross-cursor (make-object cursor% 'cross))
+    (define/override (adjust-cursor dc x y editorx editory evt) cross-cursor)
     
-    (define/override (adjust-cursor dc x y editorx editory evt)
-      cross-cursor)
-    
-    (send this set-flags
-          (list* 'handles-events (send this get-flags)))))
+    (send this set-flags (list* 'handles-events (send this get-flags)))))

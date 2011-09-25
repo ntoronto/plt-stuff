@@ -1,88 +1,84 @@
 2D and 3D
 ---------
-Start separate GUI event thread when opening window to show plots?
+Fix memory leak!
 
-Parameterize default-range->ticks
+plot2d, plot3d take variable number of arguments? or trees?
 
-Parameterize real-seq? (would allow logarithmic transform of renderers)
+Start separate GUI event thread when opening window to show plots? Or was that a bug?
 
-More color functions (contour, contour3d, surface3d, etc.)
-Flexible: allow color, listof color, function of color, whenever any makes sense
-
-Comments
+Map from integers to point symbols
 
 Documentation
 
-Test cases
+Merge common/transform.rkt and common/sample.rkt
 
-Plot options:
-Exclude axes
+Unify parameters, esp. plot3d-samples
 
-Legends
+Style:
+ - 102 spaces wide
+ - Comments
+ - Avoid (all-defined-out)
+ - 1-2-line module purpose statements
 
-Compatibility layer
+Outer contour intervals should never be zero-length
 
-Test: polynomial at [big..big+epsilon] (support for exact rational functions)
+Join contour lines
 
-Check all positive-integer/c contracts for value 1 (guess: divide by zero)
-
-Remove all references to parameters in render functions (should be passed in upon renderer creation)
-
-One tick function in a renderer (in case y ticks depend on x range, etc.)
-
-Fix point label sizes when using string
-
-
-3D only
--------
-Precision problem in dc->plot/x-size, etc. (need to rotate but not translate)
-
-Depth sorting
-Bucket the sorted shapes and then sort by occlusion, default to min z first
-Divide intersecting polygons?
-Global subdivision parameter (plot3d-samples)
-
-Graph types:
-Histogram (vector a b height)
-Isosurface
-Concentric, transparent isosurfaces ("contour volumes"?)
+Make defparam produce an applicable struct macro that contains docs
 
 
 2D only
 -------
-error-bars
+Plot types
+ - Simple 1D KDE
+ - 1D KDE using FFT
 
-Plot types:
-Functions: filling under/between curves
-1D KDE (using FFT!)
-Parametric regions
-Logarithmic (with adaptive or with parameterized subdivision, this could be a transform)
-Polar and polar axes
+Manually exclude discontinuous points in function/parametric?
+Allow line functions to return (hole p1 p2), (left-hole p1 p2) or (right-hole p1 p2)?
 
-Function extensions:
-Detect and handle visible discontinuities?
-Manually exclude discontinuous points?
-Adaptive sampling?
-Doc example: step function with discontinuities shown with circles?
+histogram-list (use parameter for x-min)
 
-Histogram changes:
-Color function
-histogram-list?
 
-More 'points' symbols:
-integers -1..127
-5star
-6star
-full5star
+3D only
+-------
+Subdivide nonlinearly transformed lines/polys
+
+Decorations
+ - labeled points
+ - x/y/z axes?
+ - tick grid?
+ - polar axes/globe?
+
+Graph types:
+Histogram (vector a b height)
+2-input parametric? (would have to divide polygons?)
+
+Depth sorting
+Bucket the sorted shapes and then sort by occlusion, default to min z first
+Divide intersecting polygons? (have to figure out how to draw without a seam, or divide only when necessary)
+
+
+Minor 2D and 3D
+---------------
+legend-entry contains minimum sizes?
+
+Log ticks-funs (with base)
+
+Label contour heights on the contour lines
+
+Support for exact rational functions (test polynomial at [big..big+epsilon])
 
 
 plot/custom
 -----------
-Contracts for everything
+defproc/defparam for everything that is exposed
+
+New modules
+ - plot2d/bounds.rkt, plot3d/bounds.rkt
 
 
-Compatibility layer info
-------------------------
+Compatibility layer
+-------------------
 Symbol to fraction of current glyph size:
 circle1 -> 3/6
 circle2 -> 4/6
@@ -107,7 +103,7 @@ Integers to symbols:
 7 -> triangle
 8 -> oplus
 9 -> odot
-10 -> square with 1px lines extending diagonally from corners (WTH? use otimes)
+10 -> 4star
 11 -> diamond
 12 -> 5star
 13 -> square

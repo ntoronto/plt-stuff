@@ -1,10 +1,24 @@
 #lang racket/base
 
-(require racket/flonum racket/fixnum racket/list racket/match)
+(require racket/flonum racket/fixnum racket/list racket/match
+         "math.rkt")
 
-(provide denormalize-t
+(provide scale-normalized-line
+         scale-normalized-poly
          heights->lines
-         heights->high-polys heights->low-polys heights->mid-polys)
+         heights->high-polys
+         heights->low-polys
+         heights->mid-polys)
+
+(define (scale-normalized-line line xa xb ya yb)
+  (match-define (vector u1 v1 u2 v2) line)
+  (vector (alpha-blend xb xa u1) (alpha-blend yb ya v1)
+          (alpha-blend xb xa u2) (alpha-blend yb ya v2)))
+
+(define (scale-normalized-poly poly xa xb ya yb)
+  (for/list ([uv  (in-list poly)])
+    (match-define (vector u v z) uv)
+    (vector (alpha-blend xb xa u) (alpha-blend yb ya v) z)))
 
 ;(: solve-t (Float Float Float -> Float))
 ;; Returns the interpolated distance of z from za toward zb
@@ -14,11 +28,6 @@
 ;; Intuitively, regard a use (solve-t z za zb) as "the point between za and zb".
 (define-syntax-rule (solve-t z za zb)
   (fl/ (fl- z za) (fl- zb za)))
-
-;(: denormalize-t (Float Float Float -> Float))
-;; Returns the x coordinate that is t normalized units from x1 toward x2.
-(define (denormalize-t t x1 x2)
-  (fl+ (fl* t x1) (fl* (fl- 1.0 t) x2)))
 
 #|
 Z values are at these normalized coordinates:

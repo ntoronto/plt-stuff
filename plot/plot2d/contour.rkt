@@ -1,181 +1,204 @@
 #lang racket/base
 
-(require racket/gui racket/math racket/flonum
+;; Renderers for contour lines and contour intervals
+
+(require racket/contract racket/class racket/match racket/list racket/flonum
          "../common/math.rkt"
-         "../common/color.rkt"
+         "../common/draw.rkt"
          "../common/marching-squares.rkt"
-         "../common/ticks.rkt"
          "../common/contract.rkt"
-         "area.rkt"
-         "renderer.rkt")
+         "../common/legend.rkt"
+         "../common/sample.rkt"
+         "renderer.rkt"
+         "ticks.rkt"
+         "sample.rkt")
 
-(provide (except-out (all-defined-out)
-                     add-contour
-                     (struct-out fast-rect) add-shade))
+(provide (all-defined-out))
 
-(defparam contour-levels levels positive-integer/c 10)
-(defparam contour-samples samples positive-integer/c 51)
-(defparam contour-color color plot-color/c "black")
-(defparam contour-width width nonnegative-real/c 1)
-(defparam contour-style style pen-style/c 'solid)
-(defparam contour-alpha alpha (real-in 0 1) 1)
+(defproc (default-contour-line-colors [zs (listof real?)]) (listof plot-color/c)
+  (color-seq* (list (->color/line 5) (->color/line 0) (->color/line 1))
+              (length zs)))
 
-(defproc (default-shade-color-function
-           [z-min real?] [z-max real?] [levels positive-integer/c]
-           ) (listof plot-color/c)
-  (color-seq* (list "blue" "white" "red") levels))
+(defproc (default-contour-fill-colors [zs (listof real?)]) (listof plot-color/c)
+  (color-seq* (list (->color/fill 5) (->color/fill 0) (->color/fill 1))
+              (sub1 (length zs))))
 
-(defparam shade-color-function function
-  color-function/c default-shade-color-function)
+(defparam contour-samples (integer>=/c 2) 51)
+(defparam contour-levels (integer>=/c 1) 6)
+(defparam contour-colors plot-colors/c default-contour-line-colors)
+(defparam contour-widths line-widths/c '(1))
+(defparam contour-styles line-styles/c '(solid long-dash))
+(defparam contour-alphas alphas/c '(1))
 
-;; =============================================================================
-;; Drawing contour lines using marching squares
+(defparam contour-interval-colors plot-colors/c default-contour-fill-colors)
+(defparam contour-interval-styles fill-styles/c '(solid))
+(defparam contour-interval-alphas alphas/c '(1))
 
-(define ((add-contour f samples color width style alpha) area)
-  (define x-min (send area get-x-min))
-  (define x-max (send area get-x-max))
-  (define y-min (send area get-y-min))
-  (define y-max (send area get-y-max))
-  
-  (match-define (list xs ys zss) (f x-min x-max samples y-min y-max samples))
-  (define-values (z-min z-max)
-    (let ([zs  (2d-sample->list zss)])
-      (values (apply regular-min zs) (apply regular-max zs))))
-  
-  (define levels (sub1 (contour-levels)))
-  (define ticks (take (rest (real-seq z-min z-max (+ 2 levels))) levels))
-  
-  (send area set-alpha alpha)
-  (send area set-pen color width style)
-  (for ([t   (in-list ticks)]
-        #:when #t  ; nest the next loop
-        [ya  (in-list ys)]
-        [yb  (in-list (rest ys))]
-        [j   (in-naturals)]
-        #:when #t  ; nest the next loop
-        [xa  (in-list xs)]
-        [xb  (in-list (rest xs))]
-        [i   (in-naturals)])
-    (define z1 (flvector-ref (vector-ref zss j) i))
-    (define z2 (flvector-ref (vector-ref zss j) (add1 i)))
-    (define z3 (flvector-ref (vector-ref zss (add1 j)) (add1 i)))
-    (define z4 (flvector-ref (vector-ref zss (add1 j)) i))
-    (define lines (heights->lines (exact->inexact t) z1 z2 z3 z4))
-    (for/list ([line  (in-list lines)])
-      (match-define (vector u1 v1 u2 v2) line)
-      (send area add-line 
-            (vector (denormalize-t u1 xb xa) (denormalize-t v1 yb ya))
-            (vector (denormalize-t u2 xb xa) (denormalize-t v2 yb ya))))))
+;; ===================================================================================================
+;; Contour lines
 
-(define (contour f [x-min #f] [x-max #f] [y-min #f] [y-max #f]
-                 #:samples [samples (contour-samples)]
-                 #:color [color (contour-color)]
-                 #:width [width (contour-width)]
-                 #:style [style (contour-style)]
-                 #:alpha [alpha (contour-alpha)])
-  (define g (memoize-sample-2d-function f))
-  (make-renderer2d (add-contour g samples color width style alpha)
-                   (default-range->ticks (plot2d-tick-skip))
-                   (default-range->ticks (plot2d-tick-skip))
-                   values
-                   x-min x-max y-min y-max))
+(define ((contours-render-proc f levels samples colors widths styles alphas label) area)
+  (let/ec return
+    (define-values (x-min x-max y-min y-max) (send area get-bounds))
+    (match-define (list xs ys zss) (f x-min x-max samples y-min y-max samples))
+    
+    (define-values (z-min z-max)
+      (let ([zs  (filter regular? (2d-sample->list zss))])
+        (when (empty? zs) (return empty))
+        (values (apply min* zs) (apply max* zs))))
+    
+    (define zs (linear-seq z-min z-max levels #:start? #f #:end? #f))
+    (define cs (apply-colors colors zs))
+    (define ws (apply-line-widths widths zs))
+    (define ss (apply-line-styles styles zs))
+    (define as (apply-alphas alphas zs))
+    
+    (for ([z      (in-list zs)]
+          [color  (in-cycle cs)]
+          [width  (in-cycle ws)]
+          [style  (in-cycle ss)]
+          [alpha  (in-cycle as)])
+      (send area set-alpha alpha)
+      (send area set-pen color width style)
+      (for ([ya  (in-list ys)]
+            [yb  (in-list (rest ys))]
+            [zs0  (in-vector zss)]
+            [zs1  (in-vector zss 1)]
+            #:when #t
+            [xa  (in-list xs)]
+            [xb  (in-list (rest xs))]
+            [z1  (in-vector zs0)]
+            [z2  (in-vector zs0 1)]
+            [z3  (in-vector zs1 1)]
+            [z4  (in-vector zs1)])
+        (for/list ([line  (in-list (heights->lines (exact->inexact z)
+                                                   (exact->inexact z1) (exact->inexact z2)
+                                                   (exact->inexact z3) (exact->inexact z4)))])
+          (match-define (vector x1 y1 x2 y2) (scale-normalized-line line xa xb ya yb))
+          (send area put-line (vector x1 y1) (vector x2 y2)))))
+    
+    (cond [label  (line-legend-entries label zs colors widths styles)]
+          [else   empty])))
 
-;; =============================================================================
-;; Drawing contour areas using marching squares
+(defproc (contours
+          [f (real? real? . -> . real?)]
+          [x-min (or/c real? #f) #f] [x-max (or/c real? #f) #f]
+          [y-min (or/c real? #f) #f] [y-max (or/c real? #f) #f]
+          [#:levels levels (integer>=/c 1) (contour-levels)]
+          [#:samples samples (integer>=/c 2) (contour-samples)]
+          [#:colors colors plot-colors/c (contour-colors)]
+          [#:widths widths line-widths/c (contour-widths)]
+          [#:styles styles line-styles/c (contour-styles)]
+          [#:alphas alphas alphas/c (contour-alphas)]
+          [#:label label (or/c string? #f) #f]
+          ) renderer2d?
+  (define g (2d-function->sampler f))
+  (make-renderer2d
+   (contours-render-proc g levels samples colors widths styles alphas label)
+   default-2d-ticks-fun
+   null-2d-bounds-fun
+   x-min x-max y-min y-max))
 
-(struct fast-rect (xa ya xb yb) #:transparent)
+;; ===================================================================================================
+;; Contour intervals
 
-(define ((add-shade f samples color-function) area)
-  (define x-min (send area get-x-min))
-  (define x-max (send area get-x-max))
-  (define y-min (send area get-y-min))
-  (define y-max (send area get-y-max))
-  
-  (match-define (list xs ys zss) (f x-min x-max samples y-min y-max samples))
-  (define-values (z-min z-max)
-    (let ([zs  (2d-sample->list zss)])
-      (values (apply regular-min zs) (apply regular-max zs))))
-  
-  (define levels (real-seq z-min z-max (+ 1 (contour-levels))))
-  (define colors (color-function z-min z-max (contour-levels)))
-  
-  (send area set-alpha 1.0)
-  (for ([za     (in-list levels)]
-        [zb     (in-list (rest levels))]
-        [color  (in-cycle colors)])
-    (send area set-brush color 'solid)
-    (send area set-pen color 1.5 'solid)
-    (define polys
-      (append*
-       (for/list ([ya  (in-list ys)]
-                  [yb  (in-list (rest ys))]
-                  [j   (in-naturals)]
-                  #:when #t  ; nest the next loop
-                  [xa  (in-list xs)]
-                  [xb  (in-list (rest xs))]
-                  [i   (in-naturals)])
-         (define z1 (flvector-ref (vector-ref zss j) i))
-         (define z2 (flvector-ref (vector-ref zss j) (add1 i)))
-         (define z3 (flvector-ref (vector-ref zss (add1 j)) (add1 i)))
-         (define z4 (flvector-ref (vector-ref zss (add1 j)) i))
-         (define facet
-           (heights->mid-polys (exact->inexact za) (exact->inexact zb)
-                               z1 z2 z3 z4))
-         (for/list ([poly  (in-list facet)])
-           (cond [(equal? poly 'full)  (fast-rect xa ya xb yb)]
-                 [else  (for/list ([uv  (in-list poly)])
-                          (match-define (vector u v _) uv)
-                          (vector (denormalize-t u xb xa)
-                                  (denormalize-t v yb ya)))])))))
-    #;; the straightforward way:
-    (for ([poly  (in-list polys)])
-      (match poly
-        [(fast-rect xa ya xb yb)
-         (send area add-rectangle (vector xa ya) (vector xb yb))]
-        [_  (send area add-polygon poly)]))
-    ; the less straightforward way, which saves GDI calls by stitching
-    ; neighboring rectangles together
-    (define last-rect
-      (for/fold ([last-rect #f]) ([poly  (in-list polys)])
-        (match poly
-          [(fast-rect xa ya xb yb)
-           ; we have a fast-rect: see what last-rect was
-           (match last-rect
-             [(fast-rect lxa lya lxb lyb)
-              ; the last-rect is a fast-rect: see if poly can extend it
-              (cond [(= xa lxb)
-                     ; adjacent: extend last-rect
-                     (fast-rect lxa lya xb yb)]
-                    [else
-                     ; not adjacent: draw last-rect, make poly the new one
-                     (send area add-rectangle (vector lxa lya) (vector lxb lyb))
-                     poly])]
-             [_
-              ; no last-rect: make poly the new one
-              poly])]
-          [_
-           ; we have a polygon: draw it
-           (send area add-polygon poly)
-           ; do we have a last-rect?
-           (match last-rect
-             [(fast-rect lxa lya lxb lyb)
-              ; yes: draw it, too
-              (send area add-rectangle (vector lxa lya) (vector lxb lyb))]
-             [_
-              ; no: we're done, and we have no last-rect
-              #f])])))
-    ; draw the last-rect if we have one
-    (match last-rect
-      [(fast-rect lxa lya lxb lyb)
-       (send area add-rectangle (vector lxa lya) (vector lxb lyb))]
-      [_  (void)])))
+(define (take-xy v)
+  (match-define (vector x y z) v)
+  (vector x y))
 
-(define (shade f [x-min #f] [x-max #f] [y-min #f] [y-max #f]
-               #:samples [samples (contour-samples)]
-               #:colors [color-function (shade-color-function)])
-  (define g (memoize-sample-2d-function f))
-  (make-renderer2d (add-shade g samples color-function)
-                   (default-range->ticks (plot2d-tick-skip))
-                   (default-range->ticks (plot2d-tick-skip))
-                   values
-                   x-min x-max y-min y-max))
+(define ((contour-intervals-render-proc
+          f levels samples colors styles contour-colors contour-widths contour-styles alphas label)
+         area)
+  (let/ec return
+    (define-values (x-min x-max y-min y-max) (send area get-bounds))
+    (match-define (list xs ys zss) (f x-min x-max samples y-min y-max samples))
+    
+    (define-values (z-min z-max)
+      (let ([flat-zs  (filter regular? (2d-sample->list zss))])
+        (when (empty? flat-zs) (return empty))
+        (values (apply min* flat-zs) (apply max* flat-zs))))
+    (define contour-zs (linear-seq z-min z-max levels #:start? #f #:end? #f))
+    
+    (define zs (append (list z-min) contour-zs (list z-max)))
+    (define cs (map ->color/fill (apply-colors colors zs)))
+    (define fss (map ->style/fill (apply-fill-styles styles zs)))
+    (define pss (map (λ (fill-style) (if (eq? fill-style 'solid) 'solid 'transparent)) fss))
+    (define as (apply-alphas alphas zs))
+    
+    (for ([za     (in-list zs)]
+          [zb     (in-list (rest zs))]
+          [color  (in-cycle cs)]
+          [fill-style       (in-cycle fss)]
+          [poly-line-style  (in-cycle pss)]
+          [alpha  (in-cycle as)])
+      (define polys
+        (append*
+         (for/list ([ya  (in-list ys)]
+                    [yb  (in-list (rest ys))]
+                    [zs0  (in-vector zss)]
+                    [zs1  (in-vector zss 1)]
+                    #:when #t
+                    [xa  (in-list xs)]
+                    [xb  (in-list (rest xs))]
+                    [z1  (in-vector zs0)]
+                    [z2  (in-vector zs0 1)]
+                    [z3  (in-vector zs1 1)]
+                    [z4  (in-vector zs1)])
+           (for/list ([poly  (in-list (heights->mid-polys (exact->inexact za) (exact->inexact zb)
+                                                          (exact->inexact z1) (exact->inexact z2)
+                                                          (exact->inexact z3) (exact->inexact z4)))])
+             (cond [(equal? poly 'full)  (list (vector xa ya) (vector xa yb)
+                                               (vector xb yb) (vector xb ya))]
+                   [else  (map take-xy (scale-normalized-poly poly xa xb ya yb))])))))
+      
+      (define (draw-polys)
+        (for ([poly  (in-list polys)])
+          (send area put-polygon poly)))
+      
+      (cond [(= alpha 1)
+             (send area set-pen color 1 poly-line-style)
+             (send area set-brush color fill-style)
+             (send area set-alpha 1)
+             (draw-polys)]
+            [else
+             ;; draw the outlines with reduced alpha first
+             (send area set-pen color 1 poly-line-style)
+             (send area set-brush color 'transparent)
+             (send area set-alpha (alpha-expt alpha 1/8))
+             (draw-polys)
+             ;; now draw the centers
+             (send area set-pen color 1 'transparent)
+             (send area set-brush color fill-style)
+             (send area set-alpha alpha)
+             (draw-polys)]))
+    
+    ((contours-render-proc f levels samples contour-colors contour-widths contour-styles alphas #f)
+     area)
+    
+    (cond [label  (contour-intervals-legend-entries
+                   label z-min z-max contour-zs
+                   cs fss cs '(1) pss contour-colors contour-widths contour-styles)]
+          [else   empty])))
+
+(defproc (contour-intervals
+          [f (real? real? . -> . real?)]
+          [x-min (or/c real? #f) #f] [x-max (or/c real? #f) #f]
+          [y-min (or/c real? #f) #f] [y-max (or/c real? #f) #f]
+          [#:levels levels (integer>=/c 1) (contour-levels)]
+          [#:samples samples (integer>=/c 2) (contour-samples)]
+          [#:colors colors plot-colors/c (contour-interval-colors)]
+          [#:styles styles fill-styles/c (contour-interval-styles)]
+          [#:contour-colors contour-colors plot-colors/c (contour-colors)]
+          [#:contour-widths contour-widths line-widths/c (contour-widths)]
+          [#:contour-styles contour-styles line-styles/c (contour-styles)]
+          [#:alphas alphas alphas/c (contour-interval-alphas)]
+          [#:label label (or/c string? #f) #f]
+          ) renderer2d?
+  (define g (2d-function->sampler f))
+  (make-renderer2d
+   (contour-intervals-render-proc g levels samples colors styles
+                                  contour-colors contour-widths contour-styles
+                                  alphas label)
+   default-2d-ticks-fun
+   null-2d-bounds-fun
+   x-min x-max y-min y-max))

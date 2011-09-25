@@ -1,24 +1,24 @@
 #lang slideshow
 
 (require "../plot2d.rkt"
-         "../plot3d.rkt")
+         "../plot3d.rkt"
+         "../common.rkt")
 
-(plot2d-font-size (* 2 (plot2d-font-size)))
-(plot2d-pen-width (* 2 (plot2d-pen-width)))
-
-(plot3d-font-size (* 2 (plot3d-font-size)))
-(plot3d-pen-width (* 2 (plot3d-pen-width)))
+(plot-font-size (* 2 (plot-font-size)))
+(plot-pen-width (* 2 (plot-pen-width)))
 
 (slide
  #:title "A 2D Parabola"
- (item "This is a 2D parabola:")
- (bitmap (plot2d->bitmap (function sqr -1 1)
-                         #:width (current-para-width) #:height 500)))
+ (para "A 2D parabola:")
+ (bitmap (plot2d (function sqr -1 1 #:label "y = x^2")
+                 #:width (current-para-width) #:height 500)))
 
 (slide
  #:title "A 3D Parabola"
- (item "This is a 3D parabola:")
- (bitmap (plot3d->bitmap
-          (list (shade3d (λ (x y) (+ (sqr x) (sqr y))) -2 2 -2 2)
-                (contour3d (λ (x y) (+ (sqr x) (sqr y))) -2 2 -2 2))
-          #:width (current-para-width) #:height 500)))
+ (para "A 3D parabola:")
+ (bitmap (plot3d
+          (list (surface3d (λ (x y) (+ (sqr x) (sqr y))) -2 2 -2 2
+                                     #:label "z = x^2 + y^2" #:color 3)
+                (contours3d (λ (x y) (+ (sqr x) (sqr y))) -2 2 -2 2))
+          #:width (current-para-width) #:height 500
+          #:legend-anchor 'top-left)))

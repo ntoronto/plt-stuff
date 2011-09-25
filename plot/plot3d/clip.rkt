@@ -136,9 +136,7 @@
                     (point-in-bounds? v x-min x-max y-min y-max z-min z-max))
                   vs)
       (return vs))
-    (define xs (map (λ (v) (vector-ref v 0)) vs))
-    (define ys (map (λ (v) (vector-ref v 1)) vs))
-    (define zs (map (λ (v) (vector-ref v 2)) vs))
+    (match-define (list (vector xs ys zs) ...) vs)
     ; early reject: all endpoints on the outside of the same plane
     (when (or (andmap (λ (x) (x . < . x-min)) xs)
               (andmap (λ (x) (x . > . x-max)) xs)
