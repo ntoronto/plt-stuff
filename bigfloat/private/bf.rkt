@@ -7,13 +7,10 @@
  racket/flonum
  [fl->exact-integer  (Float -> Integer)])
 
-(provide (except-out
-          (all-defined-out)
-          decimal-float->bigfloat ensure-digits string->bigfloat/fields
-          bigfloat->decimal-float remove-trailing-zeros format-exp format-sci
-          shift-compare
-          ; necessary because of a bug in TR:
-          fl->exact-integer))
+(provide (except-out (all-defined-out)
+                     decimal-float->bigfloat ensure-digits string->bigfloat/fields
+                     bigfloat->decimal-float remove-trailing-zeros format-exp format-sci
+                     shift-compare))
 
 (: bf-bits (Parameterof Exact-Positive-Integer))
 (define bf-bits

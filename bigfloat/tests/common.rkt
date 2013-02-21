@@ -1,6 +1,6 @@
 #lang racket
 
-(require "../bigfloat.rkt"
+(require "../bigfloat-untyped.rkt"
          (rename-in "../private/utils-syntax.rkt" [cond* cond] [def def]))
 
 (provide (all-defined-out) cond def)

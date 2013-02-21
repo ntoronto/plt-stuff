@@ -8,11 +8,8 @@
  [raise-type-error  (Symbol String Integer Any * -> Nothing)]
  [integer-sqrt/remainder (Natural -> (values Natural Natural))])
 
-(provide (except-out
-          (all-defined-out)
-          diffexp+ abs+ diffexp- abs- remainder->rounding-bits abs/
-          ; required because of a bug in TR:
-          raise-type-error integer-sqrt/remainder))
+(provide (except-out (all-defined-out)
+                     diffexp+ abs+ diffexp- abs- remainder->rounding-bits abs/))
 
 (: diffexp+ (Natural Natural Natural -> (values Integer Integer)))
 ; assumes y-exp = 0

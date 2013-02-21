@@ -342,6 +342,11 @@
 ;; =============================================================================
 ;; hyperbolic
 
+(define-bfunary-test test-bfsinh
+  bfsinh
+  bfrandom-signed
+  bfrandom-signed/exp)
+
 ;; =============================================================================
 ;; inverse hyperbolic
 

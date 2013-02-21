@@ -23,14 +23,8 @@
 (provide (rename-out [:bitwise-first-bit-set bitwise-first-bit-set]
                      [cond* cond])
          def
-         (except-out
-          (all-defined-out)
-          :bitwise-first-bit-set
-          ; required because of a bug in TR:
-          bitwise-first-bit-set
-          real->floating-point-bytes integer-bytes->integer
-          integer->integer-bytes floating-point-bytes->real
-          ctype? CType _long ctype-sizeof))
+         (except-out (all-defined-out)
+                     :bitwise-first-bit-set))
 
 (define natural? exact-nonnegative-integer?)
 (define natural+? exact-positive-integer?)

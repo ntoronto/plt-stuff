@@ -10,11 +10,7 @@
  [thread-cell-ref  (Thread-Cell -> Any)]
  [thread-cell-set!  (Thread-Cell Any -> Void)])
 
-(provide (except-out
-          (all-defined-out)
-          ; necessary because of a bug in TR:
-          thread-cell? Thread-Cell
-          make-thread-cell thread-cell-ref thread-cell-set!))
+(provide (all-defined-out))
 
 (: bfrunif (bigfloat bigfloat -> bigfloat))
 (define (bfrunif a b)

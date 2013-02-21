@@ -7,10 +7,13 @@
 
 (: bfsinh (bigfloat -> bigfloat))
 (define (bfsinh x)
-  (with-bf-bits (+ (max 16 (bf-bits)) 10 (ceiling-log2i (bf-bits))
-                   (max 0 (- (bfceiling-log2 x))))
-    (def exp-x (bfexp x))
-    (bf/2 (bf- exp-x (bfinv exp-x)))))
+  (cond [(bfnegative? x)  (bfneg (bfsinh (bfneg x)))]
+        [(bfpositive? x)
+         (with-bf-bits (+ (max 16 (bf-bits)) 10 (ceiling-log2i (bf-bits))
+                          (max 0 (- (bfceiling-log2 (bfabs x)))))
+           (def exp-x (bfexp x))
+           (bf/2 (bf- exp-x (bfinv exp-x))))]
+        [else  (bf 0)]))
 
 (: bfcosh (bigfloat -> bigfloat))
 (define (bfcosh x)

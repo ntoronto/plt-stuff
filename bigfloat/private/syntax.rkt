@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(require (for-syntax racket/base unstable/syntax)
+(require (for-syntax racket/base racket/syntax)
          "utils.rkt" "bf.rkt")
 
 (provide with-bf-bits define-bf-constant)

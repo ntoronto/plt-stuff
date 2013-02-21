@@ -9,7 +9,7 @@
  [abs  (Exact-Rational -> Exact-Rational)])
 
 ; except-out necessary because of a bug in TR
-(provide (except-out (all-defined-out) abs raise-type-error))
+(provide (all-defined-out))
 
 (: exact-relative-error (bigfloat Exact-Rational -> Exact-Rational))
 (define (exact-relative-error x r)
