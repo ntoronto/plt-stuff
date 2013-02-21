@@ -21,32 +21,6 @@ Fix endpoint booleans sent to interval in +/pre
 (provide (all-defined-out))
 
 ;; ===================================================================================================
-;; Branch records
-
-(define-type Branches (HashTable Omega-Idx (U 't 'f)))
-
-(define: empty-branches : Branches  (make-immutable-hash empty))
-
-(: branches-set (Branches Omega-Idx Boolean-Set -> Branches))
-(define (branches-set bs r b)
-  (cond [(eq? b 'tf)  (hash-remove bs r)]
-        [else
-         (define old-b (hash-ref bs r (λ () #f)))
-         (cond [(eq? old-b b)  bs]
-               [else  (hash-set bs r b)])]))
-
-(: branches-ref (Branches Omega-Idx -> Boolean-Set))
-(define (branches-ref bs r)
-  (hash-ref bs r (λ () 'tf)))
-
-(define-type New-Branches (Listof (Pair Omega-Idx Boolean-Set)))
-
-(: add-new-branches (Branches New-Branches -> Branches))
-(define (add-new-branches bs new-bs)
-  (for/fold: ([bs : Branches  bs]) ([rp  (in-list new-bs)])
-    (branches-set bs (car rp) (cdr rp))))
-
-;; ===================================================================================================
 ;; Interval splitters
 
 (define-type Interval-Splitter
@@ -92,15 +66,18 @@ Fix endpoint booleans sent to interval in +/pre
 ;; ===================================================================================================
 ;; Expression type
 
-(struct: function ([domain : Rect]
-                   [new-branches : New-Branches]
-                   [range : Rect]
-                   [preimage : (Rect -> Rect)])
+(define-type Preimage-Fun (Nonempty-Rect Branches-Rect Nonempty-Rect
+                                         -> (Rect))
+
+(struct: function ([range : Rect]
+                   [branches : (U Empty-Set Branch-Rect)]
+                   [preimage : (Rect (U Empty-Set Branches-Rect) 
+                                     -> (Values Rect (U Empty-Set Branches-Rect)))])
   #:transparent)
 
-(: make-function (Rect New-Branches Rect (Nonempty-Rect -> Rect) -> function))
-(define (make-function domain new-bs range pre)
-  (function domain new-bs range
+(: make-function (Rect Rect Preimage-Fun -> function))
+(define (make-function domain range pre)
+  (function domain range
             (λ (B)
               (let ([B  (rect-intersect B range)])
                 (cond [(empty-set? B)  empty-set]
@@ -126,7 +103,7 @@ Fix endpoint booleans sent to interval in +/pre
 (: apply-preimage (function Rect -> Rect))
 (define (apply-preimage e B)
   ((function-preimage e) B))
-
+#|
 ;; ===================================================================================================
 ;; Basic primitives
 
@@ -739,41 +716,4 @@ Fix endpoint booleans sent to interval in +/pre
                                                               neg-neg-div/arr
                                                               (c/arr 0.0)))
                                 empty/arr)))
-
-#|
-#;
-(define (* a b)
-  (cond [(positive? a)
-         (cond [(positive? b)  (pos* a b)]
-               [(negative? b)  (- (pos* a (- b)))]
-               [else  0])]
-        [(negative? a)
-         (cond [(positive? b)  (- (pos* (- a) b))]
-               [(negative? b)  (pos* (- a) (- b))]
-               [else  0])]
-        [else  0]))
-
-(: print-stuff (expression -> Void))
-(define (print-stuff e)
-  (define e-meaning (run-expression e))
-  (printf "~v~n" e-meaning)
-  (for: ([b : Boolean-Set  '(t f)])
-    (printf "~v~n"
-            (apply-preimage
-             ((meaning-computation e-meaning)
-              (rect-set (rect-set (omega-rect) 1/8 (interval 0.75 (+ 0.75 #i1/16)))
-                        5/16 (interval 0.5 1.0))
-              empty-branches #;(branches-set empty-branches 29/32 b))
-             (list-rect reals reals 't)))))
-
-(define e2 (rap/arr (list/arr random/arr random/arr)
-                    (list/arr
-                     (ref/arr 0)
-                     (ref/arr 1)
-                     (strict-if/arr (ap/arr lt/arr (pair/arr (ref/arr 0) (ref/arr 1)))
-                                    (c/arr #t)
-                                    (ap/arr gt/arr (pair/arr (ref/arr 0) (ap/arr (scale/arr 8.0)
-                                                                                 (ref/arr 1))))))))
-
-(print-stuff e2)
 |#

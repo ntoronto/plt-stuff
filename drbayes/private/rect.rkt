@@ -765,6 +765,50 @@
       (and A3 (rect-member? A3 x))))
 
 ;; ===================================================================================================
+;; Branches rectangles
+;; Sets of Omega-Idx -> Boolean-Set, representing the branches taken in a program
+
+(define-type Branches-Rect (HashTable Omega-Idx (U 't 'f)))
+
+(define: branches-rect : Branches-Rect  (make-immutable-hash empty))
+
+(: branches-rect-set (case-> (Branches-Rect Omega-Idx Boolean-Set -> Branches-Rect)
+                             (Branches-Rect Omega-Idx (U Empty-Set Boolean-Set) ->
+                                            (U Empty-Set Branches-Rect))))
+(define (branches-rect-set bs r b)
+  (cond [(empty-set? b)  empty-set]
+        [(eq? b 'tf)  (hash-remove bs r)]
+        [else
+         (define old-b (hash-ref bs r (λ () #f)))
+         (cond [(eq? old-b b)  bs]
+               [else  (hash-set bs r b)])]))
+
+(: branches-rect-ref (Branches-Rect Omega-Idx -> Boolean-Set))
+(define (branches-rect-ref bs r)
+  (hash-ref bs r (λ () 'tf)))
+
+(: branches-rect-intersect (Branches-Rect Branches-Rect -> (U Empty-Set Branches-Rect)))
+(define (branches-rect-intersect bs1 bs2)
+  (let-values ([(bs1 bs2)  (if ((hash-count bs2) . < . (hash-count bs1))
+                               (values bs2 bs1)
+                               (values bs1 bs2))])
+    (let: loop ([ks  (hash-keys bs2)] [bs : Branches-Rect  bs1])
+      (cond [(empty? ks)  bs]
+            [else  (define k (first ks))
+                   (define A (hash-ref bs k (λ () #f)))
+                   (define B (hash-ref bs2 k))
+                   (cond [(eq? A B)  (loop (rest ks) bs)]
+                         [A  empty-set]
+                         [else  (loop (rest ks) (hash-set bs k B))])]))))
+
+(: branches-rect-restrict (Branches-Rect Omega-Idx (U 't 'f) -> (U Empty-Set Branches-Rect)))
+(define (branches-rect-restrict bs r B)
+  (define old-B (hash-ref bs r (λ () #f)))
+  (cond [(eq? old-B B)  bs]
+        [B  empty-set]
+        [else  (hash-set bs r B)]))
+
+;; ===================================================================================================
 ;; Extra Omega ops
 
 (: omega-domain (Omega -> (Listof Omega-Idx)))
