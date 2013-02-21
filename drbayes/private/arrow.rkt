@@ -66,96 +66,108 @@ Fix endpoint booleans sent to interval in +/pre
 ;; ===================================================================================================
 ;; Expression type
 
-(define-type Preimage-Fun (Nonempty-Rect Branches-Rect Nonempty-Rect
-                                         -> (Rect))
-
-(struct: function ([range : Rect]
-                   [branches : (U Empty-Set Branch-Rect)]
-                   [preimage : (Rect (U Empty-Set Branches-Rect) 
-                                     -> (Values Rect (U Empty-Set Branches-Rect)))])
+;; An expression is a function from index bounds to its meaning
+(struct: expression ([fun : (Omega-Idx Omega-Idx -> expression-meaning)])
   #:transparent)
 
-(: make-function (Rect Rect Preimage-Fun -> function))
-(define (make-function domain range pre)
-  (function domain range
-            (λ (B)
-              (let ([B  (rect-intersect B range)])
-                (cond [(empty-set? B)  empty-set]
-                      [(eq? B range)   domain]
-                      [else  (pre B)])))))
+;; Expressions are currently wrapped in a struct so they can be recognized by its predicate (see
+;; "language.rkt"), but this may not be necessary in the future
 
-(define-type Prim-Computation (Nonempty-Rect Branches -> function))
-(define-type Computation (Rect Branches -> function))
-
-(struct: meaning ([indexes : Indexes]
-                  [forward : (Value Branches -> Value)]
-                  [computation : Computation])
+;; An expression means:
+;;  1. Lazy indexes of random variables and branch points
+;;  2. A forward function
+;;  3. A computation, which is used to compute preimages
+(struct: expression-meaning ([indexes : Indexes]
+                             [forward : (Value Branches-Rect -> Value)]
+                             [computation : Computation])
   #:transparent)
 
-(struct: expression ([value : (Omega-Idx Omega-Idx -> meaning)])
-  #:transparent)
-
-(: run-expression (case-> (expression -> meaning)
-                          (expression Omega-Idx Omega-Idx -> meaning)))
+(: run-expression (case-> (expression -> expression-meaning)
+                          (expression Omega-Idx Omega-Idx -> expression-meaning)))
 (define (run-expression e [r0 0] [r1 1])
-  ((expression-value e) r0 r1))
+  ((expression-fun e) r0 r1))
 
-(: apply-preimage (function Rect -> Rect))
-(define (apply-preimage e B)
-  ((function-preimage e) B))
-#|
+;; A computation is a function from a domain and branches to its meaning
+(define-type Computation (Rect (U Empty-Set Branches-Rect) -> computation-meaning))
+
+;; A computation means:
+;;  1. A branches rectangle (which bounds the branches the forward computation can take)
+;;  2. The approximate range of its forward function
+;;  3. A function that computes approximate preimages under its forward function
+(struct: computation-meaning ([branches : (U Empty-Set Branches-Rect)]
+                              [range : Rect]
+                              [preimage : Preimage-Fun])
+  #:transparent)
+
+(define-type Preimage-Fun (Rect -> Rect))
+
+;; ===================================================================================================
+;; Conveniences
+
+(define-type Prim-Preimage-Fun (Nonempty-Rect -> Rect))
+
+(: make-preimage (Rect Rect Prim-Preimage-Fun -> Preimage-Fun))
+;; Wraps a Prim-Preimage-Fun with code that ensures the argument is a subset of the range and is
+;; nonempty; also performs an optimization
+(define ((make-preimage domain range pre) B)
+  (let ([B  (rect-intersect B range)])
+    (cond [(empty-set? B)  empty-set]
+          [(eq? B range)   domain]  ; optimization
+          [else  (pre B)])))
+
+(: make-expression ((Value Branches-Rect -> Value) Computation -> expression))
+(define (make-expression fwd comp)
+  (expression (λ (r0 r1) (expression-meaning empty fwd comp))))
+
+(define-type Prim-Computation (Nonempty-Rect Branches-Rect -> computation-meaning))
+
+(: make-computation (Prim-Computation -> Computation))
+(define ((make-computation prim/comp) domain bs)
+  (if (or (empty-set? domain) (empty-set? bs))
+      (empty/comp domain bs)
+      (prim/comp domain bs)))
+
+(: make-computation/domain (Nonempty-Rect Prim-Computation -> Computation))
+(define ((make-computation/domain prim-domain prim/comp) domain bs)
+  (let ([domain  (rect-intersect domain prim-domain)])
+    (if (or (empty-set? domain) (empty-set? bs))
+        (empty/comp domain bs)
+        (prim/comp domain bs))))
+
 ;; ===================================================================================================
 ;; Basic primitives
+
+;; Empty function (aka bottom; i.e. has empty range)
+
+(: empty/comp Computation)
+(define (empty/comp domain bs)
+  (computation-meaning bs empty-set (λ (B) empty-set)))
+
+(define empty/arr
+  (make-expression (λ (γ bs) (error 'empty/arr "empty range")) empty/comp))
+
+;; Identity function
+
+(: id/comp Computation)
+(define id/comp
+  (make-computation
+   (λ (domain bs) (computation-meaning bs domain identity))))
+
+(define id/arr
+  (make-expression (λ (γ bs) γ) id/comp))
+
+;; Constant functions
 
 (: c/comp (Value -> Computation))
 (define (c/comp x)
   (define X (value->singleton x))
-  (λ (domain bs)
-    (define range (if (empty-set? domain) empty-set X))
-    
-    (: c/pre (Nonempty-Rect -> Rect))
-    (define (c/pre B) domain)
-    
-    (make-function domain empty range c/pre)))
-
-(: empty/comp Computation)
-(define (empty/comp domain bs)
-  
-  (: empty/pre (Nonempty-Rect -> Rect))
-  (define (empty/pre B) empty-set)
-  
-  (make-function domain empty empty-set empty/pre))
-
-(: make-primitive (case-> ((Value Branches -> Value) Computation -> expression)
-                          ((Value Branches -> Value) Prim-Computation Nonempty-Rect -> expression)))
-(define make-primitive
-  (case-lambda
-    [(fwd comp)  (expression (λ (r0 r1) (meaning empty fwd comp)))]
-    [(fwd prim-comp prim-domain)
-     (make-primitive
-      fwd
-      (λ: ([domain : Rect] [bs : Branches])
-        (let ([domain  (rect-intersect domain prim-domain)])
-          (cond [(empty-set? domain)  (empty/comp domain bs)]
-                [else  (prim-comp domain bs)]))))]))
-
-(define id/arr
-  (make-primitive
-   (λ: ([γ : Value] [bs : Branches]) γ)
-   (λ: ([domain : Rect] [bs : Branches])
-     (make-function domain empty domain identity))))
+  (make-computation
+   (λ (domain bs)
+     (computation-meaning bs X (λ (B) (if (empty-set? B) empty-set domain))))))
 
 (: c/arr (Value -> expression))
-(define (c/arr x) 
-  (make-primitive
-   (λ (γ bs) x)
-   (c/comp x)))
-
-(: empty/arr expression)
-(define empty/arr
-  (make-primitive
-   (λ (γ bs) (error 'empty/arr "empty range"))
-   empty/comp))
+(define (c/arr x)
+  (make-expression (λ (γ bs) x) (c/comp x)))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Application
@@ -165,56 +177,52 @@ Fix endpoint booleans sent to interval in +/pre
   (expression
    (λ (r0 r1)
      (define r (omega-expr-idx r0 r1))
-     (match-define (meaning g-idxs g-fwd g-comp) (run-expression g-expr r r1))
-     (match-define (meaning f-idxs f-fwd f-comp) (run-expression f-expr r0 r))
-     (meaning
+     (match-define (expression-meaning g-idxs g-fwd g-comp) (run-expression g-expr r r1))
+     (match-define (expression-meaning f-idxs f-fwd f-comp) (run-expression f-expr r0 r))
+     (expression-meaning
       (append f-idxs g-idxs)
       (λ (γ bs)
         (let* ([γ  (g-fwd γ bs)]
                [γ  (f-fwd γ bs)])
           γ))
-      (λ (domain bs)
-        (define g (g-comp domain bs))
-        (define f (f-comp (function-range g) bs))
-        (define range (function-range f))
-        
-        (: ap/pre (Nonempty-Rect -> Rect))
-        (define (ap/pre C)
-          (let* ([B  (apply-preimage f C)]
-                 [A  (apply-preimage g B)])
-            A))
-        
-        (define new-bs (append (function-new-branches g) (function-new-branches f)))
-        
-        (make-function domain new-bs range ap/pre))))))
+      (make-computation
+       (λ (domain bs)
+         (match-let* ([(computation-meaning bs g-range g-pre)  (g-comp domain bs)]
+                      [(computation-meaning bs range f-pre)    (f-comp g-range bs)])
+           
+           (: ap/pre Prim-Preimage-Fun)
+           (define (ap/pre C)
+             (let* ([B  (f-pre C)]
+                    [A  (g-pre B)])
+               A))
+           
+           (computation-meaning bs range (make-preimage domain range ap/pre)))))))))
 
 (: rap/arr (expression expression -> expression))
 (define (rap/arr f-expr g-expr)
   (expression
    (λ (r0 r1)
      (define r (omega-expr-idx r0 r1))
-     (match-define (meaning f-idxs f-fwd f-comp) (run-expression f-expr r0 r))
-     (match-define (meaning g-idxs g-fwd g-comp) (run-expression g-expr r r1))
-     (meaning
+     (match-define (expression-meaning f-idxs f-fwd f-comp) (run-expression f-expr r0 r))
+     (match-define (expression-meaning g-idxs g-fwd g-comp) (run-expression g-expr r r1))
+     (expression-meaning
       (append f-idxs g-idxs)
       (λ (γ bs)
         (let* ([γ  (f-fwd γ bs)]
                [γ  (g-fwd γ bs)])
           γ))
-      (λ (domain bs)
-        (define f (f-comp domain bs))
-        (define g (g-comp (function-range f) bs))
-        (define range (function-range g))
-        
-        (: rap/pre (Nonempty-Rect -> Rect))
-        (define (rap/pre C)
-          (let* ([B  (apply-preimage g C)]
-                 [A  (apply-preimage f B)])
-            A))
-        
-        (define new-bs (append (function-new-branches f) (function-new-branches g)))
-        
-        (make-function domain new-bs range rap/pre))))))
+      (make-computation
+       (λ (domain bs)
+         (match-let* ([(computation-meaning bs f-range f-pre)  (f-comp domain bs)]
+                      [(computation-meaning bs range g-pre)    (g-comp f-range bs)])
+           
+           (: rap/pre Prim-Preimage-Fun)
+           (define (rap/pre C)
+             (let* ([B  (g-pre C)]
+                    [A  (f-pre B)])
+               A))
+           
+           (computation-meaning bs range (make-preimage domain range rap/pre)))))))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Pairs and lists
@@ -230,36 +238,30 @@ Fix endpoint booleans sent to interval in +/pre
   (expression
    (λ (r0 r1)
      (define r (omega-expr-idx r0 r1))
-     (match-define (meaning fst-idxs fst-fwd fst-comp) (run-expression fst-expr r0 r))
-     (match-define (meaning snd-idxs snd-fwd snd-comp) (run-expression snd-expr r r1))
-     (meaning
+     (match-define (expression-meaning fst-idxs fst-fwd fst-comp) (run-expression fst-expr r0 r))
+     (match-define (expression-meaning snd-idxs snd-fwd snd-comp) (run-expression snd-expr r r1))
+     (expression-meaning
       (append fst-idxs snd-idxs)
       (λ (γ bs)
         (cons (fst-fwd γ bs)
               (snd-fwd γ bs)))
-      (λ (domain bs)
-        (define fst (fst-comp domain bs))
-        (define snd (snd-comp domain bs))
-        (define range-B1 (function-range fst))
-        (define range-B2 (function-range snd))
-        (define range (pair-rect range-B1 range-B2))
-        
-        (: pair/pre (Nonempty-Rect -> Rect))
-        (define (pair/pre B1×B2)
-          (match B1×B2
-            [(pair-rect B1 B2)
-             (define fst? (not (eq? B1 range-B1)))
-             (define snd? (not (eq? B2 range-B2)))
-             (cond [(and fst? snd?)  (rect-intersect (apply-preimage fst B1)
-                                                     (apply-preimage snd B2))]
-                   [fst?  (apply-preimage fst B1)]
-                   [snd?  (apply-preimage snd B2)]
-                   [else  domain])]
-            [_  empty-set]))
-        
-        (define new-bs (append (function-new-branches fst) (function-new-branches snd)))
-        
-        (make-function domain new-bs range pair/pre))))))
+      (make-computation
+       (λ (domain bs)
+         (match-let* ([(computation-meaning bs fst-range fst-pre)  (fst-comp domain bs)]
+                      [(computation-meaning bs snd-range snd-pre)  (snd-comp domain bs)])
+           (define range (pair-rect fst-range snd-range))
+           
+           (: pair/pre Prim-Preimage-Fun)
+           (define (pair/pre B1×B2)
+             (match-define (pair-rect B1 B2) B1×B2)
+             (define fst? (not (eq? B1 fst-range)))
+             (define snd? (not (eq? B2 snd-range)))
+             (cond [(and fst? snd?)  (rect-intersect (fst-pre B1) (snd-pre B2))]
+                   [fst?  (fst-pre B1)]
+                   [snd?  (snd-pre B2)]
+                   [else  domain]))
+           
+           (computation-meaning bs range (make-preimage domain range pair/pre)))))))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Random
@@ -269,16 +271,17 @@ Fix endpoint booleans sent to interval in +/pre
   (expression
    (λ (r0 r1)
      (define r (omega-expr-idx r0 r1))
-     (meaning
+     (expression-meaning
       (list r)
       (λ (γ bs) (value-ref γ r))
-      (λ (domain bs)
-        (define range (rect-ref domain r))
-        
-        (: random/pre (Nonempty-Rect -> Rect))
-        (define (random/pre B) (rect-set domain r B))
-        
-        (make-function domain empty range random/pre))))))
+      (make-computation
+       (λ (domain bs)
+         (define range (rect-ref domain r))
+         
+         (: random/pre Prim-Preimage-Fun)
+         (define (random/pre B) (rect-set domain r B))
+         
+         (computation-meaning bs range (make-preimage domain range random/pre))))))))
 
 (: random-boolean/arr (Flonum -> expression))
 (define (random-boolean/arr p)
@@ -290,27 +293,28 @@ Fix endpoint booleans sent to interval in +/pre
      (expression
       (λ (r0 r1)
         (define r (omega-expr-idx r0 r1))
-        (meaning
+        (expression-meaning
          (list (cons r split))
          (λ (γ bs)
            (cond [(omega? γ)  ((omega-ref γ r) . < . p)]
                  [else  (raise-argument-error 'random-boolean/arr "Omega" γ)]))
-         (λ (domain bs)
-           (define I (rect-ref domain r))
-           (let ([It  (rect-intersect I It)]
-                 [If  (rect-intersect I If)])
-             (define range (booleans->boolean-set (not (empty-set? It)) (not (empty-set? If))))
-             
-             (: random-boolean/pre (Nonempty-Rect -> Rect))
-             (define (random-boolean/pre B)
-               (define I (case B
-                           [(tf)  (rect-join It If)]
-                           [(t)   It]
-                           [(f)   If]
-                           [else  empty-set]))
-               (rect-set domain r I))
-             
-             (make-function domain empty range random-boolean/pre))))))]
+         (make-computation
+          (λ (domain bs)
+            (define I (rect-ref domain r))
+            (let ([It  (rect-intersect I It)]
+                  [If  (rect-intersect I If)])
+              (define range (booleans->boolean-set (not (empty-set? It)) (not (empty-set? If))))
+              
+              (: random-boolean/pre Prim-Preimage-Fun)
+              (define (random-boolean/pre B)
+                (define I (case B
+                            [(tf)  (rect-join It If)]
+                            [(t)   It]
+                            [(f)   If]
+                            [else  empty-set]))
+                (rect-set domain r I))
+              
+              (computation-meaning bs range (make-preimage domain range random-boolean/pre))))))))]
     [(= p 0.0)  (c/arr #f)]
     [(= p 1.0)  (c/arr #t)]
     [else  (raise-argument-error 'boolean "probability" p)]))
@@ -323,42 +327,42 @@ Fix endpoint booleans sent to interval in +/pre
 
 (: ref/arr (Idx -> expression))
 (define (ref/arr j)
-  (make-primitive
-   (λ: ([γ : Value] [bs : Branches])
-     (value-ref γ j))
-   (λ: ([domain : Rect] [bs : Branches])
-     (define range (rect-ref domain j))
-     
-     (: ref/pre (Nonempty-Rect -> Rect))
-     (define (ref/pre B) (rect-set domain j B))
-     
-     (make-function domain empty range ref/pre))))
+  (make-expression
+   (λ (γ bs) (value-ref γ j))
+   (make-computation
+    (λ (domain bs)
+      (define range (rect-ref domain j))
+      
+      (: ref/pre Prim-Preimage-Fun)
+      (define (ref/pre B) (rect-set domain j B))
+      
+      (computation-meaning bs range (make-preimage domain range ref/pre))))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Monotone R -> R functions
 
 (: monotone-function/arr (Symbol Interval Interval (Flonum -> Flonum) (Flonum -> Flonum) Boolean
                                  -> expression))
-(define (monotone-function/arr name f-domain f-range f g inc?)
-  (make-primitive
-   (λ: ([γ : Value] [bs : Branches])
-     (if (flonum? γ) (f γ) (raise-argument-error name "Flonum" γ)))
-   (λ: ([domain : Nonempty-Rect] [bs : Branches])
-     (match-define (interval a b a? b?) domain)
-     (define range
-       (cond [inc?  (rect-intersect (interval (f a) (f b) a? b?) f-range)]
-             [else  (rect-intersect (interval (f b) (f a) b? a?) f-range)]))
-     
-     (: f/pre (Nonempty-Rect -> Rect))
-     (define (f/pre B)
-       (match B
-         [(interval a b a? b?)
-          (cond [inc?  (rect-intersect (interval (g a) (g b) a? b?) domain)]
-                [else  (rect-intersect (interval (g b) (g a) b? a?) domain)])]
-         [_  empty-set]))
-     
-     (make-function domain empty range f/pre))
-   f-domain))
+(define (monotone-function/arr name f-domain f-range f g fx?)
+  (make-expression
+   (λ (γ bs) (if (flonum? γ) (f γ) (raise-argument-error name "Flonum" γ)))
+   (make-computation/domain
+    f-domain
+    (λ (domain bs)
+      (match-define (interval a b a? b?) domain)
+      (define range
+        (cond [fx?   (rect-intersect (interval (f a) (f b) a? b?) f-range)]
+              [else  (rect-intersect (interval (f b) (f a) b? a?) f-range)]))
+      
+      (: f/pre Prim-Preimage-Fun)
+      (define (f/pre B)
+        (match B
+          [(interval a b a? b?)
+           (cond [fx?   (rect-intersect (interval (g a) (g b) a? b?) domain)]
+                 [else  (rect-intersect (interval (g b) (g a) b? a?) domain)])]
+          [_  empty-set]))
+      
+      (computation-meaning bs range (make-preimage domain range f/pre))))))
 
 (: scale/arr (Flonum -> expression))
 (define (scale/arr y)
@@ -422,40 +426,38 @@ Fix endpoint booleans sent to interval in +/pre
                                     (Flonum Flonum -> Flonum) Boolean Boolean
                                     (Flonum Flonum -> Flonum) Boolean Boolean
                                     -> expression))
-(define (monotone-2d-function/arr name f-domain f-range
-                                  f fxinc? fyinc?
-                                  g gzinc? gyinc?
-                                  h hzinc? hxinc?)
-  (make-primitive
-   (λ: ([γ : Value] [bs : Branches])
+(define (monotone-2d-function/arr name f-domain f-range f fx? fy? g gz? gy? h hz? hx?)
+  (make-expression
+   (λ (γ bs)
      (match γ
        [(cons (? flonum? x) (? flonum? y))  (f x y)]
        [_  (raise-argument-error name "(Pair Flonum Flonum)" γ)]))
-   (λ: ([domain : Nonempty-Rect] [bs : Branches])
-     (match-define (pair-rect (interval xa xb xa? xb?) (interval ya yb ya? yb?)) domain)
-     
-     (define range
-       (let-values ([(xa xb xa? xb?)  (if fxinc? (values xa xb xa? xb?) (values xb xa xb? xa?))]
-                    [(ya yb ya? yb?)  (if fyinc? (values ya yb ya? yb?) (values yb ya yb? ya?))])
-         (rect-intersect f-range (interval (f xa ya) (f xb yb) (and xa? ya?) (and xb? yb?)))))
-     
-     (: f/pre (Nonempty-Rect -> Rect))
-     (define (f/pre B)
-       (match B
-         [(interval za zb za? zb?)
-          (rect-intersect
-           (pair-rect
-            (let-values ([(za zb za? zb?)  (if gzinc? (values za zb za? zb?) (values zb za zb? za?))]
-                         [(ya yb ya? yb?)  (if gyinc? (values ya yb ya? yb?) (values yb ya yb? ya?))])
-              (interval (g za ya) (g zb yb) (and za? ya?) (and zb? yb?)))
-            (let-values ([(za zb za? zb?)  (if hzinc? (values za zb za? zb?) (values zb za zb? za?))]
-                         [(xa xb xa? xb?)  (if hxinc? (values xa xb xa? xb?) (values xb xa xb? xa?))])
-              (interval (h za xa) (h zb xb) (and za? xa?) (and zb? xb?))))
-           domain)]
-         [_  empty-set]))
-     
-     (make-function domain empty range f/pre))
-   f-domain))
+   (make-computation/domain
+    f-domain
+    (λ (domain bs)
+      (match-define (pair-rect (interval xa xb xa? xb?) (interval ya yb ya? yb?)) domain)
+      
+      (define range
+        (let-values ([(xa xb xa? xb?)  (if fx? (values xa xb xa? xb?) (values xb xa xb? xa?))]
+                     [(ya yb ya? yb?)  (if fy? (values ya yb ya? yb?) (values yb ya yb? ya?))])
+          (rect-intersect f-range (interval (f xa ya) (f xb yb) (and xa? ya?) (and xb? yb?)))))
+      
+      (: f/pre (Nonempty-Rect -> Rect))
+      (define (f/pre B)
+        (match B
+          [(interval za zb za? zb?)
+           (rect-intersect
+            (pair-rect
+             (let-values ([(za zb za? zb?)  (if gz? (values za zb za? zb?) (values zb za zb? za?))]
+                          [(ya yb ya? yb?)  (if gy? (values ya yb ya? yb?) (values yb ya yb? ya?))])
+               (interval (g za ya) (g zb yb) (and za? ya?) (and zb? yb?)))
+             (let-values ([(za zb za? zb?)  (if hz? (values za zb za? zb?) (values zb za zb? za?))]
+                          [(xa xb xa? xb?)  (if hx? (values xa xb xa? xb?) (values xb xa xb? xa?))])
+               (interval (h za xa) (h zb xb) (and za? xa?) (and zb? xb?))))
+            domain)]
+          [_  empty-set]))
+      
+      (computation-meaning bs range (make-preimage domain range f/pre))))))
 
 (define +/arr
   (monotone-2d-function/arr '+/arr (pair-rect reals reals) reals
@@ -527,61 +529,61 @@ Fix endpoint booleans sent to interval in +/pre
 ;; Square
 
 (define sqr/arr
-  (make-primitive
-   (λ: ([γ : Value] [bs : Branches])
-     (cond [(flonum? γ)  (fl* γ γ)]
-           [else  (raise-argument-error 'sqr/env "flonum" γ)]))
-   (λ: ([domain : Nonempty-Rect] [bs : Branches])
-     (match-define (interval a b a? b?) domain)
-     (define range
-       (cond [(a . >= . 0.0)  (interval (* a a) (* b b) a? b?)]
-             [(b . <= . 0.0)  (interval (* b b) (* a a) b? a?)]
-             [else  (define c (* a a))
-                    (define d (* b b))
-                    (cond [(c . > . d)  (interval 0.0 c #t a?)]
-                          [(d . > . c)  (interval 0.0 d #t b?)]
-                          [else  (interval 0.0 c #t (or a? b?))])]))
-     
-     (: sqr/pre (Nonempty-Rect -> Rect))
-     (define (sqr/pre B)
-       (match B
-         [(interval a b a? b?)
-          (let-values ([(a a?)  (if (< a 0.0) (values 0.0 #t) (values a a?))]
-                       [(b b?)  (if (< b 0.0) (values 0.0 #t) (values b b?))])
-            (define A1 (interval (flsqrt a) (flsqrt b) a? b?))
-            (define A2 (interval (- (flsqrt b)) (- (flsqrt a)) b? a?))
-            (rect-join (rect-intersect A1 domain)
-                       (rect-intersect A2 domain)))]
-         [_  empty-set]))
-     
-     (make-function domain empty range sqr/pre))
-   reals))
+  (make-expression
+   (λ (γ bs) (if (flonum? γ) (fl* γ γ) (raise-argument-error 'sqr/env "flonum" γ)))
+   (make-computation/domain
+    reals
+    (λ (domain bs)
+      (match-define (interval a b a? b?) domain)
+      (define range
+        (cond [(a . >= . 0.0)  (interval (* a a) (* b b) a? b?)]
+              [(b . <= . 0.0)  (interval (* b b) (* a a) b? a?)]
+              [else  (define c (* a a))
+                     (define d (* b b))
+                     (cond [(c . > . d)  (interval 0.0 c #t a?)]
+                           [(d . > . c)  (interval 0.0 d #t b?)]
+                           [else  (interval 0.0 c #t (or a? b?))])]))
+      
+      (: sqr/pre (Nonempty-Rect -> Rect))
+      (define (sqr/pre B)
+        (match B
+          [(interval a b a? b?)
+           (let-values ([(a a?)  (if (< a 0.0) (values 0.0 #t) (values a a?))]
+                        [(b b?)  (if (< b 0.0) (values 0.0 #t) (values b b?))])
+             (define A1 (interval (flsqrt a) (flsqrt b) a? b?))
+             (define A2 (interval (- (flsqrt b)) (- (flsqrt a)) b? a?))
+             (rect-join (rect-intersect A1 domain)
+                        (rect-intersect A2 domain)))]
+          [_  empty-set]))
+      
+      (computation-meaning bs range (make-preimage domain range sqr/pre))))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Predicates
 
 (: predicate/arr ((Value -> Boolean) Nonempty-Rect Nonempty-Rect -> expression))
 (define (predicate/arr pred? true-set false-set)
-  (make-primitive
-   (λ: ([γ : Value] [bs : Branches]) (pred? γ))
-   (λ: ([domain : Nonempty-Rect] [bs : Branches])
-     (let ([true-set   (rect-intersect domain true-set)]
-           [false-set  (rect-intersect domain false-set)])
-       
-       (define range
-         (booleans->boolean-set (not (empty-set? true-set))
-                                (not (empty-set? false-set))))
-       
-       (: pred?/pre (Nonempty-Rect -> Rect))
-       (define (pred?/pre B)
-         (case B
-           [(tf)  (rect-join true-set false-set)]
-           [(t)   true-set]
-           [(f)   false-set]
-           [else  empty-set]))
-       
-       (make-function domain empty range pred?/pre)))
-   (rect-join true-set false-set)))
+  (make-expression
+   (λ (γ bs) (pred? γ))
+   (make-computation/domain
+    (rect-join true-set false-set)
+    (λ (domain bs)
+      (let ([true-set   (rect-intersect domain true-set)]
+            [false-set  (rect-intersect domain false-set)])
+        
+        (define range
+          (booleans->boolean-set (not (empty-set? true-set))
+                                 (not (empty-set? false-set))))
+        
+        (: pred?/pre (Nonempty-Rect -> Rect))
+        (define (pred?/pre B)
+          (case B
+            [(tf)  (rect-join true-set false-set)]
+            [(t)   true-set]
+            [(f)   false-set]
+            [else  empty-set]))
+        
+        (computation-meaning bs range (make-preimage domain range pred?/pre)))))))
 
 (: real-predicate/arr (Symbol (Flonum -> Boolean) Interval Interval -> expression))
 (define (real-predicate/arr name p? true-ivl false-ivl)
@@ -627,61 +629,63 @@ Fix endpoint booleans sent to interval in +/pre
    (λ (r0 r1)
      (define r (omega-expr-idx r0 r1))
      (define rte (omega-expr-idx r r1))
-     (match-define (meaning c-idxs c-fwd c-comp) (run-expression c-expr r0 r))
+     (match-define (expression-meaning c-idxs c-fwd c-comp) (run-expression c-expr r0 r))
      (define t-meaning (delay (run-expression t-expr r rte)))
      (define f-meaning (delay (run-expression f-expr rte r1)))
-     (define t-idxs (delay (meaning-indexes (force t-meaning))))
-     (define f-idxs (delay (meaning-indexes (force f-meaning))))
-     (meaning
+     (define t-idxs (delay (expression-meaning-indexes (force t-meaning))))
+     (define f-idxs (delay (expression-meaning-indexes (force f-meaning))))
+     (expression-meaning
       (append c-idxs (list (if-indexes r t-idxs f-idxs)))
       (λ (γ bs)
         (define c (c-fwd γ bs))
-        (define b (branches-ref bs r))
+        (define b (branches-rect-ref bs r))
         (cond [(or (not (boolean? c)) (not (boolean-set-member? b c)))  (raise 'if-bad-branch)]
-              [c     ((meaning-forward (force t-meaning)) γ bs)]
-              [else  ((meaning-forward (force f-meaning)) γ bs)]))
-      (λ (orig-domain bs)
-        (define c (c-comp orig-domain bs))
-        (define c-range (function-range c))
-        
-        (define t-domain (if (rect-member? c-range #t) (apply-preimage c 't) empty-set))
-        (define f-domain (if (rect-member? c-range #f) (apply-preimage c 'f) empty-set))
-        
-        ;; t? = #t if it's possible to take the true branch
-        ;; f? = #t if it's possible to take the false branch
-        (define-values (t? f?)
-          (let-values ([(bt? bf?)  (boolean-set->booleans (branches-ref bs r))])
-            (values (and bt? (not (empty-set? t-domain)))
-                    (and bf? (not (empty-set? f-domain))))))
-        
-        (define c-new-bs (function-new-branches c))
-        
-        (cond [(and t? f?)
-               (define domain (rect-join t-domain f-domain))
-               (cond [strict?
-                      (let ([t  ((meaning-computation (force t-meaning)) t-domain bs)]
-                            [f  ((meaning-computation (force f-meaning)) f-domain bs)])
-                        (define t-range (function-range t))
-                        (define f-range (function-range f))
-                        (define range (rect-join t-range f-range))
-                        (make-function domain c-new-bs range
-                                       (λ (B)
-                                         (rect-join (apply-preimage t (rect-intersect t-range B))
-                                                    (apply-preimage f (rect-intersect f-range B))))))]
-                     [else
-                      (make-function domain c-new-bs universal-set (λ (B) domain))])]
-              [t?
-               (let ([t  ((meaning-computation (force t-meaning)) t-domain bs)])
-                 (define t-range (function-range t))
-                 (define new-bs (cons (cons r 't) (append c-new-bs (function-new-branches t))))
-                 (make-function t-domain new-bs t-range (λ (B) (apply-preimage t B))))]
-              [f?
-               (let ([f  ((meaning-computation (force f-meaning)) f-domain bs)])
-                 (define f-range (function-range f))
-                 (define new-bs (cons (cons r 'f) (append c-new-bs (function-new-branches f))))
-                 (make-function f-domain new-bs f-range (λ (B) (apply-preimage f B))))]
-              [else
-               (make-function empty-set c-new-bs empty-set (λ (B) empty-set))]))))))
+              [c     ((expression-meaning-forward (force t-meaning)) γ bs)]
+              [else  ((expression-meaning-forward (force f-meaning)) γ bs)]))
+      (make-computation
+       (λ (domain bs)
+         (match-let ([(computation-meaning bs c-range c-pre)  (c-comp domain bs)])
+           (define t-domain (if (rect-member? c-range #t) (c-pre 't) empty-set))
+           (define f-domain (if (rect-member? c-range #f) (c-pre 'f) empty-set))
+           
+           ;; t? = #t if it's possible to take the true branch
+           ;; f? = #t if it's possible to take the false branch
+           (define-values (t? f?)
+             (let-values ([(bt? bf?)  (boolean-set->booleans (branches-rect-ref bs r))])
+               (values (and bt? (not (empty-set? t-domain)))
+                       (and bf? (not (empty-set? f-domain))))))
+           
+           (cond
+             [(and t? f?)
+              (define domain (rect-join t-domain f-domain))
+              (cond
+                [strict?
+                 (define t-comp (expression-meaning-computation (force t-meaning)))
+                 (define f-comp (expression-meaning-computation (force f-meaning)))
+                 (match-let* ([(computation-meaning bs t-range t-pre)  (t-comp t-domain bs)]
+                              [(computation-meaning bs f-range f-pre)  (f-comp f-domain bs)])
+                   (define range (rect-join t-range f-range))
+                   
+                   (: if/pre Prim-Preimage-Fun)
+                   (define (if/pre B)
+                     (define Bt (rect-intersect t-range B))
+                     (define Bf (rect-intersect f-range B))
+                     (rect-join (t-pre Bt) (f-pre Bf)))
+                   
+                   (computation-meaning bs range (make-preimage domain range if/pre)))]
+                [else
+                 (define range universal-set)
+                 (computation-meaning bs range (make-preimage domain range (λ (B) domain)))])]
+             [t?
+              (define t-comp (expression-meaning-computation (force t-meaning)))
+              (match-let ([(computation-meaning bs t-range t-pre)  (t-comp t-domain bs)])
+                (computation-meaning (branches-rect-restrict bs r 't) t-range t-pre))]
+             [f?
+              (define f-comp (expression-meaning-computation (force f-meaning)))
+              (match-let ([(computation-meaning bs f-range f-pre)  (f-comp f-domain bs)])
+                (computation-meaning (branches-rect-restrict bs r 'f) f-range f-pre))]
+             [else
+              (empty/comp empty-set bs)]))))))))
 
 (define lazy-if/arr (if/arr #f))
 (define strict-if/arr (if/arr #t))
@@ -716,4 +720,3 @@ Fix endpoint booleans sent to interval in +/pre
                                                               neg-neg-div/arr
                                                               (c/arr 0.0)))
                                 empty/arr)))
-|#

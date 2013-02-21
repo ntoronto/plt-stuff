@@ -3,7 +3,7 @@
 (require "private/types.rkt"
          "private/functions.rkt"
          "private/rect.rkt"
-         (except-in "private/arrow.rkt" function)
+         "private/arrow.rkt"
          "private/expression.rkt"
          "private/sample.rkt"
          "private/language.rkt")

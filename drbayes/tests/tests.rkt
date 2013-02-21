@@ -51,7 +51,6 @@
                       (ref/arr 1)
                       (ap/arr +/arr (pair/arr (ref/arr 0) (ref/arr 1))))
             (list/arr random/arr
-                      random/arr
                       random/arr)))
   (define B (list-rect reals reals (interval 0.45 0.7 #t #t))))
 
@@ -79,7 +78,7 @@
             [y  (translate (scale (uniform) (const 2.0)) (const -1.0))])
         (list x y (/ x y))))))
   
-  (define B (list-rect reals reals (interval -1.25 0.8))))
+  (define B (list-rect reals reals (interval -0.8 1.25))))
 
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:
@@ -152,7 +151,7 @@
              [y  (normal x 1)])
         (list x (strict-if (y . > . 100) 100 y))))))
   
-  (define B (list-rect reals (interval 100.0 100.0))))
+  (define B (list-rect reals (interval 98.0 99.0))))
 
 #;; Test: Normal-Normal model with circular condition
 ;; Preimage should look like a football set up for a field goal
@@ -284,15 +283,15 @@
 
 ;; ===================================================================================================
 
-(match-define (meaning idxs f-fwd f-comp) (run-expression f-expr))
+(match-define (expression-meaning idxs f-fwd f-comp) (run-expression f-expr))
 
 (define refine
   (cond [(empty-set? B)  (error 'empty-image)]
         [else  (preimage-refiner f-comp B)]))
 
 (define-values (Ω bs)
-  (let-values ([(Ω bs)  (refine (omega-rect) empty-branches)])
-    (cond [(empty-set? Ω)  (error 'empty-preimage)]
+  (let-values ([(Ω bs)  (refine (omega-rect) branches-rect)])
+    (cond [(or (empty-set? Ω) (empty-set? bs))  (error 'empty-preimage)]
           [else  (values Ω bs)])))
 
 (printf "idxs = ~v~n" idxs)
@@ -301,7 +300,7 @@
 (newline)
 
 (struct: domain-sample ([Ω : Omega-Rect]
-                        [branches : Branches]
+                        [branches : Branches-Rect]
                         [point : Omega]
                         [image-point : (U Void Value)]
                         [measure : Flonum]

@@ -23,15 +23,17 @@
 ;; ===================================================================================================
 
 (define-type Refiner
-  ((U Empty-Set Omega-Rect) Branches -> (Values (U Empty-Set Omega-Rect) Branches)))
+  ((U Empty-Set Omega-Rect)
+   (U Empty-Set Branches-Rect)
+   -> (Values (U Empty-Set Omega-Rect)
+              (U Empty-Set Branches-Rect))))
 
 (: preimage-refiner (Computation Nonempty-Rect -> Refiner))
-(define ((preimage-refiner e B) A bs)
-  (let* ([f  (e A bs)]
-         [new-bs  (function-new-branches f)]
-         [A  (apply-preimage f B)])
-    (cond [(or (empty-set? A) (omega-rect? A))  (values A (add-new-branches bs new-bs))]
-          [else  (raise-result-error 'preimage-refiner "(U Empty-Set Omega-Rect)" A)])))
+(define ((preimage-refiner e-comp B) Ω bs)
+  (match-let ([(computation-meaning bs range e-pre)  (e-comp Ω bs)])
+    (let ([Ω  (e-pre B)])
+      (cond [(or (empty-set? Ω) (omega-rect? Ω))  (values Ω bs)]
+            [else  (raise-result-error 'preimage-refiner "(U Empty-Set Omega-Rect)" Ω)]))))
 
 ;; ===================================================================================================
 ;; Helper functions
@@ -53,7 +55,7 @@
 (struct: fail-info ([idxs : Indexes]
                     [m : Natural]
                     [Ω : (U Empty-Set Omega-Rect)]
-                    [branches : Branches])
+                    [branches : (U Empty-Set Branches-Rect)])
   #:transparent)
 
 (define splits 0)
@@ -67,7 +69,7 @@
 (define (index-dist ps)
   (discrete-dist (build-list (length ps) (λ: ([i : Index]) i)) ps))
 
-(define-type Omega-Sample (weighted-sample (Pair Omega-Rect Branches)))
+(define-type Omega-Sample (weighted-sample (Pair Omega-Rect Branches-Rect)))
 
 (: num-omega-rect-changes (Omega-Rect Omega-Rect -> Integer))
 (define (num-omega-rect-changes Ω1 Ω2)
@@ -82,25 +84,25 @@
                (loop (rest ks) sum)
                (loop (rest ks) (+ 1 sum)))])))
 
-(: num-branch-changes (Branches Branches -> Integer))
+(: num-branch-changes (Branches-Rect Branches-Rect -> Integer))
 (define (num-branch-changes bs1 bs2)
   (define ks (list-union (hash-keys bs1) (hash-keys bs2)))
   (let loop ([ks ks] [sum 0])
     (cond [(empty? ks)  sum]
           [else
            (define k (first ks))
-           (if (equal? (branches-ref bs1 k) (branches-ref bs2 k))
+           (if (equal? (branches-rect-ref bs1 k) (branches-rect-ref bs2 k))
                (loop (rest ks) sum)
                (loop (rest ks) (+ 1 sum)))])))
 
-(: refinement-sample (Omega-Rect Branches Indexes Refiner -> Omega-Sample))
+(: refinement-sample (Omega-Rect Branches-Rect Indexes Refiner -> Omega-Sample))
 (define (refinement-sample orig-Ω orig-bs idxs refine)
   (define max-splits (interval-max-splits))
   (define min-ivl (interval-min-length))
   (let: loop ([idxs : Indexes  idxs]
               [m : Natural  0]
               [Ω : (U Empty-Set Omega-Rect)  orig-Ω]
-              [bs : Branches  orig-bs]
+              [bs : (U Empty-Set Branches-Rect)  orig-bs]
               [prob : Flonum  1.0]
               [fail-queue : (Listof (Promise fail-info))  empty]
               [prob-queue : (Listof Flonum)  empty])
@@ -129,7 +131,7 @@
     
     (cond
       ;; Empty preimage: failure!
-      [(empty-set? Ω)  (backtrack)]
+      [(or (empty-set? Ω) (empty-set? bs))  (backtrack)]
       ;; Empty indexes: success!
       [(empty? idxs)  (weighted-sample (cons Ω bs) prob)]
       [else
@@ -172,13 +174,14 @@
          [(if-indexes r t-idxs f-idxs)
           
           (: choose-branch ((U 't 'f) (Promise Indexes)
-                                      -> (Values Indexes (U Empty-Set Omega-Rect) Branches)))
+                                      -> (Values Indexes
+                                                 (U Empty-Set Omega-Rect)
+                                                 (U Empty-Set Branches-Rect))))
           (define (choose-branch b b-idxs)
-            (let*-values ([(bs)    (branches-set bs r b)]
-                          [(Ω bs)  (refine Ω bs)])
+            (let-values ([(Ω bs)  (refine Ω (branches-rect-restrict bs r b))])
               (values (append (force b-idxs) (rest idxs)) Ω bs)))
           
-          (define b (branches-ref bs r))
+          (define b (branches-rect-ref bs r))
           (case b
             [(t)  (let-values ([(idxs Ω bs)  (choose-branch 't t-idxs)])
                     (loop idxs 0 Ω bs prob fail-queue prob-queue))]
@@ -208,7 +211,7 @@
 (: drbayes-sample (case-> (expression Integer -> (Values (Listof Value) (Listof Flonum)))
                           (expression Integer Rect -> (Values (Listof Value) (Listof Flonum)))))
 (define (drbayes-sample f n [B universal-set])
-  (match-define (meaning idxs f-fwd f-comp) (run-expression (program/exp f)))
+  (match-define (expression-meaning idxs f-fwd f-comp) (run-expression (program/exp f)))
   
   (define (empty-set-fail)
     (error 'drbayes-sample "cannot sample from the empty set"))
@@ -218,8 +221,8 @@
           [else  (preimage-refiner f-comp B)]))
   
   (define-values (Ω bs)
-    (let-values ([(Ω bs)  (refine (omega-rect) empty-branches)])
-      (if (empty-set? Ω) (empty-set-fail) (values Ω bs))))
+    (let-values ([(Ω bs)  (refine (omega-rect) branches-rect)])
+      (if (or (empty-set? Ω) (empty-set? bs)) (empty-set-fail) (values Ω bs))))
   
   (: omega-samples (Listof Omega-Sample))
   (define omega-samples
