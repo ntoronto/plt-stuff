@@ -527,7 +527,7 @@ Fix endpoint booleans sent to interval in +/pre
                             fl/ #t #f
                             fl* #t #t
                             inv-fl/ #f #t))
-  
+
 (define pos-neg-div/arr
   (monotone-2d-function/arr '//arr (pair-rect positive-reals negative-reals) negative-reals
                             fl/ #f #f

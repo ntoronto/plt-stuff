@@ -68,6 +68,7 @@
   
   (define B (list-rect reals reals (interval 0.45 0.7))))
 
+#;
 (begin
   (interval-max-splits 4)
   
@@ -258,7 +259,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (define f-expr
