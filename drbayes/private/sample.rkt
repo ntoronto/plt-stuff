@@ -35,8 +35,6 @@
     (let-values ([(Ω Γ)  (e-pre B)])
       (cond [(not (or (empty-set? Γ) (null-rect? Γ)))
              (raise-result-error 'preimage-refiner "(U Empty-Set Null-Rect)" Γ)]
-            [(not (or (empty-set? Ω) (omega-rect? Ω)))
-             (raise-result-error 'preimage-refiner "(U Empty-Set Omega-Rect)" Ω)]
             [else  (values Ω bs)]))))
 
 ;; ===================================================================================================

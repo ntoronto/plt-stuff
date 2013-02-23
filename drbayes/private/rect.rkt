@@ -688,38 +688,134 @@
   (sort (hash-keys (omega-hash ω)) <))
 
 ;; ===================================================================================================
+
+(define-type (Omega-Tree A) (U #f (Omega-Node A)))
+
+(struct: (A) Omega-Node ([value : A]
+                         [fst : (Omega-Tree A)]
+                         [snd : (Omega-Tree A)])
+  #:transparent)
+
+(: omega-node (All (A) (A -> (A (Omega-Tree A) (Omega-Tree A) -> (Omega-Tree A)))))
+(define ((omega-node default) v fst snd)
+  (cond [(and (eq? v default) (not fst) (not snd))  #f]
+        [else  (Omega-Node v fst snd)]))
+
+(: omega-tree-ref (All (A) (A -> ((Omega-Tree A) Omega-Idx -> A))))
+(define ((omega-tree-ref default) t r)
+  (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1])
+    (define mid (* 1/2 (+ r0 r1)))
+    (cond [(not t)  default]
+          [(r . < . mid)  (loop (Omega-Node-fst t) r0 mid)]
+          [(r . > . mid)  (loop (Omega-Node-snd t) mid r1)]
+          [else  (Omega-Node-value t)])))
+
+(: omega-tree-set (All (A) (A -> ((Omega-Tree A) Omega-Idx A -> (Omega-Tree A)))))
+(define (omega-tree-set default)
+  (define make-node (omega-node default))
+  (λ (t r v)
+    (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1])
+      (define mid (* 1/2 (+ r0 r1)))
+      (if (not t)
+          (cond [(r . < . mid)  (define new-fst (loop #f r0 mid))
+                                (if (eq? #f new-fst) t (make-node default new-fst #f))]
+                [(r . > . mid)  (define new-snd (loop #f mid r1))
+                                (if (eq? #f new-snd) t (make-node default #f new-snd))]
+                [(eq? v default)  #f]
+                [else  (make-node v #f #f)])
+          (cond [(r . < . mid)
+                 (define fst (Omega-Node-fst t))
+                 (define new-fst (loop fst r0 mid))
+                 (cond [(eq? fst new-fst)  t]
+                       [else  (make-node (Omega-Node-value t) new-fst (Omega-Node-snd t))])]
+                [(r . > . mid)
+                 (define snd (Omega-Node-snd t))
+                 (define new-snd (loop snd mid r1))
+                 (cond [(eq? snd new-snd)  t]
+                       [else  (make-node (Omega-Node-value t) (Omega-Node-fst t) new-snd)])]
+                [(eq? v (Omega-Node-value t))  t]
+                [else
+                 (define fst (Omega-Node-fst t))
+                 (define snd (Omega-Node-snd t))
+                 (cond [(and (eq? v default) (not fst) (not snd))  #f]
+                       [else  (make-node v fst snd)])])))))
+
+(: omega-tree-join (All (A) (A (A A -> A)
+                               -> ((Omega-Tree A) (Omega-Tree A) -> (Omega-Tree A)))))
+(define (omega-tree-join default join)
+  (define make-node (omega-node default))
+  (λ (t1 t2)
+    (let: loop ([t1 t1] [t2 t2])
+      (cond [(or (not t1) (not t2))  #f]
+            [else  (match-define (Omega-Node v1 fst1 snd1) t1)
+                   (match-define (Omega-Node v2 fst2 snd2) t2)
+                   (define v (join v1 v2))
+                   (define fst (loop fst1 fst2))
+                   (define snd (loop snd1 snd2))
+                   (cond [(and (eq? v v1) (eq? fst fst1) (eq? snd snd1))  t1]
+                         [(and (eq? v v2) (eq? fst fst2) (eq? snd snd2))  t2]
+                         [else  (make-node v fst snd)])]))))
+
+(: omega-tree-intersect
+   (All (A) (A (A A -> (U Empty-Set A))
+               -> ((Omega-Tree A) (Omega-Tree A) -> (U Empty-Set (Omega-Tree A))))))
+(define (omega-tree-intersect default intersect)
+  (define make-node (omega-node default))
+  (λ (t1 t2)
+    (let: loop ([t1 t1] [t2 t2])
+      (cond [(not t1)  t2]
+            [(not t2)  t1]
+            [else  (match-define (Omega-Node v1 fst1 snd1) t1)
+                   (match-define (Omega-Node v2 fst2 snd2) t2)
+                   (define v (intersect v1 v2))
+                   (cond [(empty-set? v)  empty-set]
+                         [else
+                          (define fst (loop fst1 fst2))
+                          (cond [(empty-set? fst)  empty-set]
+                                [else
+                                 (define snd (loop snd1 snd2))
+                                 (cond [(empty-set? snd)  empty-set]
+                                       [(and (eq? v v1) (eq? fst fst1) (eq? snd snd1))  t1]
+                                       [(and (eq? v v2) (eq? fst fst2) (eq? snd snd2))  t2]
+                                       [else  (make-node v fst snd)])])])]))))
+
+(: omega-tree-map (All (A B) (A -> ((Omega-Tree A) (Omega-Idx A -> B) -> (Listof B)))))
+(define ((omega-tree-map default) t f)
+  (: bs (Listof B))
+  (define bs
+    (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1] [bs : (Listof B)  null])
+      (define mid (* 1/2 (+ r0 r1)))
+      (cond [t  (define v (Omega-Node-value t))
+                (let ([bs  (loop (Omega-Node-fst t) r0 mid bs)])
+                  (cond [(eq? v default)  (loop (Omega-Node-snd t) mid r1 bs)]
+                        [else  (loop (Omega-Node-snd t) mid r1 (cons (f mid v) bs))]))]
+            [else  bs])))
+  (reverse bs))
+
+(: omega-tree-keys (All (A) (A -> ((Omega-Tree A) -> (Listof Omega-Idx)))))
+(define ((omega-tree-keys default) t)
+  (((inst omega-tree-map A Omega-Idx) default) t (λ: ([k : Omega-Idx] [_ : A]) k)))
+
+;; ===================================================================================================
 ;; Infinite product space rectangles
 
-(define-type Omega-Rect-Hash (HashTable Omega-Idx Interval))
-(define: empty-omega-rect-hash : Omega-Rect-Hash  (make-immutable-hash empty))
+(define-type Omega-Rect (Omega-Tree Interval))
 
-(: print-omega-rect (Omega-Rect Output-Port (U #t #f 0 1) -> Any))
-(define (print-omega-rect Ω port mode)
-  (define lst (hash-map (omega-rect-hash Ω) (λ: ([k : Omega-Idx] [x : Interval]) (cons k x))))
-  (pretty-print-constructor 'omega-rect lst port mode))
+(define (omega-rect) #f)
 
-(struct: Omega-Rect ([hash : Omega-Rect-Hash])
-  #:transparent
-  #:property prop:custom-print-quotable 'never
-  #:property prop:custom-write print-omega-rect)
+(define omega-rect-node ((inst omega-node Interval) unit-interval))
+(define omega-rect-ref ((inst omega-tree-ref Interval) unit-interval))
+(define omega-rect-set ((inst omega-tree-set Interval) unit-interval))
 
-(define omega-rect? Omega-Rect?)
-(define omega-rect-hash Omega-Rect-hash)
+(: omega-rect-map (All (B) (Omega-Rect (Omega-Idx Interval -> B) -> (Listof B))))
+(define (omega-rect-map Ω f)
+  (((inst omega-tree-map Interval B) unit-interval) Ω f))
 
-(: omega-rect (case-> (-> Omega-Rect)
-                      (Omega-Rect-Hash -> Omega-Rect)))
-(define (omega-rect [h empty-omega-rect-hash])
-  (cond [(immutable? h)  (Omega-Rect h)]
-        [else  (raise-argument-error 'omega-rect "immutable Omega-Rect-Hash" h)]))
+(define just-omega-rect-join
+  ((inst omega-tree-join Interval) unit-interval interval-join))
 
-(: omega-rect-ref (Omega-Rect Omega-Idx -> Interval))
-(define (omega-rect-ref Ω r)
-  (hash-ref (omega-rect-hash Ω) r (λ () unit-interval)))
-
-(: omega-rect-set (Omega-Rect Omega-Idx Interval -> Omega-Rect))
-(define (omega-rect-set Ω r I)
-  (define old-I (omega-rect-ref Ω r))
-  (if (equal? I old-I) Ω (omega-rect (hash-set (omega-rect-hash Ω) r I))))
+(define just-omega-rect-intersect
+  ((inst omega-tree-intersect Interval) unit-interval interval-intersect))
 
 (: omega-rect-join
    (case-> (Empty-Set Empty-Set -> Empty-Set)
@@ -727,75 +823,29 @@
            (Omega-Rect (U Empty-Set Omega-Rect) -> Omega-Rect)
            ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
 (define (omega-rect-join Ω1 Ω2)
-  (cond
-    [(empty-set? Ω1)  Ω2]
-    [(empty-set? Ω2)  Ω1]
-    [else
-     (define h1 (omega-rect-hash Ω1))
-     (define h2 (omega-rect-hash Ω2))
-     (define ks (list-intersect (hash-keys h1) (hash-keys h2)))
-     (omega-rect
-      (for/fold: ([h : Omega-Rect-Hash  empty-omega-rect-hash]) ([k  (in-list ks)])
-        (hash-set h k (interval-join (hash-ref h1 k) (hash-ref h2 k)))))]))
+  (cond [(empty-set? Ω1)  Ω2]
+        [(empty-set? Ω2)  Ω1]
+        [else  (just-omega-rect-join Ω1 Ω2)]))
 
 (: omega-rect-intersect
    (case-> (Empty-Set (U Empty-Set Omega-Rect) -> Empty-Set)
            ((U Empty-Set Omega-Rect) Empty-Set -> Empty-Set)
            ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
 (define (omega-rect-intersect Ω1 Ω2)
-  (cond
-    [(empty-set? Ω1)  Ω1]
-    [(empty-set? Ω2)  Ω2]
-    [else
-     (define h1 (omega-rect-hash Ω1))
-     (define h2 (omega-rect-hash Ω2))
-     (let-values ([(h1 h2)  (if ((hash-count h2) . < . (hash-count h1))
-                                (values h2 h1)
-                                (values h1 h2))])
-       (let: loop ([ks  (hash-keys h2)] [h : Omega-Rect-Hash  h1])
-         (cond [(empty? ks)  (omega-rect h)]
-               [else  (define k (first ks))
-                      (define A (hash-ref h k (λ () #f)))
-                      (define B (hash-ref h2 k))
-                      (cond [A
-                             (define C (interval-intersect A B))
-                             (cond [(empty-set? C)  empty-set]
-                                   [else
-                                    (loop (rest ks)
-                                          (if (eq? C A)
-                                              h
-                                              ;; This annotation is friggin' ridiculous
-                                              ((inst hash-set Omega-Idx Interval) h k C)))])]
-                            [else
-                             (loop (rest ks) (hash-set h k B))])])))]))
-
-(: omega-rect-member? (case-> (Empty-Set Omega -> #f)
-                              ((U Empty-Set Omega-Rect) Omega -> Boolean)))
-(define (omega-rect-member? Ω ω)
-  (cond
-    [(empty-set? Ω)  #f]
-    [else
-     (define h1 (omega-rect-hash Ω))
-     (define h2 (omega-hash ω))
-     (define ks (list-union (hash-keys h1) (hash-keys h2)))
-     (andmap (λ: ([k : Omega-Idx])
-               (interval-contains? (hash-ref h1 k (λ () unit-interval))
-                                   (omega-ref ω k)))
-             ks)]))
+  (cond [(empty-set? Ω1)  Ω1]
+        [(empty-set? Ω2)  Ω2]
+        [else  (just-omega-rect-intersect Ω1 Ω2)]))
 
 (: omega-rect-domain (Omega-Rect -> (Listof Omega-Idx)))
-(define (omega-rect-domain Ω)
-  (sort (hash-keys (omega-rect-hash Ω)) <))
+(define omega-rect-domain (omega-tree-keys unit-interval))
 
 (: omega-rect-sample-point (Omega-Rect -> Omega))
 (define (omega-rect-sample-point Ω)
-  (define h (omega-rect-hash Ω))
   (omega ((inst make-immutable-hash Omega-Idx Flonum)
-          (hash-map h (λ: ([k : Omega-Idx] [A : Interval])
-                        (cons k (interval-sample-point A)))))))
+          (omega-rect-map Ω (λ: ([k : Omega-Idx] [I : Interval])
+                              (cons k (interval-sample-point I)))))))
 
 (: omega-rect-measure (Omega-Rect -> Flonum))
 (define (omega-rect-measure Ω)
-  (define h (omega-rect-hash Ω))
-  (fl (apply * (hash-map h (λ: ([k : Omega-Idx] [A : Interval])
-                             (interval-measure A))))))
+  (fl (apply * (omega-rect-map Ω (λ: ([k : Omega-Idx] [A : Interval])
+                                   (interval-measure A))))))

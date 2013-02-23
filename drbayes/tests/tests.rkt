@@ -200,7 +200,7 @@
             (list/arr random/arr random/arr random/arr)))
   (define B (list-rect reals (interval 0.9 1.1 #t #t) 'tf)))
 
-#;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
+;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
   (define f-expr
     (drbayes
@@ -264,7 +264,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (define f-expr
@@ -288,8 +288,8 @@
 #;
 (begin
   (define f-expr
-    (drbayes (list (- (uniform)) (uniform))))
-  (define B (list-rect reals reals)))
+    (drbayes (strict-if ((uniform) . < . 1/2) (fail) #f)))
+  (define B 'tf))
 
 ;; ===================================================================================================
 
@@ -366,7 +366,7 @@
         (sort
          (remove-duplicates
           (map (λ: ([s : domain-sample])
-                 (length (hash-keys (omega-rect-hash (domain-sample-Ω s)))))
+                 (length (omega-rect-domain (domain-sample-Ω s))))
                all-samples))
          <))
 (newline)
