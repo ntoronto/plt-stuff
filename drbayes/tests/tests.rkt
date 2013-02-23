@@ -281,18 +281,26 @@
                        (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
+#;
+(begin
+  (define f-expr
+    (pair/arr (ap/arr normal/arr random/arr)
+              (ap/arr normal/arr random/arr)))
+  (define B (pair-rect reals reals)))
+
 ;; ===================================================================================================
 
 (match-define (expression-meaning idxs f-fwd f-comp) (run-expression f-expr))
 
+(define (empty-set-error)
+  (error 'drbayes-sample "cannot sample from the empty set"))
+
 (define refine
-  (cond [(empty-set? B)  (error 'empty-image)]
-        [else  (preimage-refiner f-comp B)]))
+  (if (empty-set? B) (empty-set-error) (preimage-refiner f-comp B)))
 
 (define-values (Ω bs)
   (let-values ([(Ω bs)  (refine (omega-rect) branches-rect)])
-    (cond [(or (empty-set? Ω) (empty-set? bs))  (error 'empty-preimage)]
-          [else  (values Ω bs)])))
+    (if (or (empty-set? Ω) (empty-set? bs)) (empty-set-error) (values Ω bs))))
 
 (printf "idxs = ~v~n" idxs)
 (printf "Ω = ~v~n" Ω)

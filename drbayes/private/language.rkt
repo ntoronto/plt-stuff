@@ -69,7 +69,7 @@
     #:description "zero-ary primitive operator"
     #:attributes (combinator)
     #:literals (fail)
-    (pattern fail #:attr combinator #'(λ () empty/arr))
+    (pattern fail #:attr combinator #'(λ () bottom/arr))
     )
   
   (define-syntax-class 1ary-primitive
@@ -120,13 +120,13 @@
     (pattern (~and (- arg0 arg1) (- args ...)) #:attr combinator #'-/exp)
     (pattern (~and e (- args ...))
              #:when (raise-syntax-error 'drbayes "expected 1 or 2 arguments" #'e)
-             #:attr combinator #'(λ () empty/arr))
+             #:attr combinator #'(λ () bottom/arr))
     
     (pattern (~and (/ arg) (/ args ...)) #:attr combinator #'inv/exp)
     (pattern (~and (/ arg0 arg1) (/ args ...)) #:attr combinator #'//exp)
     (pattern (~and e (/ args ...))
              #:when (raise-syntax-error 'drbayes "expected 1 or 2 arguments" #'e)
-             #:attr combinator #'(λ () empty/arr))
+             #:attr combinator #'(λ () bottom/arr))
     
     (pattern (~and e (op:0ary-primitive ~! args ...))
              #:when (if (= 0 (length (syntax->list #'(args ...))))

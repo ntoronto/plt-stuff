@@ -121,7 +121,7 @@
          (error 'drbayes-sample "cannot sample from the empty set")]))
     
     #;
-    (unless (empty-set? Ω)
+    (when (and (not (empty-set? Ω)) (not (empty-set? bs)))
       (printf "number of Ω changes: ~v~n" (+ (num-omega-rect-changes orig-Ω Ω)
                                              (num-branch-changes orig-bs bs)))
       (when (and (eq? orig-Ω Ω) (eq? orig-bs bs))
@@ -149,8 +149,9 @@
                [(empty? (rest Is))
                 (define new-I (first Is))
                 (cond [(eq? I new-I)  (loop (rest idxs) 0 Ω bs prob fail-queue prob-queue)]
-                      [else  (let-values ([(Ω bs)  (refine (omega-rect-set Ω idx new-I) bs)])
-                               (loop idxs (+ m 1) Ω bs prob fail-queue prob-queue))])]
+                      [else
+                       (let-values ([(Ω bs)  (refine (omega-rect-set Ω idx new-I) bs)])
+                         (loop idxs (+ m 1) Ω bs prob fail-queue prob-queue))])]
                [else
                 (set! splits (+ 1 splits))
                 
@@ -160,8 +161,9 @@
                              [(p ps)  (take-index (discrete-dist-probs d) i)])
                   (define new-fails
                     (map (λ: ([I : Interval])
-                           (delay (let-values ([(Ω bs)  (refine (omega-rect-set Ω idx I) bs)])
-                                    (fail-info idxs (+ m 1) Ω bs))))
+                           (delay
+                             (let-values ([(Ω bs)  (refine (omega-rect-set Ω idx I) bs)])
+                               (fail-info idxs (+ m 1) Ω bs))))
                          Is))
                   (define new-probs (map (λ: ([p : Flonum]) (* prob p)) ps))
                   
@@ -213,16 +215,16 @@
 (define (drbayes-sample f n [B universal-set])
   (match-define (expression-meaning idxs f-fwd f-comp) (run-expression (program/exp f)))
   
-  (define (empty-set-fail)
+  (define (empty-set-error)
     (error 'drbayes-sample "cannot sample from the empty set"))
   
   (define refine
-    (cond [(empty-set? B)  (empty-set-fail)]
+    (cond [(empty-set? B)  (empty-set-error)]
           [else  (preimage-refiner f-comp B)]))
   
   (define-values (Ω bs)
     (let-values ([(Ω bs)  (refine (omega-rect) branches-rect)])
-      (if (or (empty-set? Ω) (empty-set? bs)) (empty-set-fail) (values Ω bs))))
+      (if (or (empty-set? Ω) (empty-set? bs)) (empty-set-error) (values Ω bs))))
   
   (: omega-samples (Listof Omega-Sample))
   (define omega-samples
