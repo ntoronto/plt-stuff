@@ -81,14 +81,14 @@
   
   (define B (list-rect reals reals (interval 0.45 0.7))))
 
-;; Test: arithmetic
+#;; Test: arithmetic
 (begin
   (interval-max-splits 4)
   
   (define f-expr
     (drbayes
-     (let ([x  (uniform -1 1)]
-           [y  (uniform -1 1)])
+     (let* ([x  (uniform -1 1)]
+            [y  (uniform -1 1)])
        (list x y (- x y)))))
   
   (define B (list-rect reals reals (interval -0.1 0.2))))
@@ -264,7 +264,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (define f-expr
@@ -285,6 +285,11 @@
                        (interval 0.4 0.6 #t #t)
                        (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
+#;
+(begin
+  (define f-expr
+    (drbayes (list (- (uniform)) (uniform))))
+  (define B (list-rect reals reals)))
 
 ;; ===================================================================================================
 

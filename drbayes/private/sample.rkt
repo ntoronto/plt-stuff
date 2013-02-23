@@ -4,6 +4,7 @@
          racket/list
          racket/promise
          math/distributions
+         "types.rkt"
          "rect.rkt"
          "arrow.rkt"
          "expression.rkt")
@@ -74,30 +75,6 @@
 
 (define-type Omega-Sample (weighted-sample (Pair Omega-Rect Branches-Rect)))
 
-(: num-omega-rect-changes (Omega-Rect Omega-Rect -> Integer))
-(define (num-omega-rect-changes Ω1 Ω2)
-  (define h1 (omega-rect-hash Ω1))
-  (define h2 (omega-rect-hash Ω2))
-  (define ks (list-union (hash-keys h1) (hash-keys h2)))
-  (let loop ([ks ks] [sum 0])
-    (cond [(empty? ks)  sum]
-          [else
-           (define k (first ks))
-           (if (equal? (omega-rect-ref Ω1 k) (omega-rect-ref Ω2 k))
-               (loop (rest ks) sum)
-               (loop (rest ks) (+ 1 sum)))])))
-
-(: num-branch-changes (Branches-Rect Branches-Rect -> Integer))
-(define (num-branch-changes bs1 bs2)
-  (define ks (list-union (hash-keys bs1) (hash-keys bs2)))
-  (let loop ([ks ks] [sum 0])
-    (cond [(empty? ks)  sum]
-          [else
-           (define k (first ks))
-           (if (equal? (branches-rect-ref bs1 k) (branches-rect-ref bs2 k))
-               (loop (rest ks) sum)
-               (loop (rest ks) (+ 1 sum)))])))
-
 (: refinement-sample (Omega-Rect Branches-Rect Indexes Refiner -> Omega-Sample))
 (define (refinement-sample orig-Ω orig-bs idxs refine)
   (define max-splits (interval-max-splits))
@@ -122,15 +99,6 @@
         ;; Empty preimage, no recourses: total fail!
         [else
          (error 'drbayes-sample "cannot sample from the empty set")]))
-    
-    #;
-    (when (and (not (empty-set? Ω)) (not (empty-set? bs)))
-      (printf "number of Ω changes: ~v~n" (+ (num-omega-rect-changes orig-Ω Ω)
-                                             (num-branch-changes orig-bs bs)))
-      (when (and (eq? orig-Ω Ω) (eq? orig-bs bs))
-        (printf "**** equivalent ****~n"))
-      (set! orig-Ω Ω)
-      (set! orig-bs bs))
     
     (cond
       ;; Empty preimage: failure!
