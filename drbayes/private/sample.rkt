@@ -30,10 +30,13 @@
 
 (: preimage-refiner (Computation Nonempty-Rect -> Refiner))
 (define ((preimage-refiner e-comp B) Ω bs)
-  (match-let ([(computation-meaning bs range e-pre)  (e-comp Ω bs)])
-    (let ([Ω  (e-pre B)])
-      (cond [(or (empty-set? Ω) (omega-rect? Ω))  (values Ω bs)]
-            [else  (raise-result-error 'preimage-refiner "(U Empty-Set Omega-Rect)" Ω)]))))
+  (match-let ([(computation-meaning bs range e-pre)  (e-comp Ω null-rect bs)])
+    (let-values ([(Ω Γ)  (e-pre B)])
+      (cond [(not (or (empty-set? Γ) (null-rect? Γ)))
+             (raise-result-error 'preimage-refiner "(U Empty-Set Null-Rect)" Γ)]
+            [(not (or (empty-set? Ω) (omega-rect? Ω)))
+             (raise-result-error 'preimage-refiner "(U Empty-Set Omega-Rect)" Ω)]
+            [else  (values Ω bs)]))))
 
 ;; ===================================================================================================
 ;; Helper functions
@@ -213,7 +216,7 @@
 (: drbayes-sample (case-> (expression Integer -> (Values (Listof Value) (Listof Flonum)))
                           (expression Integer Rect -> (Values (Listof Value) (Listof Flonum)))))
 (define (drbayes-sample f n [B universal-set])
-  (match-define (expression-meaning idxs f-fwd f-comp) (run-expression (program/exp f)))
+  (match-define (expression-meaning idxs f-fwd f-comp) (run-expression f))
   
   (define (empty-set-error)
     (error 'drbayes-sample "cannot sample from the empty set"))
@@ -244,7 +247,7 @@
              (match-define (weighted-sample (cons Ω bs) p) (first omega-samples))
              (define ω (omega-rect-sample-point Ω))
              (with-handlers ([if-bad-branch?  (λ (_) (loop (rest omega-samples)))])
-               (define x (f-fwd ω bs))
+               (define x (f-fwd ω null bs))
                (cond [(rect-member? B x)
                       (define m (omega-rect-measure Ω))
                       (cons (weighted-sample x (/ m p)) (loop (rest omega-samples)))]

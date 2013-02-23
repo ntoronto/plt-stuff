@@ -20,6 +20,13 @@
   (define I (interval 0.25 0.5 #t #t))
   (define B (list-rect I I I)))
 
+#;; Test: same as above, using expressions
+(begin
+  (define f-expr
+    (drbayes (list (uniform) (uniform) (uniform))))
+  (define I (interval 0.25 0.5 #t #t))
+  (define B (list-rect I I I)))
+
 #;; Test: list/arr random/arr ap/arr sqr/arr
 ;; Preimage is a rectangle [0.25,0.5] × [0.5,sqrt(1/2)] × [0.5,sqrt(1/2)]
 (begin
@@ -27,6 +34,14 @@
     (list/arr random/arr
               (ap/arr sqr/arr random/arr)
               (ap/arr sqr/arr random/arr)))
+  (define I (interval 0.25 0.5 #t #t))
+  (define B (list-rect I I I)))
+
+#;; Test: same as above, using expressions
+(begin
+  (define f-expr
+    (drbayes
+     (list (uniform) (sqr (uniform)) (sqr (uniform)))))
   (define I (interval 0.25 0.5 #t #t))
   (define B (list-rect I I I)))
 
@@ -59,26 +74,24 @@
   (interval-max-splits 2)
   
   (define f-expr
-    (program/exp
-     (drbayes
-      (let ([x  (uniform)]
-            [y  (uniform)])
-        (list x y (+ x y))))))
+    (drbayes
+     (let ([x  (uniform)]
+           [y  (uniform)])
+       (list x y (+ x y)))))
   
   (define B (list-rect reals reals (interval 0.45 0.7))))
 
-#;
+#;; Test: arithmetic
 (begin
   (interval-max-splits 4)
   
   (define f-expr
-    (program/exp
-     (drbayes
-      (let ([x  (translate (scale (uniform) (const 2.0)) (const -1.0))]
-            [y  (translate (scale (uniform) (const 2.0)) (const -1.0))])
-        (list x y (/ x y))))))
+    (drbayes
+     (let ([x  (translate (scale (uniform) (const 2.0)) (const -1.0))]
+           [y  (translate (scale (uniform) (const 2.0)) (const -1.0))])
+       (list x y (- x y)))))
   
-  (define B (list-rect reals reals (interval -0.8 1.25))))
+  (define B (list-rect reals reals (interval -0.1 0.2))))
 
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:
@@ -111,11 +124,10 @@
 ;; samples should be uniformly distributed
 (begin
   (define f-expr
-    (program/exp
-     (drbayes
-      (let ([x  (uniform)]
-            [y  (uniform)])
-        (list x y (or (< x y) (> x (scale y (const 8)))))))))
+    (drbayes
+     (let ([x  (uniform)]
+           [y  (uniform)])
+       (list x y (or (< x y) (> x (scale y (const 8))))))))
   (define B (list-rect reals reals 't)))
 
 #;; Test: Normal-Normal model
@@ -134,24 +146,22 @@
 ;; Preimage should be as above
 (begin
   (define f-expr
-    (program/exp
-     (drbayes
-      (let* ([x  (normal)]
-             [y  (normal x)])
-        (list x y)))))
+    (drbayes
+     (let* ([x  (normal)]
+            [y  (normal x)])
+       (list x y))))
   (define B (list-rect reals (interval 0.9 1.1 #t #t)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
 #;; Test: thermometer that goes to 100
 (begin
   (define f-expr
-    (program/exp
-     (drbayes
-      (let* ([x  (normal 90 10)]
-             [y  (normal x 1)])
-        (list x (strict-if (y . > . 100) 100 y))))))
+    (drbayes
+     (let* ([x  (normal 90 10)]
+            [y  (normal x 1)])
+       (list x (strict-if (y . > . 100) 100 y)))))
   
-  (define B (list-rect reals (interval 98.0 99.0))))
+  (define B (list-rect reals (interval 100.0 100.0))))
 
 #;; Test: Normal-Normal model with circular condition
 ;; Preimage should look like a football set up for a field goal
@@ -169,11 +179,10 @@
 ;; Preimage should be as above
 (begin
   (define f-expr
-    (program/exp
-     (drbayes
-      (let* ([x0  (normal)]
-             [x1  (normal x0)])
-        (list x0 x1 (sqrt (+ (sqr x0) (sqr x1))))))))
+    (drbayes
+     (let* ([x0  (normal)]
+            [x1  (normal x0)])
+       (list x0 x1 (sqrt (+ (sqr x0) (sqr x1)))))))
   (define B (list-rect reals reals (interval 0.95 1.05 #t #t))))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
@@ -194,13 +203,12 @@
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
   (define f-expr
-    (program/exp
-     (drbayes
-      (lazy-if ((uniform) . < . (const #i499/1000))
-               (let ([x  (normal)])
-                 (list x (normal x)))
-               (let ([x  (cauchy)])
-                 (list x (cauchy x)))))))
+    (drbayes
+     (strict-if ((uniform) . < . (const #i499/1000))
+                (let ([x  (normal)])
+                  (list x (normal x)))
+                (let ([x  (cauchy)])
+                  (list x (cauchy x))))))
   (define B (list-rect reals (interval 0.9 1.1 #t #t))))
 
 #;; Test: Bernoulli(p) distribution
@@ -222,8 +230,7 @@
     (lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p))))
   
   (define f-expr
-    (program/exp
-     (drbayes (geometric-p))))
+    (drbayes (geometric-p)))
   
   (define B (interval 1.0 3.0 #t #t))
   
@@ -241,10 +248,9 @@
                [else  0]))
   
   (define f-expr
-    (program/exp
-     (drbayes
-      (let ([x  (geometric-p)])
-        (list x (normal x))))))
+    (drbayes
+     (let ([x  (geometric-p)])
+       (list x (normal x)))))
   
   (define B (list-rect reals (interval 2.9 3.1 #t #t)))
   
@@ -258,20 +264,19 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (define f-expr
-    (program/exp
-     (drbayes
-      (let ([x  (normal)])
-        (list x
-              (normal x)
-              (normal x)
-              (normal x)
-              (normal x)
-              (normal x)
-              (normal x))))))
+    (drbayes
+     (let ([x  (normal)])
+       (list x
+             (normal x)
+             (normal x)
+             (normal x)
+             (normal x)
+             (normal x)
+             (normal x)))))
   (define B (list-rect reals
                        (interval 2.2 2.4 #t #t)
                        (interval 0.9 1.1 #t #t)
@@ -280,13 +285,6 @@
                        (interval 0.4 0.6 #t #t)
                        (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
-
-#;
-(begin
-  (define f-expr
-    (pair/arr (ap/arr normal/arr random/arr)
-              (ap/arr normal/arr random/arr)))
-  (define B (pair-rect reals reals)))
 
 ;; ===================================================================================================
 
@@ -340,7 +338,7 @@
     (match-define (weighted-sample (cons Ω bs) p) s)
     (define ω (omega-rect-sample-point Ω))
     (define x (with-handlers ([if-bad-branch?  (λ (_) (void))])
-                (f-fwd ω bs)))
+                (f-fwd ω null bs)))
     (define m (omega-rect-measure Ω))
     (domain-sample Ω bs ω x m p (/ m p))))
 

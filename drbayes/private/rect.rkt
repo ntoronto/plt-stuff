@@ -24,10 +24,10 @@
 (define (list-union xs ys)
   (remove-duplicates (append xs ys)))
 
-(define-type Value (Rec V (U Flonum Boolean Null (Pair V V) Omega)))
+(define-type Value (Rec V (U Flonum Boolean Null (Pair V V))))
 
 (define-type Joinable-Rect (U Interval Boolean-Set Null-Rect Pair-Rect))
-(define-type Nonempty-Rect (U Universal-Set Omega-Rect Join-Rect Joinable-Rect))
+(define-type Nonempty-Rect (U Universal-Set Join-Rect Joinable-Rect))
 (define-type Rect (U Empty-Set Nonempty-Rect))
 
 ;; ===================================================================================================
@@ -290,60 +290,6 @@
   (foldr pair-rect null-rect As))
 
 ;; ===================================================================================================
-;; Infinite product space values
-
-(define-type Omega-Hash (HashTable Omega-Idx Flonum))
-(define: empty-omega-hash : Omega-Hash  (make-immutable-hash empty))
-
-(: print-omega (Omega Output-Port (U #t #f 0 1) -> Any))
-(define (print-omega ω port mode)
-  (define lst (hash-map (unbox (Omega-hash ω))
-                        (λ: ([k : Omega-Idx] [x : Flonum]) (cons k x))))
-  (pretty-print-constructor 'omega lst port mode))
-
-(struct: Omega ([hash : (Boxof Omega-Hash)])
-  #:transparent
-  #:property prop:custom-print-quotable 'never
-  #:property prop:custom-write print-omega)
-
-(define omega? Omega?)
-
-(: omega (case-> (-> Omega)
-                 (Omega-Hash -> Omega)))
-(define (omega [h empty-omega-hash])
-  (cond [(immutable? h)  (Omega (box h))]
-        [else  (raise-argument-error 'omega "immutable Omega-Hash" h)]))
-
-(: omega-hash (Omega -> Omega-Hash))
-(define (omega-hash ω)
-  (unbox (Omega-hash ω)))
-
-;; ===================================================================================================
-;; Infinite product space rectangles
-
-(define-type Omega-Rect-Hash (HashTable Omega-Idx Interval))
-(define: empty-omega-rect-hash : Omega-Rect-Hash  (make-immutable-hash empty))
-
-(: print-omega-rect (Omega-Rect Output-Port (U #t #f 0 1) -> Any))
-(define (print-omega-rect Ω port mode)
-  (define lst (hash-map (omega-rect-hash Ω) (λ: ([k : Omega-Idx] [x : Interval]) (cons k x))))
-  (pretty-print-constructor 'omega-rect lst port mode))
-
-(struct: Omega-Rect ([hash : Omega-Rect-Hash])
-  #:transparent
-  #:property prop:custom-print-quotable 'never
-  #:property prop:custom-write print-omega-rect)
-
-(define omega-rect? Omega-Rect?)
-(define omega-rect-hash Omega-Rect-hash)
-
-(: omega-rect (case-> (-> Omega-Rect)
-                      (Omega-Rect-Hash -> Omega-Rect)))
-(define (omega-rect [h empty-omega-rect-hash])
-  (cond [(immutable? h)  (Omega-Rect h)]
-        [else  (raise-argument-error 'omega-rect "immutable Omega-Rect-Hash" h)]))
-
-;; ===================================================================================================
 ;; Polymorphic join
 
 (struct: Join-Rect ([interval : (U #f Interval)]
@@ -397,10 +343,7 @@
 
 (: value-ref (Value Idx -> Value))
 (define (value-ref v j)
-  (cond [(omega? v)
-         (cond [(number? j)  (omega-ref v j)]
-               [else  (raise-argument-error 'value-ref "Omega-Idx" 1 v j)])]
-        [(and (pair? v) (or (eq? j 'fst) (eq? j 'snd) (exact-integer? j)))
+  (cond [(and (pair? v) (or (eq? j 'fst) (eq? j 'snd) (exact-integer? j)))
          (pair-ref v j)]
         [else
          (raise 'value-ref)]))
@@ -413,22 +356,12 @@
         [(zero? j)  x1]
         [else  (value-ref x2 (- j 1))]))
 
-(: omega-ref (Omega Omega-Idx -> Flonum))
-(define (omega-ref ω r)
-  (define bx (Omega-hash ω))
-  (define h (unbox bx))
-  (cond [(hash-has-key? h r)  (hash-ref h r)]
-        [else  (define v (random))
-               (set-box! bx (hash-set h r v))
-               v]))
-
 ;; ---------------------------------------------------------------------------------------------------
 ;; Singleton
 
 (: value->singleton (Value -> Nonempty-Rect))
 (define (value->singleton v)
-  (cond [(omega? v)   (omega->singleton v)]
-        [(flonum? v)  (flonum->singleton v)]
+  (cond [(flonum? v)  (flonum->singleton v)]
         [(null? v)    null-rect]
         [(pair? v)    (pair->singleton v)]
         [else         (boolean->singleton v)]))
@@ -438,13 +371,6 @@
   (match-define (cons x1 x2) x1x2)
   (pair-rect (value->singleton x1)
              (value->singleton x2)))
-
-(: omega->singleton (Omega -> Omega-Rect))
-(define (omega->singleton ω)
-  (define h (omega-hash ω))
-  (omega-rect ((inst make-immutable-hash Omega-Idx Interval)
-               (hash-map h (λ: ([k : Omega-Idx] [v : Flonum])
-                             (cons k (flonum->singleton v)))))))
 
 (: flonum->singleton (Flonum -> Interval))
 (define (flonum->singleton x)
@@ -465,9 +391,6 @@
                     (Rect Idx -> Rect)))
 (define (rect-ref A j)
   (cond [(empty-set? A)   A]
-        [(omega-rect? A)
-         (cond [(number? j)  (omega-rect-ref A j)]
-               [else  (raise-argument-error 'rect-ref "Omega-Idx" 1 A j)])]
         [(universal-set? A)  universal-set]
         [(join-rect? A)
          (let ([A  (join-rect-pair-rect A)])
@@ -485,10 +408,6 @@
         [(zero? j)  A1]
         [else  (rect-ref A2 (- j 1))]))
 
-(: omega-rect-ref (Omega-Rect Omega-Idx -> Interval))
-(define (omega-rect-ref Ω r)
-  (hash-ref (omega-rect-hash Ω) r (λ () unit-interval)))
-
 ;; ---------------------------------------------------------------------------------------------------
 ;; Set
 
@@ -498,10 +417,6 @@
 (define (rect-set A j C)
   (cond [(empty-set? A)  A]
         [(empty-set? C)  C]
-        [(omega-rect? A)
-         (cond [(not (number? j))    (raise-argument-error 'rect-set "Omega-Idx" 1 A j C)]
-               [(not (interval? C))  (raise-argument-error 'rect-set "interval" 2 A j C)]
-               [else  (omega-rect-set A j C)])]
         [(universal-set? A)
          (rect-set universal-pair j C)]
         [(join-rect? A)
@@ -521,11 +436,6 @@
         [else  (let ([C  (rect-set A2 (- j 1) C)])
                  (if (eq? C A2) A1×A2 (pair-rect A1 C)))]))
 
-(: omega-rect-set (Omega-Rect Omega-Idx Interval -> Omega-Rect))
-(define (omega-rect-set Ω r I)
-  (define old-I (omega-rect-ref Ω r))
-  (if (equal? I old-I) Ω (omega-rect (hash-set (omega-rect-hash Ω) r I))))
-
 ;; ---------------------------------------------------------------------------------------------------
 ;; Join
 
@@ -539,11 +449,6 @@
         [(eq? A B)  A]
         [(universal-set? A)  A]
         [(universal-set? B)  B]
-        [(omega-rect? A)
-         (cond [(omega-rect? B)  (omega-rect-join A B)]
-               [else  (raise-argument-error 'rect-join "Omega-Rect" 1 A B)])]
-        [(omega-rect? B)
-         (raise-argument-error 'rect-join "Omega-Rect" 0 A B)]
         [(and (join-rect? A) (join-rect? B))  (join-join-join A B)]
         [(join-rect? A)  (join-rect-join A B)]
         [(join-rect? B)  (join-rect-join B A)]
@@ -585,15 +490,6 @@
             (pair-rect (if A1? A1 (if B1? B1 C1))
                        (if A2? A2 (if B2? B2 C2)))))))
 
-(: omega-rect-join (Omega-Rect Omega-Rect -> Omega-Rect))
-(define (omega-rect-join Ω1 Ω2)
-  (define h1 (omega-rect-hash Ω1))
-  (define h2 (omega-rect-hash Ω2))
-  (define ks (list-intersect (hash-keys h1) (hash-keys h2)))
-  (omega-rect
-   (for/fold: ([h : Omega-Rect-Hash  empty-omega-rect-hash]) ([k  (in-list ks)])
-     (hash-set h k (interval-join (hash-ref h1 k) (hash-ref h2 k))))))
-
 (: join-join-join (Join-Rect Join-Rect -> Nonempty-Rect))
 (define (join-join-join A B)
   (match-define (join-rect A0 A1 A2 A3) A)
@@ -627,11 +523,6 @@
         [(eq? A B)  A]
         [(universal-set? A)  B]
         [(universal-set? B)  A]
-        [(omega-rect? A)
-         (cond [(omega-rect? B)  (omega-rect-intersect A B)]
-               [else  (raise-argument-error 'rect-intersect "Omega-Rect" 1 A B)])]
-        [(omega-rect? B)
-         (raise-argument-error 'rect-intersect "Omega-Rect" 0 A B)]
         [(and (join-rect? A) (join-rect? B))  (join-join-intersect A B)]
         [(join-rect? A)  (join-rect-intersect A B)]
         [(join-rect? B)  (join-rect-intersect B A)]
@@ -664,29 +555,6 @@
             B1×B2
             (pair-rect (if A1? A1 (if B1? B1 C1))
                        (if A2? A2 (if B2? B2 C2)))))))
-
-(: omega-rect-intersect (Omega-Rect Omega-Rect -> (U Empty-Set Omega-Rect)))
-(define (omega-rect-intersect Ω1 Ω2)
-  (define h1 (omega-rect-hash Ω1))
-  (define h2 (omega-rect-hash Ω2))
-  (let-values ([(h1 h2)  (if ((hash-count h2) . < . (hash-count h1))
-                             (values h2 h1)
-                             (values h1 h2))])
-    (let: loop ([ks  (hash-keys h2)] [h : Omega-Rect-Hash  h1])
-      (cond [(empty? ks)  (omega-rect h)]
-            [else  (define k (first ks))
-                   (define A (hash-ref h k (λ () #f)))
-                   (define B (hash-ref h2 k))
-                   (cond [A
-                          (define C (interval-intersect A B))
-                          (cond [(empty-set? C)  empty-set]
-                                [else
-                                 (loop (rest ks)
-                                       (cond [(eq? C A)  h]
-                                             ;; This annotation is friggin' ridiculous
-                                             [else  ((inst hash-set Omega-Idx Interval) h k C)]))])]
-                         [else
-                          (loop (rest ks) (hash-set h k B))])]))))
 
 (: join-join-intersect (Join-Rect Join-Rect -> Rect))
 (define (join-join-intersect A B)
@@ -731,9 +599,6 @@
 (define (rect-member? A x)
   (cond [(empty-set? A)  #f]
         [(universal-set? A)  #t]
-        [(omega-rect? A)
-         (cond [(omega? x)  (omega-rect-member? A x)]
-               [else  (raise-argument-error 'rect-member? "Omega" 1 A x)])]
         [(join-rect? A)  (join-rect-member? A x)]
         [(interval? A)   (and (flonum? x) (interval-contains? A x))]
         [(null-rect? A)  (null? x)]
@@ -746,16 +611,6 @@
   (and (rect-member? A1 (car x1x2))
        (rect-member? A2 (cdr x1x2))))
 
-(: omega-rect-member? (Omega-Rect Omega -> Boolean))
-(define (omega-rect-member? Ω ω)
-  (define h1 (omega-rect-hash Ω))
-  (define h2 (omega-hash ω))
-  (define ks (list-union (hash-keys h1) (hash-keys h2)))
-  (andmap (λ: ([k : Omega-Idx])
-            (interval-contains? (hash-ref h1 k (λ () unit-interval))
-                                (omega-ref ω k)))
-          ks))
-
 (: join-rect-member? (Join-Rect Value -> Boolean))
 (define (join-rect-member? A x)
   (match-define (join-rect A0 A1 A2 A3) A)
@@ -766,7 +621,7 @@
 
 ;; ===================================================================================================
 ;; Branches rectangles
-;; Sets of Omega-Idx -> Boolean-Set, representing the branches taken in a program
+;; Rectangles of Omega-Idx -> Boolean-Set, representing the branches taken in a program
 
 (define-type Branches-Rect (HashTable Omega-Idx (U 't 'f)))
 
@@ -791,11 +646,142 @@
                [else  (hash-set bs r B)])]))
 
 ;; ===================================================================================================
-;; Extra Omega ops
+;; Infinite product space values
+
+(define-type Omega-Hash (HashTable Omega-Idx Flonum))
+(define: empty-omega-hash : Omega-Hash  (make-immutable-hash empty))
+
+(: print-omega (Omega Output-Port (U #t #f 0 1) -> Any))
+(define (print-omega ω port mode)
+  (define lst (hash-map (unbox (Omega-hash ω))
+                        (λ: ([k : Omega-Idx] [x : Flonum]) (cons k x))))
+  (pretty-print-constructor 'omega lst port mode))
+
+(struct: Omega ([hash : (Boxof Omega-Hash)])
+  #:transparent
+  #:property prop:custom-print-quotable 'never
+  #:property prop:custom-write print-omega)
+
+(define omega? Omega?)
+
+(: omega (case-> (-> Omega)
+                 (Omega-Hash -> Omega)))
+(define (omega [h empty-omega-hash])
+  (cond [(immutable? h)  (Omega (box h))]
+        [else  (raise-argument-error 'omega "immutable Omega-Hash" h)]))
+
+(: omega-hash (Omega -> Omega-Hash))
+(define (omega-hash ω)
+  (unbox (Omega-hash ω)))
+
+(: omega-ref (Omega Omega-Idx -> Flonum))
+(define (omega-ref ω r)
+  (define bx (Omega-hash ω))
+  (define h (unbox bx))
+  (cond [(hash-has-key? h r)  (hash-ref h r)]
+        [else  (define v (random))
+               (set-box! bx (hash-set h r v))
+               v]))
 
 (: omega-domain (Omega -> (Listof Omega-Idx)))
 (define (omega-domain ω)
   (sort (hash-keys (omega-hash ω)) <))
+
+;; ===================================================================================================
+;; Infinite product space rectangles
+
+(define-type Omega-Rect-Hash (HashTable Omega-Idx Interval))
+(define: empty-omega-rect-hash : Omega-Rect-Hash  (make-immutable-hash empty))
+
+(: print-omega-rect (Omega-Rect Output-Port (U #t #f 0 1) -> Any))
+(define (print-omega-rect Ω port mode)
+  (define lst (hash-map (omega-rect-hash Ω) (λ: ([k : Omega-Idx] [x : Interval]) (cons k x))))
+  (pretty-print-constructor 'omega-rect lst port mode))
+
+(struct: Omega-Rect ([hash : Omega-Rect-Hash])
+  #:transparent
+  #:property prop:custom-print-quotable 'never
+  #:property prop:custom-write print-omega-rect)
+
+(define omega-rect? Omega-Rect?)
+(define omega-rect-hash Omega-Rect-hash)
+
+(: omega-rect (case-> (-> Omega-Rect)
+                      (Omega-Rect-Hash -> Omega-Rect)))
+(define (omega-rect [h empty-omega-rect-hash])
+  (cond [(immutable? h)  (Omega-Rect h)]
+        [else  (raise-argument-error 'omega-rect "immutable Omega-Rect-Hash" h)]))
+
+(: omega-rect-ref (Omega-Rect Omega-Idx -> Interval))
+(define (omega-rect-ref Ω r)
+  (hash-ref (omega-rect-hash Ω) r (λ () unit-interval)))
+
+(: omega-rect-set (Omega-Rect Omega-Idx Interval -> Omega-Rect))
+(define (omega-rect-set Ω r I)
+  (define old-I (omega-rect-ref Ω r))
+  (if (equal? I old-I) Ω (omega-rect (hash-set (omega-rect-hash Ω) r I))))
+
+(: omega-rect-join
+   (case-> (Empty-Set Empty-Set -> Empty-Set)
+           ((U Empty-Set Omega-Rect) Omega-Rect -> Omega-Rect)
+           (Omega-Rect (U Empty-Set Omega-Rect) -> Omega-Rect)
+           ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
+(define (omega-rect-join Ω1 Ω2)
+  (cond
+    [(empty-set? Ω1)  Ω2]
+    [(empty-set? Ω2)  Ω1]
+    [else
+     (define h1 (omega-rect-hash Ω1))
+     (define h2 (omega-rect-hash Ω2))
+     (define ks (list-intersect (hash-keys h1) (hash-keys h2)))
+     (omega-rect
+      (for/fold: ([h : Omega-Rect-Hash  empty-omega-rect-hash]) ([k  (in-list ks)])
+        (hash-set h k (interval-join (hash-ref h1 k) (hash-ref h2 k)))))]))
+
+(: omega-rect-intersect
+   (case-> (Empty-Set (U Empty-Set Omega-Rect) -> Empty-Set)
+           ((U Empty-Set Omega-Rect) Empty-Set -> Empty-Set)
+           ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
+(define (omega-rect-intersect Ω1 Ω2)
+  (cond
+    [(empty-set? Ω1)  Ω1]
+    [(empty-set? Ω2)  Ω2]
+    [else
+     (define h1 (omega-rect-hash Ω1))
+     (define h2 (omega-rect-hash Ω2))
+     (let-values ([(h1 h2)  (if ((hash-count h2) . < . (hash-count h1))
+                                (values h2 h1)
+                                (values h1 h2))])
+       (let: loop ([ks  (hash-keys h2)] [h : Omega-Rect-Hash  h1])
+         (cond [(empty? ks)  (omega-rect h)]
+               [else  (define k (first ks))
+                      (define A (hash-ref h k (λ () #f)))
+                      (define B (hash-ref h2 k))
+                      (cond [A
+                             (define C (interval-intersect A B))
+                             (cond [(empty-set? C)  empty-set]
+                                   [else
+                                    (loop (rest ks)
+                                          (if (eq? C A)
+                                              h
+                                              ;; This annotation is friggin' ridiculous
+                                              ((inst hash-set Omega-Idx Interval) h k C)))])]
+                            [else
+                             (loop (rest ks) (hash-set h k B))])])))]))
+
+(: omega-rect-member? (case-> (Empty-Set Omega -> #f)
+                              ((U Empty-Set Omega-Rect) Omega -> Boolean)))
+(define (omega-rect-member? Ω ω)
+  (cond
+    [(empty-set? Ω)  #f]
+    [else
+     (define h1 (omega-rect-hash Ω))
+     (define h2 (omega-hash ω))
+     (define ks (list-union (hash-keys h1) (hash-keys h2)))
+     (andmap (λ: ([k : Omega-Idx])
+               (interval-contains? (hash-ref h1 k (λ () unit-interval))
+                                   (omega-ref ω k)))
+             ks)]))
 
 (: omega-rect-domain (Omega-Rect -> (Listof Omega-Idx)))
 (define (omega-rect-domain Ω)

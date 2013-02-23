@@ -9,13 +9,9 @@
 
 (provide (all-defined-out))
 
-(: program/exp (expression -> expression))
-(define (program/exp e)
-  (ap/arr e (pair/arr id/arr null/arr)))
-
 (: apply/arr (expression (Listof expression) -> expression))
 (define (apply/arr body args)
-  (ap/arr body (pair/arr (ref/arr 'fst) (list/arr (apply list/arr args)))))
+  (ap/arr body (list/arr (apply list/arr args))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Primitives
@@ -79,20 +75,19 @@
 
 (: let/exp (expression expression -> expression))
 (define (let/exp expr body)
-  (rap/arr (pair/arr (ref/arr 'fst) (pair/arr expr (ref/arr 'snd)))
-           body))
+  (rap/arr (pair/arr expr id/arr) body))
 
 (: env/exp (Idx -> expression))
 (define (env/exp j)
-  (rap/arr (ref/arr 'snd) (ref/arr j)))
+  (ref/arr j))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Random store
 
-(define random/exp (ap/arr random/arr (ref/arr 'fst)))
+(define random/exp random/arr)
 
 (: boolean/exp (Flonum -> expression))
-(define (boolean/exp p) (ap/arr (random-boolean/arr p) (ref/arr 'fst)))
+(define (boolean/exp p) (random-boolean/arr p))
 
 (: uniform/exp (case-> (-> expression)
                        (expression expression -> expression)))
@@ -117,7 +112,7 @@
   (case-lambda
     [()  (ap/arr cauchy/arr (uniform/exp))]
     [(m)  (+/exp m (cauchy/exp))]
-    [(m s)  (error 'cauchy/exp "undefined with two arguments; given ~e and ~e" m s)]))
+    [(m s)  (+/exp m (*/exp (cauchy/exp) s))]))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; if

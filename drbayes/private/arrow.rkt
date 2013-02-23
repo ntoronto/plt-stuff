@@ -76,7 +76,7 @@
                              [computation : Computation])
   #:transparent)
 
-(define-type Forward-Fun (Value Branches-Rect -> Value))
+(define-type Forward-Fun (Omega Value Branches-Rect -> Value))
 
 (: run-expression (case-> (expression -> expression-meaning)
                           (expression Omega-Idx Omega-Idx -> expression-meaning)))
@@ -84,7 +84,8 @@
   ((expression-fun e) r0 r1))
 
 ;; A computation is a function from a domain and branches to its meaning
-(define-type Computation (Rect (U Empty-Set Branches-Rect) -> computation-meaning))
+(define-type Computation
+  ((U Empty-Set Omega-Rect) Rect (U Empty-Set Branches-Rect) -> computation-meaning))
 
 ;; A computation means:
 ;;  1. A branches rectangle (which bounds the branches the forward computation can take)
@@ -95,29 +96,26 @@
                               [preimage : Preimage-Fun])
   #:transparent)
 
-(define-type Preimage-Fun (Rect -> Rect))
+(define-type Preimage-Fun (Rect -> (Values (U Empty-Set Omega-Rect) Rect)))
 
 ;; ===================================================================================================
 ;; Conveniences
 
-(define-type Prim-Preimage-Fun (Nonempty-Rect -> Rect))
+(define-type Simple-Preimage-Fun (Nonempty-Rect -> (Values (U Empty-Set Omega-Rect) Rect)))
 
-(: make-preimage (Rect Rect Prim-Preimage-Fun -> Preimage-Fun))
+(: simple-preimage ((U Empty-Set Omega-Rect) Rect Rect Simple-Preimage-Fun -> Preimage-Fun))
 ;; Wraps a Prim-Preimage-Fun with code that ensures the argument is a subset of the range and is
 ;; nonempty; also performs an optimization
-(define ((make-preimage domain range pre) B)
+(define ((simple-preimage Ω Γ range pre) B)
   (let ([B  (rect-intersect B range)])
-    (cond [(empty-set? B)  empty-set]
-          [(eq? B range)   domain]  ; optimization
+    (cond [(empty-set? B)  (values empty-set empty-set)]
+          [(eq? B range)   (values Ω Γ)]  ; optimization
           [else  (pre B)])))
 
-(: make-expression ((Value Branches-Rect -> Value) Computation -> expression))
-(define (make-expression fwd comp)
-  (expression (λ (r0 r1) (expression-meaning empty fwd comp))))
+(define-type Simple-Computation (Omega-Rect Nonempty-Rect Branches-Rect -> computation-meaning))
 
-(define-type Prim-Computation (Nonempty-Rect Branches-Rect -> computation-meaning))
-
-(struct: comp-rec ([domain : (U #f Nonempty-Rect)]
+(struct: comp-rec ([omega : (U #f Omega-Rect)]
+                   [gamma : (U #f Nonempty-Rect)]
                    [branches : (U #f Branches-Rect)]
                    [meaning : (U #f computation-meaning)])
   #:transparent
@@ -131,44 +129,20 @@
 (define (print-comp-hash-stats)
   (printf "hits = ~v~nmisses = ~v~n" comp-hash-hits comp-hash-misses))
 
-(: make-computation (Omega-Idx Prim-Computation -> Computation))
-(define (make-computation r prim/comp)
-  ;(define rec (hash-ref! comp-hash r (λ () (comp-rec #f #f #f))))
-  (λ (domain bs)
-    (cond [(or (empty-set? domain) (empty-set? bs))  (bottom/comp domain bs)]
-          [else
-           ;(match-define (comp-rec last-domain last-bs last-meaning) rec)
-           (cond #;[(and (eq? domain last-domain) (eq? bs last-bs) last-meaning)
-                  (set! comp-hash-hits (+ 1 comp-hash-hits))
-                  last-meaning]
-                 [else
-                  ;(set! comp-hash-misses (+ 1 comp-hash-misses))
-                  (define m (prim/comp domain bs))
-                  ;(set-comp-rec-domain! rec domain)
-                  ;(set-comp-rec-branches! rec bs)
-                  ;(set-comp-rec-meaning! rec m)
-                  m])])))
+(: simple-computation (Omega-Idx Simple-Computation -> Computation))
+(define (simple-computation r comp)
+  (λ (Ω Γ bs)
+    (cond [(or (empty-set? Ω) (empty-set? Γ) (empty-set? bs))  (bottom/comp Ω Γ bs)]
+          [else  (comp Ω Γ bs)])))
 
-(: make-computation/domain (Omega-Idx Rect Prim-Computation -> Computation))
-(define (make-computation/domain r prim-domain prim/comp)
-  (cond [(empty-set? prim-domain)  bottom/comp]
+(: simple-computation/domain (Omega-Idx Rect Simple-Computation -> Computation))
+(define (simple-computation/domain r domain comp)
+  (cond [(empty-set? domain)  bottom/comp]
         [else
-         (define rec (hash-ref! comp-hash r (λ () (comp-rec #f #f #f))))
-         (λ (domain bs)
-           (let ([domain  (rect-intersect domain prim-domain)])
-             (cond [(or (empty-set? domain) (empty-set? bs))  (bottom/comp domain bs)]
-                   [else
-                    (match-define (comp-rec last-domain last-bs last-meaning) rec)
-                    (cond [(and (eq? domain last-domain) (eq? bs last-bs) last-meaning)
-                           (set! comp-hash-hits (+ 1 comp-hash-hits))
-                           last-meaning]
-                          [else
-                           (set! comp-hash-misses (+ 1 comp-hash-misses))
-                           (define m (prim/comp domain bs))
-                           (set-comp-rec-domain! rec domain)
-                           (set-comp-rec-branches! rec bs)
-                           (set-comp-rec-meaning! rec m)
-                           m])])))]))
+         (λ (Ω Γ bs)
+           (let ([Γ  (rect-intersect Γ domain)])
+             (cond [(or (empty-set? Ω) (empty-set? Γ) (empty-set? bs))  (bottom/comp Ω Γ bs)]
+                   [else  (comp Ω Γ bs)])))]))
 
 ;; ===================================================================================================
 ;; Basic primitives
@@ -176,32 +150,34 @@
 ;; Empty function (aka bottom; i.e. has empty range)
 
 (: bottom/fwd Forward-Fun)
-(define (bottom/fwd γ bs)
+(define (bottom/fwd ω γ bs)
   (error 'bottom/arr "empty range"))
 
 (: bottom/pre Preimage-Fun)
-(define (bottom/pre B) empty-set)
+(define (bottom/pre B) (values empty-set empty-set))
 
 (: bottom/comp Computation)
-(define (bottom/comp domain bs)
+(define (bottom/comp Ω Γ bs)
   (computation-meaning bs empty-set bottom/pre))
 
 (define bottom/arr
-  (make-expression bottom/fwd bottom/comp))
+  (expression
+   (λ (r0 r1)
+     (expression-meaning empty bottom/fwd bottom/comp))))
 
 ;; Identity function
 
 (: id/fwd Forward-Fun)
-(define (id/fwd γ bs) γ)
+(define (id/fwd ω γ bs) γ)
 
-(: id/pre Preimage-Fun)
-(define id/pre identity)
+(: id/pre ((U Empty-Set Omega-Rect) Rect -> Preimage-Fun))
+(define ((id/pre Ω Γ) B) (values Ω (rect-intersect B Γ)))
 
 (: id/comp (Omega-Idx -> Computation))
 (define (id/comp r)
-  (make-computation
-   r (λ (domain bs)
-       (computation-meaning bs domain id/pre))))
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (computation-meaning bs Γ (id/pre Ω Γ)))))
 
 (define id/arr
   (expression
@@ -212,18 +188,20 @@
 ;; Constant functions
 
 (: c/fwd (Value -> Forward-Fun))
-(define ((c/fwd x) γ bs) x)
+(define ((c/fwd x) ω γ bs) x)
 
-(: c/pre (Rect -> Preimage-Fun))
-(define ((c/pre domain) B)
-  (if (empty-set? B) empty-set domain))
+(: c/pre ((U Empty-Set Omega-Rect) Rect Nonempty-Rect -> Preimage-Fun))
+(define ((c/pre Ω Γ X) B)
+  (if (empty-set? (rect-intersect X B))
+      (values empty-set empty-set)
+      (values Ω Γ)))
 
 (: c/comp (Omega-Idx Value -> Computation))
 (define (c/comp r x)
   (define X (value->singleton x))
-  (make-computation
-   r (λ (domain bs)
-       (computation-meaning bs X (c/pre domain)))))
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (computation-meaning bs X (c/pre Ω Γ X)))))
 
 (: c/arr (Value -> expression))
 (define (c/arr x)
@@ -236,24 +214,24 @@
 ;; Application
 
 (: ap/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
-(define ((ap/fwd f-fwd g-fwd) γ bs)
-  (let* ([γ  (g-fwd γ bs)]
-         [γ  (f-fwd γ bs)])
+(define ((ap/fwd f-fwd g-fwd) ω γ bs)
+  (let* ([γ  (g-fwd ω γ bs)]
+         [γ  (f-fwd ω γ bs)])
     γ))
 
-(: ap/pre (Preimage-Fun Preimage-Fun -> Prim-Preimage-Fun))
+(: ap/pre (Preimage-Fun Preimage-Fun -> Simple-Preimage-Fun))
 (define ((ap/pre f-pre g-pre) C)
-  (let* ([B  (f-pre C)]
-         [A  (g-pre B)])
-    A))
+  (let*-values ([(Ωf B)  (f-pre C)]
+                [(Ωg A)  (g-pre B)])
+    (values (omega-rect-intersect Ωf Ωg) A)))
 
 (: ap/comp (Omega-Idx Computation Computation -> Computation))
 (define (ap/comp r f-comp g-comp)
-  (make-computation
-   r (λ (domain bs)
-       (match-let* ([(computation-meaning bs g-range g-pre)  (g-comp domain bs)]
-                    [(computation-meaning bs f-range f-pre)  (f-comp g-range bs)])
-         (computation-meaning bs f-range (make-preimage domain f-range (ap/pre f-pre g-pre)))))))
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (match-let* ([(computation-meaning bs g-range g-pre)  (g-comp Ω Γ bs)]
+                    [(computation-meaning bs f-range f-pre)  (f-comp Ω g-range bs)])
+         (computation-meaning bs f-range (simple-preimage Ω Γ f-range (ap/pre f-pre g-pre)))))))
 
 (: ap/arr (expression expression -> expression))
 (define (ap/arr f-expr g-expr)
@@ -270,24 +248,24 @@
 ;; Reverse application
 
 (: rap/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
-(define ((rap/fwd f-fwd g-fwd) γ bs)
-  (let* ([γ  (f-fwd γ bs)]
-         [γ  (g-fwd γ bs)])
+(define ((rap/fwd f-fwd g-fwd) ω γ bs)
+  (let* ([γ  (f-fwd ω γ bs)]
+         [γ  (g-fwd ω γ bs)])
     γ))
 
-(: rap/pre (Preimage-Fun Preimage-Fun -> Prim-Preimage-Fun))
+(: rap/pre (Preimage-Fun Preimage-Fun -> Simple-Preimage-Fun))
 (define ((rap/pre f-pre g-pre) C)
-  (let* ([B  (g-pre C)]
-         [A  (f-pre B)])
-    A))
+  (let*-values ([(Ωg B)  (g-pre C)]
+                [(Ωf A)  (f-pre B)])
+    (values (omega-rect-intersect Ωf Ωg) A)))
 
 (: rap/comp (Omega-Idx Computation Computation -> Computation))
 (define (rap/comp r f-comp g-comp)
-  (make-computation
-   r (λ (domain bs)
-       (match-let* ([(computation-meaning bs f-range f-pre)  (f-comp domain bs)]
-                    [(computation-meaning bs g-range g-pre)  (g-comp f-range bs)])
-         (computation-meaning bs g-range (make-preimage domain g-range (rap/pre f-pre g-pre)))))))
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (match-let* ([(computation-meaning bs f-range f-pre)  (f-comp Ω Γ bs)]
+                    [(computation-meaning bs g-range g-pre)  (g-comp Ω f-range bs)])
+         (computation-meaning bs g-range (simple-preimage Ω Γ g-range (rap/pre f-pre g-pre)))))))
 
 (: rap/arr (expression expression -> expression))
 (define (rap/arr f-expr g-expr)
@@ -310,28 +288,32 @@
   (foldr pair/arr null/arr es))
 
 (: pair/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
-(define ((pair/fwd fst-fwd snd-fwd) γ bs)
-  (cons (fst-fwd γ bs) (snd-fwd γ bs)))
+(define ((pair/fwd fst-fwd snd-fwd) ω γ bs)
+  (cons (fst-fwd ω γ bs) (snd-fwd ω γ bs)))
 
-(: pair/pre (Preimage-Fun Preimage-Fun Nonempty-Rect Rect Rect -> Prim-Preimage-Fun))
-(define ((pair/pre fst-pre snd-pre domain fst-range snd-range) B1×B2)
+(: pair/pre (Preimage-Fun Preimage-Fun Omega-Rect Nonempty-Rect Rect Rect -> Simple-Preimage-Fun))
+(define ((pair/pre fst-pre snd-pre Ω Γ fst-range snd-range) B1×B2)
   (match-define (pair-rect B1 B2) B1×B2)
   (define fst? (not (eq? B1 fst-range)))
   (define snd? (not (eq? B2 snd-range)))
-  (cond [(and fst? snd?)  (rect-intersect (fst-pre B1) (snd-pre B2))]
+  (cond [(and fst? snd?)
+         (let-values ([(Ω1 A1)  (fst-pre B1)]
+                      [(Ω2 A2)  (snd-pre B2)])
+           (values (omega-rect-intersect Ω1 Ω2)
+                   (rect-intersect A1 A2)))]
         [fst?  (fst-pre B1)]
         [snd?  (snd-pre B2)]
-        [else  domain]))
+        [else  (values Ω Γ)]))
 
 (: pair/comp (Omega-Idx Computation Computation -> Computation))
 (define (pair/comp r fst-comp snd-comp)
-  (make-computation
-   r (λ (domain bs)
-       (match-let* ([(computation-meaning bs fst-range fst-pre)  (fst-comp domain bs)]
-                    [(computation-meaning bs snd-range snd-pre)  (snd-comp domain bs)])
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (match-let* ([(computation-meaning bs fst-range fst-pre)  (fst-comp Ω Γ bs)]
+                    [(computation-meaning bs snd-range snd-pre)  (snd-comp Ω Γ bs)])
          (define range (pair-rect fst-range snd-range))
-         (define pre (pair/pre fst-pre snd-pre domain fst-range snd-range))
-         (computation-meaning bs range (make-preimage domain range pre))))))
+         (define pre (pair/pre fst-pre snd-pre Ω Γ fst-range snd-range))
+         (computation-meaning bs range (simple-preimage Ω Γ range pre))))))
 
 (: pair/arr (expression expression -> expression))
 (define (pair/arr fst-expr snd-expr)
@@ -348,19 +330,20 @@
 ;; Random
 
 (: random/fwd (Omega-Idx -> Forward-Fun))
-(define ((random/fwd r) γ bs)
-  (value-ref γ r))
+(define ((random/fwd r) ω γ bs)
+  (omega-ref ω r))
 
-(: random/pre (Nonempty-Rect Omega-Idx -> Prim-Preimage-Fun))
-(define ((random/pre domain r) B)
-  (rect-set domain r B))
+(: random/pre (Omega-Rect Nonempty-Rect Omega-Idx -> Simple-Preimage-Fun))
+(define ((random/pre Ω Γ r) B)
+  (cond [(interval? B)  (values (omega-rect-set Ω r B) Γ)]
+        [else  (values empty-set empty-set)]))
 
 (: random/comp (Omega-Idx -> Computation))
 (define (random/comp r)
-  (make-computation
-   r (λ (domain bs)
-       (define range (rect-ref domain r))
-       (computation-meaning bs range (make-preimage domain range (random/pre domain r))))))
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (define range (omega-rect-ref Ω r))
+       (computation-meaning bs range (simple-preimage Ω Γ range (random/pre Ω Γ r))))))
 
 (: random/arr expression)
 (define random/arr
@@ -373,29 +356,31 @@
 ;; Random boolean
 
 (: random-boolean/fwd (Omega-Idx Flonum -> Forward-Fun))
-(define ((random-boolean/fwd r p) γ bs)
-  (cond [(omega? γ)  ((omega-ref γ r) . < . p)]
-        [else  (raise-argument-error 'random-boolean/arr "Omega" γ)]))
+(define ((random-boolean/fwd r p) ω γ bs)
+  ((omega-ref ω r) . < . p))
 
-(: random-boolean/pre (Nonempty-Rect Omega-Idx Rect Rect -> Prim-Preimage-Fun))
-(define ((random-boolean/pre domain r It If) B)
+(: random-boolean/pre
+   (Omega-Rect Nonempty-Rect Omega-Idx (U Empty-Set Interval) (U Empty-Set Interval)
+               -> Simple-Preimage-Fun))
+(define ((random-boolean/pre Ω Γ r It If) B)
   (define I (case B
               [(tf)  (rect-join It If)]
               [(t)   It]
               [(f)   If]
               [else  empty-set]))
-  (rect-set domain r I))
+  (cond [(interval? I)  (values (omega-rect-set Ω r I) Γ)]
+        [else  (values empty-set empty-set)]))
 
-(: random-boolean/comp (Omega-Idx Rect Rect -> Computation))
+(: random-boolean/comp (Omega-Idx Interval Interval -> Computation))
 (define (random-boolean/comp r It If)
-  (make-computation
-   r (λ (domain bs)
-       (define I (rect-ref domain r))
-       (let ([It  (rect-intersect I It)]
-             [If  (rect-intersect I If)])
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (define I (omega-rect-ref Ω r))
+       (let ([It  (interval-intersect I It)]
+             [If  (interval-intersect I If)])
          (define range (booleans->boolean-set (not (empty-set? It)) (not (empty-set? If))))
-         (define pre (random-boolean/pre domain r It If))
-         (computation-meaning bs range (make-preimage domain range pre))))))
+         (define pre (random-boolean/pre Ω Γ r It If))
+         (computation-meaning bs range (simple-preimage Ω Γ range pre))))))
 
 (: random-boolean/arr (Flonum -> expression))
 (define (random-boolean/arr p)
@@ -421,19 +406,19 @@
 ;; Ref
 
 (: ref/fwd (Idx -> Forward-Fun))
-(define ((ref/fwd j) γ bs)
+(define ((ref/fwd j) ω γ bs)
   (value-ref γ j))
 
-(: ref/pre (Nonempty-Rect Idx -> Prim-Preimage-Fun))
-(define ((ref/pre domain j) B)
-  (rect-set domain j B))
+(: ref/pre (Omega-Rect Nonempty-Rect Idx -> Simple-Preimage-Fun))
+(define ((ref/pre Ω Γ j) B)
+  (values Ω (rect-set Γ j B)))
 
 (: ref/comp (Omega-Idx Idx -> Computation))
 (define (ref/comp r j)
-  (make-computation
-   r (λ (domain bs)
-       (define range (rect-ref domain j))
-       (computation-meaning bs range (make-preimage domain range (ref/pre domain j))))))
+  (simple-computation
+   r (λ (Ω Γ bs)
+       (define range (rect-ref Γ j))
+       (computation-meaning bs range (simple-preimage Ω Γ range (ref/pre Ω Γ j))))))
 
 (: ref/arr (Idx -> expression))
 (define (ref/arr j)
@@ -446,7 +431,7 @@
 ;; Monotone R -> R functions
 
 (: monotone/fwd (Symbol (Flonum -> Flonum) -> Forward-Fun))
-(define ((monotone/fwd name f) γ bs)
+(define ((monotone/fwd name f) ω γ bs)
   (if (flonum? γ) (f γ) (raise-argument-error name "Flonum" γ)))
 
 (: monotone-range (Nonempty-Rect Interval (Flonum -> Flonum) Boolean -> Rect))
@@ -455,22 +440,22 @@
   (cond [fx?   (rect-intersect (interval (f a) (f b) a? b?) f-range)]
         [else  (rect-intersect (interval (f b) (f a) b? a?) f-range)]))
 
-(: monotone/pre (Nonempty-Rect (Flonum -> Flonum) Boolean -> Prim-Preimage-Fun))
-(define ((monotone/pre domain g fx?) B)
+(: monotone/pre (Omega-Rect Nonempty-Rect (Flonum -> Flonum) Boolean -> Simple-Preimage-Fun))
+(define ((monotone/pre Ω Γ g fx?) B)
   (match B
     [(interval a b a? b?)
-     (cond [fx?   (rect-intersect (interval (g a) (g b) a? b?) domain)]
-           [else  (rect-intersect (interval (g b) (g a) b? a?) domain)])]
-    [_  empty-set]))
+     (values Ω (cond [fx?   (rect-intersect (interval (g a) (g b) a? b?) Γ)]
+                     [else  (rect-intersect (interval (g b) (g a) b? a?) Γ)]))]
+    [_  (values empty-set empty-set)]))
 
 (: monotone/comp (Omega-Idx Interval Interval (Flonum -> Flonum) (Flonum -> Flonum) Boolean
                             -> Computation))
 (define (monotone/comp r f-domain f-range f g fx?)
-  (make-computation/domain
+  (simple-computation/domain
    r f-domain
-   (λ (domain bs)
-     (define range (monotone-range domain f-range f fx?))
-     (computation-meaning bs range (make-preimage domain range (monotone/pre domain g fx?))))))
+   (λ (Ω Γ bs)
+     (define range (monotone-range Γ f-range f fx?))
+     (computation-meaning bs range (simple-preimage Ω Γ range (monotone/pre Ω Γ g fx?))))))
 
 (: monotone/arr (Symbol Interval Interval (Flonum -> Flonum) (Flonum -> Flonum) Boolean
                         -> expression))
@@ -483,7 +468,7 @@
                          (monotone/comp r f-domain f-range f g fx?)))))
 
 ;; ---------------------------------------------------------------------------------------------------
-;; Concrete R -> R functions
+;; Concrete monotone R -> R functions
 
 (: scale/arr (Flonum -> expression))
 (define (scale/arr y)
@@ -546,7 +531,7 @@
 ;; Monotone R R -> R functions
 
 (: monotone2d/fwd (Symbol (Flonum Flonum -> Flonum) -> Forward-Fun))
-(define ((monotone2d/fwd name f) γ bs)
+(define ((monotone2d/fwd name f) ω γ bs)
   (match γ
     [(cons (? flonum? x) (? flonum? y))  (f x y)]
     [_  (raise-argument-error name "(Pair Flonum Flonum)" γ)]))
@@ -558,11 +543,12 @@
                [(ya yb ya? yb?)  (if fy? (values ya yb ya? yb?) (values yb ya yb? ya?))])
     (rect-intersect f-range (interval (f xa ya) (f xb yb) (and xa? ya?) (and xb? yb?)))))
 
-(: monotone2d/pre (Nonempty-Rect (Flonum Flonum -> Flonum) Boolean Boolean
-                                 (Flonum Flonum -> Flonum) Boolean Boolean
-                                 -> Prim-Preimage-Fun))
-(define (monotone2d/pre domain g gz? gy? h hz? hx?)
-  (match-define (pair-rect (interval xa xb xa? xb?) (interval ya yb ya? yb?)) domain)
+(: monotone2d/pre (Omega-Rect Nonempty-Rect
+                              (Flonum Flonum -> Flonum) Boolean Boolean
+                              (Flonum Flonum -> Flonum) Boolean Boolean
+                              -> Simple-Preimage-Fun))
+(define (monotone2d/pre Ω Γ g gz? gy? h hz? hx?)
+  (match-define (pair-rect (interval xa xb xa? xb?) (interval ya yb ya? yb?)) Γ)
   (λ (B)
     (match B
       [(interval za zb za? zb?)
@@ -574,8 +560,9 @@
          (let-values ([(za zb za? zb?)  (if hz? (values za zb za? zb?) (values zb za zb? za?))]
                       [(xa xb xa? xb?)  (if hx? (values xa xb xa? xb?) (values xb xa xb? xa?))])
            (interval (h za xa) (h zb xb) (and za? xa?) (and zb? xb?))))
-       (rect-intersect (pair-rect X Y) domain)]
-      [_  empty-set])))
+       (values Ω (rect-intersect (pair-rect X Y) Γ))]
+      [_
+       (values empty-set empty-set)])))
 
 (: monotone2d/comp (Omega-Idx Pair-Rect Interval
                               (Flonum Flonum -> Flonum) Boolean Boolean
@@ -583,11 +570,11 @@
                               (Flonum Flonum -> Flonum) Boolean Boolean
                               -> Computation))
 (define (monotone2d/comp r f-domain f-range f fx? fy? g gz? gy? h hz? hx?)
-  (make-computation/domain
+  (simple-computation/domain
    r f-domain
-   (λ (domain bs)
-     (define range (monotone2d-range domain f-range f fx? fy?))
-     (define pre (make-preimage domain range (monotone2d/pre domain g gz? gy? h hz? hx?)))
+   (λ (Ω Γ bs)
+     (define range (monotone2d-range Γ f-range f fx? fy?))
+     (define pre (simple-preimage Ω Γ range (monotone2d/pre Ω Γ g gz? gy? h hz? hx?)))
      (computation-meaning bs range pre))))
 
 (: monotone2d/arr (Symbol Pair-Rect Interval
@@ -676,8 +663,8 @@
 ;; Square
 
 (: sqr/fwd Forward-Fun)
-(define (sqr/fwd γ bs)
-  (if (flonum? γ) (fl* γ γ) (raise-argument-error 'sqr/env "flonum" γ)))
+(define (sqr/fwd ω γ bs)
+  (if (flonum? γ) (fl* γ γ) (raise-argument-error 'sqr/fwd "flonum" γ)))
 
 (: sqr-range (Nonempty-Rect -> Rect))
 (define (sqr-range domain)
@@ -690,25 +677,26 @@
                      [(d . > . c)  (interval 0.0 d #t b?)]
                      [else  (interval 0.0 c #t (or a? b?))])]))
 
-(: sqr/pre (Nonempty-Rect -> Prim-Preimage-Fun))
-(define ((sqr/pre domain) B)
+(: sqr/pre (Omega-Rect Nonempty-Rect -> Simple-Preimage-Fun))
+(define ((sqr/pre Ω Γ) B)
   (match B
     [(interval a b a? b?)
      (let-values ([(a a?)  (if (< a 0.0) (values 0.0 #t) (values a a?))]
                   [(b b?)  (if (< b 0.0) (values 0.0 #t) (values b b?))])
        (define A1 (interval (flsqrt a) (flsqrt b) a? b?))
        (define A2 (interval (- (flsqrt b)) (- (flsqrt a)) b? a?))
-       (rect-join (rect-intersect A1 domain)
-                  (rect-intersect A2 domain)))]
-    [_  empty-set]))
+       (values Ω (rect-join (rect-intersect A1 Γ)
+                            (rect-intersect A2 Γ))))]
+    [_
+     (values empty-set empty-set)]))
 
 (: sqr/comp (Omega-Idx -> Computation))
 (define (sqr/comp r)
-  (make-computation/domain
+  (simple-computation/domain
    r reals
-   (λ (domain bs)
-     (define range (sqr-range domain))
-     (computation-meaning bs range (make-preimage domain range (sqr/pre domain))))))
+   (λ (Ω Γ bs)
+     (define range (sqr-range Γ))
+     (computation-meaning bs range (simple-preimage Ω Γ range (sqr/pre Ω Γ))))))
 
 (define sqr/arr
   (expression
@@ -720,7 +708,7 @@
 ;; Predicates
 
 (: predicate/fwd ((Value -> Boolean) -> Forward-Fun))
-(define ((predicate/fwd pred?) γ bs)
+(define ((predicate/fwd pred?) ω γ bs)
   (pred? γ))
 
 (: predicate-range (Rect Rect -> (U Empty-Set Boolean-Set)))
@@ -728,23 +716,23 @@
   (booleans->boolean-set (not (empty-set? true-set))
                          (not (empty-set? false-set))))
 
-(: predicate/pre (Rect Rect -> Prim-Preimage-Fun))
-(define ((predicate/pre true-set false-set) B)
-  (case B
-    [(tf)  (rect-join true-set false-set)]
-    [(t)   true-set]
-    [(f)   false-set]
-    [else  empty-set]))
+(: predicate/pre (Omega-Rect Rect Rect -> Simple-Preimage-Fun))
+(define ((predicate/pre Ω true-set false-set) B)
+  (values Ω (case B
+              [(tf)  (rect-join true-set false-set)]
+              [(t)   true-set]
+              [(f)   false-set]
+              [else  empty-set])))
 
 (: predicate/comp (Omega-Idx Rect Rect -> Computation))
 (define (predicate/comp r true-set false-set)
-  (make-computation/domain
+  (simple-computation/domain
    r (rect-join true-set false-set)
-   (λ (domain bs)
-     (let ([true-set   (rect-intersect domain true-set)]
-           [false-set  (rect-intersect domain false-set)])
+   (λ (Ω Γ bs)
+     (let ([true-set   (rect-intersect Γ true-set)]
+           [false-set  (rect-intersect Γ false-set)])
        (define range (predicate-range true-set false-set))
-       (define pre (make-preimage domain range (predicate/pre true-set false-set)))
+       (define pre (simple-preimage Ω Γ range (predicate/pre Ω true-set false-set)))
        (computation-meaning bs range pre)))))
 
 (: predicate/arr ((Value -> Boolean) Nonempty-Rect Nonempty-Rect -> expression))
@@ -795,61 +783,69 @@
 (define-predicate if-bad-branch? 'if-bad-branch)
 
 (: if/fwd (Omega-Idx Forward-Fun (Promise Forward-Fun) (Promise Forward-Fun) -> Forward-Fun))
-(define ((if/fwd r c-fwd t-fwd f-fwd) γ bs)
-  (define c (c-fwd γ bs))
+(define ((if/fwd r c-fwd t-fwd f-fwd) ω γ bs)
+  (define c (c-fwd ω γ bs))
   (define b (branches-rect-ref bs r))
   (cond [(or (not (boolean? c)) (not (boolean-set-member? b c)))  (raise 'if-bad-branch)]
-        [c     ((force t-fwd) γ bs)]
-        [else  ((force f-fwd) γ bs)]))
+        [c     ((force t-fwd) ω γ bs)]
+        [else  ((force f-fwd) ω γ bs)]))
 
 (: if/comp (Boolean Omega-Idx Computation (Promise expression-meaning) (Promise expression-meaning)
                     -> Computation))
 (define (if/comp strict? r c-comp t-meaning f-meaning)
-  (make-computation
+  (simple-computation
    r
-   (λ (domain bs)
-     (match-let ([(computation-meaning bs c-range c-pre)  (c-comp domain bs)])
-       (define t-domain (if (rect-member? c-range #t) (c-pre 't) empty-set))
-       (define f-domain (if (rect-member? c-range #f) (c-pre 'f) empty-set))
+   (λ (Ω Γ bs)
+     (match-let ([(computation-meaning bs c-range c-pre)  (c-comp Ω Γ bs)])
+       (define-values (Ωt Γt)
+         (cond [(rect-member? c-range #t)  (c-pre 't)]
+               [else  (values empty-set empty-set)]))
+       
+       (define-values (Ωf Γf)
+         (cond [(rect-member? c-range #f)  (c-pre 'f)]
+               [else  (values empty-set empty-set)]))
        
        ;; t? = #t if it's possible to take the true branch
        ;; f? = #t if it's possible to take the false branch
        (define-values (t? f?)
          (let-values ([(bt? bf?)  (boolean-set->booleans (branches-rect-ref bs r))])
-           (values (and bt? (not (empty-set? t-domain)))
-                   (and bf? (not (empty-set? f-domain))))))
+           (values (and bt? (not (empty-set? Ωt)) (not (empty-set? Γt)))
+                   (and bf? (not (empty-set? Ωf)) (not (empty-set? Γf))))))
        
        (cond
          [(and t? f?)
-          (define domain (rect-join t-domain f-domain))
+          (define Ω (omega-rect-join Ωt Ωf))
+          (define Γ (rect-join Γt Γf))
           (cond
             [strict?
              (define t-comp (expression-meaning-computation (force t-meaning)))
              (define f-comp (expression-meaning-computation (force f-meaning)))
-             (match-let* ([(computation-meaning bs t-range t-pre)  (t-comp t-domain bs)]
-                          [(computation-meaning bs f-range f-pre)  (f-comp f-domain bs)])
+             (match-let* ([(computation-meaning bs t-range t-pre)  (t-comp Ωt Γt bs)]
+                          [(computation-meaning bs f-range f-pre)  (f-comp Ωf Γf bs)])
                (define range (rect-join t-range f-range))
                
-               (: if/pre Prim-Preimage-Fun)
+               (: if/pre Simple-Preimage-Fun)
                (define (if/pre B)
                  (define Bt (rect-intersect t-range B))
                  (define Bf (rect-intersect f-range B))
-                 (rect-join (t-pre Bt) (f-pre Bf)))
+                 (let-values ([(Ωt At)  (t-pre Bt)]
+                              [(Ωf Af)  (f-pre Bf)])
+                   (values (omega-rect-join Ωt Ωf) (rect-join At Af))))
                
-               (computation-meaning bs range (make-preimage domain range if/pre)))]
+               (computation-meaning bs range (simple-preimage Ω Γ range if/pre)))]
             [else
              (define range universal-set)
-             (computation-meaning bs range (make-preimage domain range (λ (B) domain)))])]
+             (computation-meaning bs range (simple-preimage Ω Γ range (λ (B) (values Ω Γ))))])]
          [t?
           (define t-comp (expression-meaning-computation (force t-meaning)))
-          (match-let ([(computation-meaning bs t-range t-pre)  (t-comp t-domain bs)])
+          (match-let ([(computation-meaning bs t-range t-pre)  (t-comp Ωt Γt bs)])
             (computation-meaning (branches-rect-restrict bs r 't) t-range t-pre))]
          [f?
           (define f-comp (expression-meaning-computation (force f-meaning)))
-          (match-let ([(computation-meaning bs f-range f-pre)  (f-comp f-domain bs)])
+          (match-let ([(computation-meaning bs f-range f-pre)  (f-comp Ωf Γf bs)])
             (computation-meaning (branches-rect-restrict bs r 'f) f-range f-pre))]
          [else
-          (bottom/comp empty-set bs)])))))
+          (bottom/comp empty-set empty-set bs)])))))
 
 (: if/arr (Boolean -> (expression expression expression -> expression)))
 (define ((if/arr strict?) c-expr t-expr f-expr)
