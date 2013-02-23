@@ -55,6 +55,7 @@
 
 (define pair/exp pair/arr)
 (define null/exp null/arr)
+(define list/exp list/arr)
 
 (: fst/exp (expression -> expression))
 (define (fst/exp p)
@@ -63,8 +64,6 @@
 (: snd/exp (expression -> expression))
 (define (snd/exp p)
   (ap/arr (ref/arr 'snd) p))
-
-(define list/exp list/arr)
 
 (: list-ref/exp (expression Idx -> expression))
 (define (list-ref/exp lst j)
@@ -77,24 +76,22 @@
 (define (let/exp expr body)
   (rap/arr (pair/arr expr id/arr) body))
 
-(: env/exp (Idx -> expression))
-(define (env/exp j)
-  (ref/arr j))
+(define env/exp ref/arr)
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Random store
 
 (define random/exp random/arr)
-
-(: boolean/exp (Flonum -> expression))
-(define (boolean/exp p) (random-boolean/arr p))
+(define boolean/exp random-boolean/arr)
 
 (: uniform/exp (case-> (-> expression)
+                       (expression -> expression)
                        (expression expression -> expression)))
 (define uniform/exp
   (case-lambda
     [()  random/exp]
-    [(a b)  (error 'uniform/exp "undefined with two arguments; given ~e and ~e" a b)]))
+    [(b)  (*/exp b random/exp)]
+    [(a b)  (+/exp a (*/exp (-/exp b a) random/exp))]))
 
 (: normal/exp (case-> (-> expression)
                       (expression -> expression)

@@ -81,14 +81,14 @@
   
   (define B (list-rect reals reals (interval 0.45 0.7))))
 
-#;; Test: arithmetic
+;; Test: arithmetic
 (begin
   (interval-max-splits 4)
   
   (define f-expr
     (drbayes
-     (let ([x  (translate (scale (uniform) (const 2.0)) (const -1.0))]
-           [y  (translate (scale (uniform) (const 2.0)) (const -1.0))])
+     (let ([x  (uniform -1 1)]
+           [y  (uniform -1 1)])
        (list x y (- x y)))))
   
   (define B (list-rect reals reals (interval -0.1 0.2))))
