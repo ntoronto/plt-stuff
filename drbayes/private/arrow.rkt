@@ -257,7 +257,7 @@
     (let*-values ([(Ωf B)  (f-pre C)]
                   [(Ωg A)  (g-pre B)])
       (values (cond [(and (eq? Ωf Ω1) (eq? Ωg Ω2))  Ω]
-                    [else  (omega-rect-node unit-interval Ωf Ωg)])
+                    [else  (unit-omega-rect-node Ωf Ωg)])
               A))))
 
 (: ap/comp (Computation Computation -> Computation))
@@ -296,7 +296,7 @@
     (let*-values ([(Ωg B)  (g-pre C)]
                   [(Ωf A)  (f-pre B)])
       (values (cond [(and (eq? Ωf Ω1) (eq? Ωg Ω2))  Ω]
-                    [else  (omega-rect-node unit-interval Ωf Ωg)])
+                    [else  (unit-omega-rect-node Ωf Ωg)])
               A))))
 
 (: rap/comp (Computation Computation -> Computation))
@@ -343,15 +343,15 @@
            (let-values ([(Ω1 A1)  (fst-pre B1)]
                         [(Ω2 A2)  (snd-pre B2)])
              (values (cond [(and (eq? Ω1 old-Ω1) (eq? Ω2 old-Ω2))  Ω]
-                           [else  (omega-rect-node unit-interval Ω1 Ω2)])
+                           [else  (unit-omega-rect-node Ω1 Ω2)])
                      (rect-intersect A1 A2)))]
           [fst?  (let-values ([(Ω1 A1)  (fst-pre B1)])
                    (values (cond [(eq? Ω1 old-Ω1)  Ω]
-                                 [else  (omega-rect-node unit-interval Ω1 old-Ω2)])
+                                 [else  (unit-omega-rect-node Ω1 old-Ω2)])
                            A1))]
           [snd?  (let-values ([(Ω2 A2)  (snd-pre B2)])
                    (values (cond [(eq? Ω2 old-Ω2)  Ω]
-                                 [else  (omega-rect-node unit-interval old-Ω1 Ω2)])
+                                 [else  (unit-omega-rect-node old-Ω1 Ω2)])
                            A2))]
           [else  (values Ω Γ)])))
 
@@ -859,7 +859,7 @@
                [else  (values empty-set empty-set)]))
        
        (define Ωc (omega-rect-join Ωct Ωcf))
-       (define Ω (omega-rect-node unit-interval Ωc (omega-rect-node unit-interval Ωt Ωf)))
+       (define Ω (unit-omega-rect-node Ωc (unit-omega-rect-node Ωt Ωf)))
        
        (define-values (bt? bf?) (boolean-set->booleans (branches-rect-ref bs r)))
        
@@ -872,12 +872,12 @@
        (: t/pre (Preimage-Fun -> Preimage-Fun))
        (define ((t/pre t-pre) B)
          (let-values ([(Ωt At)  (t-pre B)])
-           (values (omega-rect-node unit-interval Ωc (omega-rect-node unit-interval Ωt Ωf)) At)))
+           (values (unit-omega-rect-node Ωc (unit-omega-rect-node Ωt Ωf)) At)))
        
        (: f/pre (Preimage-Fun -> Preimage-Fun))
        (define ((f/pre f-pre) B)
          (let-values ([(Ωf Af)  (f-pre B)])
-           (values (omega-rect-node unit-interval Ωc (omega-rect-node unit-interval Ωt Ωf)) Af)))
+           (values (unit-omega-rect-node Ωc (unit-omega-rect-node Ωt Ωf)) Af)))
        
        (cond
          [(and t? f?)

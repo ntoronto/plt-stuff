@@ -545,8 +545,6 @@
   (define A2 (pair-rect-snd A1×A2))
   (define B1 (pair-rect-fst B1×B2))
   (define B2 (pair-rect-snd B1×B2))
-  ;(match-define (pair-rect A1 A2) A1×A2)
-  ;(match-define (pair-rect B1 B2) B1×B2)
   (define C1 (rect-intersect A1 B1))
   (define C2 (rect-intersect A2 B2))
   (define A1? (eq? C1 A1))
@@ -666,7 +664,7 @@
   #:property prop:custom-print-quotable 'never
   #:property prop:custom-write print-omega)
 
-(define omega? Omega?)
+(define-syntax omega? (make-rename-transformer #'Omega?))
 
 (: omega (case-> (-> Omega)
                  (Omega-Hash -> Omega)))
@@ -693,64 +691,78 @@
 
 ;; ===================================================================================================
 
-(define-type (Omega-Tree A) (U #f (Omega-Node A)))
+(define-type (Omega-Tree A) (U Omega-Leaf (Omega-Node A)))
 
+(struct: Omega-Leaf () #:transparent)
 (struct: (A) Omega-Node ([value : A]
                          [fst : (Omega-Tree A)]
                          [snd : (Omega-Tree A)])
   #:transparent)
 
+(define omega-leaf (Omega-Leaf))
+(define-syntax omega-leaf? (make-rename-transformer #'Omega-Leaf?))
+
 (: omega-node (All (A) (A -> (A (Omega-Tree A) (Omega-Tree A) -> (Omega-Tree A)))))
 (define ((omega-node default) v fst snd)
-  (cond [(and (eq? v default) (not fst) (not snd))  #f]
-        [else  (Omega-Node v fst snd)]))
+  (if (and (eq? v default) (omega-leaf? fst) (omega-leaf? snd))
+      omega-leaf
+      (Omega-Node v fst snd)))
+
+(: omega-tree-value (All (A) (A -> ((Omega-Tree A) -> A))))
+(define ((omega-tree-value default) t)
+  (if (omega-leaf? t) default (Omega-Node-value t)))
+
+(: omega-tree-fst (All (A) (case-> (Omega-Leaf -> Omega-Leaf)
+                                   ((Omega-Tree A) -> (Omega-Tree A)))))
+(define (omega-tree-fst t)
+  (if (omega-leaf? t) t (Omega-Node-fst t)))
+
+(: omega-tree-snd (All (A) (case-> (Omega-Leaf -> Omega-Leaf)
+                                   ((Omega-Tree A) -> (Omega-Tree A)))))
+(define (omega-tree-snd t)
+  (if (omega-leaf? t) t (Omega-Node-snd t)))
 
 (: omega-tree-ref (All (A) (A -> ((Omega-Tree A) Omega-Idx -> A))))
 (define ((omega-tree-ref default) t r)
   (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1])
-    (define mid (* 1/2 (+ r0 r1)))
-    (cond [(not t)  default]
-          [(r . < . mid)  (loop (Omega-Node-fst t) r0 mid)]
-          [(r . > . mid)  (loop (Omega-Node-snd t) mid r1)]
-          [else  (Omega-Node-value t)])))
+    (cond [(omega-leaf? t)  default]
+          [else
+           (define mid (* 1/2 (+ r0 r1)))
+           (cond [(r . < . mid)  (loop (Omega-Node-fst t) r0 mid)]
+                 [(r . > . mid)  (loop (Omega-Node-snd t) mid r1)]
+                 [else  (Omega-Node-value t)])])))
 
 (: omega-tree-set (All (A) (A -> ((Omega-Tree A) Omega-Idx A -> (Omega-Tree A)))))
 (define (omega-tree-set default)
   (define make-node (omega-node default))
+  (define get-value (omega-tree-value default))
   (λ (t r v)
     (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1])
-      (define mid (/ (+ r0 r1) 2))
-      (if (not t)
-          (cond [(r . < . mid)  (define new-fst (loop #f r0 mid))
-                                (if (eq? #f new-fst) t (make-node default new-fst #f))]
-                [(r . > . mid)  (define new-snd (loop #f mid r1))
-                                (if (eq? #f new-snd) t (make-node default #f new-snd))]
-                [(eq? v default)  #f]
-                [else  (make-node v #f #f)])
-          (cond [(r . < . mid)
-                 (define fst (Omega-Node-fst t))
-                 (define new-fst (loop fst r0 mid))
-                 (cond [(eq? fst new-fst)  t]
-                       [else  (make-node (Omega-Node-value t) new-fst (Omega-Node-snd t))])]
-                [(r . > . mid)
-                 (define snd (Omega-Node-snd t))
-                 (define new-snd (loop snd mid r1))
-                 (cond [(eq? snd new-snd)  t]
-                       [else  (make-node (Omega-Node-value t) (Omega-Node-fst t) new-snd)])]
-                [(eq? v (Omega-Node-value t))  t]
-                [else
-                 (define fst (Omega-Node-fst t))
-                 (define snd (Omega-Node-snd t))
-                 (cond [(and (eq? v default) (not fst) (not snd))  #f]
-                       [else  (make-node v fst snd)])])))))
+      (define old-v (get-value t))
+      (cond
+        [(eq? v old-v)  t]
+        [else
+         (define mid (/ (+ r0 r1) 2))
+         (cond 
+           [(r . < . mid)
+            (define fst (omega-tree-fst t))
+            (define new-fst (loop fst r0 mid))
+            (cond [(eq? fst new-fst)  t]
+                  [else  (make-node old-v new-fst (omega-tree-snd t))])]
+           [(r . > . mid)
+            (define snd (omega-tree-snd t))
+            (define new-snd (loop snd mid r1))
+            (cond [(eq? snd new-snd)  t]
+                  [else  (make-node old-v (omega-tree-fst t) new-snd)])]
+           [else
+            (make-node v (omega-tree-fst t) (omega-tree-snd t))])]))))
 
-(: omega-tree-join (All (A) (A (A A -> A)
-                               -> ((Omega-Tree A) (Omega-Tree A) -> (Omega-Tree A)))))
+(: omega-tree-join (All (A) (A (A A -> A) -> ((Omega-Tree A) (Omega-Tree A) -> (Omega-Tree A)))))
 (define (omega-tree-join default join)
   (define make-node (omega-node default))
   (λ (t1 t2)
     (let: loop ([t1 t1] [t2 t2])
-      (cond [(or (not t1) (not t2))  #f]
+      (cond [(or (omega-leaf? t1) (omega-leaf? t2))  omega-leaf]
             [else  (match-define (Omega-Node v1 fst1 snd1) t1)
                    (match-define (Omega-Node v2 fst2 snd2) t2)
                    (define v (join v1 v2))
@@ -767,8 +779,8 @@
   (define make-node (omega-node default))
   (λ (t1 t2)
     (let: loop ([t1 t1] [t2 t2])
-      (cond [(not t1)  t2]
-            [(not t2)  t1]
+      (cond [(omega-leaf? t1)  t2]
+            [(omega-leaf? t2)  t1]
             [else  (match-define (Omega-Node v1 fst1 snd1) t1)
                    (match-define (Omega-Node v2 fst2 snd2) t2)
                    (define v (intersect v1 v2))
@@ -789,11 +801,12 @@
   (define bs
     (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1] [bs : (Listof B)  null])
       (define mid (* 1/2 (+ r0 r1)))
-      (cond [t  (define v (Omega-Node-value t))
-                (let ([bs  (loop (Omega-Node-fst t) r0 mid bs)])
-                  (cond [(eq? v default)  (loop (Omega-Node-snd t) mid r1 bs)]
-                        [else  (loop (Omega-Node-snd t) mid r1 (cons (f mid v) bs))]))]
-            [else  bs])))
+      (cond [(omega-leaf? t)  bs]
+            [else
+             (define v (Omega-Node-value t))
+             (let ([bs  (loop (Omega-Node-fst t) r0 mid bs)])
+               (cond [(eq? v default)  (loop (Omega-Node-snd t) mid r1 bs)]
+                     [else  (loop (Omega-Node-snd t) mid r1 (cons (f mid v) bs))]))])))
   (reverse bs))
 
 (: omega-tree-keys (All (A) (A -> ((Omega-Tree A) -> (Listof Omega-Idx)))))
@@ -809,19 +822,15 @@
 (define omega-rect-set ((inst omega-tree-set Interval) unit-interval))
 
 (: omega-rect-fst (Omega-Rect -> Omega-Rect))
-(define (omega-rect-fst Ω)
-  (and Ω (Omega-Node-fst Ω)))
+(define omega-rect-fst omega-tree-fst)
 
 (: omega-rect-snd (Omega-Rect -> Omega-Rect))
-(define (omega-rect-snd Ω)
-  (and Ω (Omega-Node-snd Ω)))
+(define omega-rect-snd omega-tree-snd)
 
 (: omega-rect-value (Omega-Rect -> Interval))
-(define (omega-rect-value Ω)
-  (cond [Ω  (Omega-Node-value Ω)]
-        [else  unit-interval]))
+(define omega-rect-value (omega-tree-value unit-interval))
 
-(define (omega-rect) #f)
+(define (omega-rect) omega-leaf)
 
 (: omega-rect-map (All (B) (Omega-Rect (Omega-Idx Interval -> B) -> (Listof B))))
 (define (omega-rect-map Ω f)
@@ -844,6 +853,14 @@
   (cond [(empty-set? Ω1)  Ω1]
         [(empty-set? Ω2)  Ω2]
         [else  (just-omega-rect-node I Ω1 Ω2)]))
+
+(: unit-omega-rect-node
+   (case-> (Empty-Set Empty-Set -> Empty-Set)
+           ((U Empty-Set Omega-Rect) Empty-Set -> Empty-Set)
+           (Empty-Set (U Empty-Set Omega-Rect) -> Empty-Set)
+           ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
+(define (unit-omega-rect-node Ω1 Ω2)
+  (omega-rect-node unit-interval Ω1 Ω2))
 
 (: omega-rect-join
    (case-> (Empty-Set Empty-Set -> Empty-Set)
