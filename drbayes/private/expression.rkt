@@ -82,7 +82,7 @@
 ;; Random store
 
 (define random/exp random/arr)
-(define boolean/exp random-boolean/arr)
+(define boolean/exp boolean/arr)
 
 (: uniform/exp (case-> (-> expression)
                        (expression -> expression)

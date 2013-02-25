@@ -13,6 +13,23 @@
 (interval-max-splits 5)
 (define n 1000)
 
+#;
+(begin
+  (define f-expr random/arr)
+  (define B (interval 0.25 0.5 #t #t)))
+
+#;
+(begin
+  (define f-expr (pair/arr random/arr random/arr))
+  (define I (interval 0.25 0.5 #t #t))
+  (define B (pair-rect I I)))
+
+#;
+(begin
+  (define f-expr (pair/arr random/arr (pair/arr random/arr random/arr)))
+  (define I (interval 0.25 0.5 #t #t))
+  (define B (pair-rect I (pair-rect I I))))
+
 #;; Test: list/arr (really pair/arr and unit/arr) random/arr
 ;; Preimage is a rectangle [0.25,0.5] × [0.25,0.5] × [0.25,0.5]
 (begin
@@ -26,6 +43,12 @@
     (drbayes (list (uniform) (uniform) (uniform))))
   (define I (interval 0.25 0.5 #t #t))
   (define B (list-rect I I I)))
+
+#;
+(begin
+  (define f-expr
+    (ap/arr sqr/arr random/arr))
+  (define B (interval 0.25 0.5 #t #t)))
 
 #;; Test: list/arr random/arr ap/arr sqr/arr
 ;; Preimage is a rectangle [0.25,0.5] × [0.5,sqrt(1/2)] × [0.5,sqrt(1/2)]
@@ -81,7 +104,7 @@
   
   (define B (list-rect reals reals (interval 0.45 0.7))))
 
-#;; Test: arithmetic
+;; Test: arithmetic
 (begin
   (interval-max-splits 4)
   
@@ -89,7 +112,7 @@
     (drbayes
      (let* ([x  (uniform -1 1)]
             [y  (uniform -1 1)])
-       (list x y (- x y)))))
+       (list x y (* x y)))))
   
   (define B (list-rect reals reals (interval -0.1 0.2))))
 
@@ -200,7 +223,7 @@
             (list/arr random/arr random/arr random/arr)))
   (define B (list-rect reals (interval 0.9 1.1 #t #t) 'tf)))
 
-;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
+#;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
   (define f-expr
     (drbayes
@@ -277,13 +300,14 @@
              (normal x)
              (normal x)
              (normal x)))))
-  (define B (list-rect reals
-                       (interval 2.2 2.4 #t #t)
-                       (interval 0.9 1.1 #t #t)
-                       (interval -0.1 0.1 #t #t)
-                       (interval -0.9 -0.7 #t #t)
-                       (interval 0.4 0.6 #t #t)
-                       (interval 1.3 1.5 #t #t)))
+  (define B
+    (list-rect reals
+               (interval 2.2 2.4 #t #t)
+               (interval 0.9 1.1 #t #t)
+               (interval -0.1 0.1 #t #t)
+               (interval -0.9 -0.7 #t #t)
+               (interval 0.4 0.6 #t #t)
+               (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 #;
 (begin

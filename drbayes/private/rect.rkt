@@ -39,7 +39,7 @@
   (λ (_ port write?) (fprintf port "empty-set")))
 
 (define empty-set (Empty-Set))
-(define empty-set? Empty-Set?)
+(define-syntax empty-set? (make-rename-transformer #'Empty-Set?))
 
 (define rect-nonempty?
   (λ: ([A : Rect]) (not (empty-set? A))))
@@ -53,7 +53,7 @@
   (λ (_ port write?) (fprintf port "universal-set")))
 
 (define universal-set (Universal-Set))
-(define universal-set? Universal-Set?)
+(define-syntax universal-set? (make-rename-transformer #'Universal-Set?))
 
 ;; ===================================================================================================
 ;; Intervals
@@ -92,11 +92,11 @@
                  [(fl= b +inf.0)  (Interval a b a? #f)]
                  [else  (Interval a b a? b?)]))]))
 
-(define interval? Interval?)
-(define interval-min Interval-min)
-(define interval-max Interval-max)
-(define interval-min? Interval-min?)
-(define interval-max? Interval-max?)
+(define-syntax interval? (make-rename-transformer #'Interval?))
+(define-syntax interval-min (make-rename-transformer #'Interval-min))
+(define-syntax interval-max (make-rename-transformer #'Interval-max))
+(define-syntax interval-min? (make-rename-transformer #'Interval-min?))
+(define-syntax interval-max? (make-rename-transformer #'Interval-max?))
 
 (define-match-expander interval
   (λ (stx)
@@ -242,7 +242,7 @@
   #:property prop:custom-write print-null-rect)
 
 (define null-rect-value (Null-Rect))
-(define null-rect? Null-Rect?)
+(define-syntax null-rect? (make-rename-transformer #'Null-Rect?))
 
 (define-match-expander null-rect
   (λ (stx)
@@ -262,9 +262,9 @@
   #:property prop:custom-print-quotable 'never
   #:property prop:custom-write print-pair-rect)
 
-(define pair-rect? Pair-Rect?)
-(define pair-rect-fst Pair-Rect-fst)
-(define pair-rect-snd Pair-Rect-snd)
+(define-syntax pair-rect? (make-rename-transformer #'Pair-Rect?))
+(define-syntax pair-rect-fst (make-rename-transformer #'Pair-Rect-fst))
+(define-syntax pair-rect-snd (make-rename-transformer #'Pair-Rect-snd))
 
 (define universal-pair (Pair-Rect universal-set universal-set))
 
@@ -298,11 +298,11 @@
                     [boolean-set : (U #f Boolean-Set)])
   #:transparent)
 
-(define join-rect? Join-Rect?)
-(define join-rect-interval Join-Rect-interval)
-(define join-rect-boolean-set Join-Rect-boolean-set)
-(define join-rect-null-rect Join-Rect-null-rect)
-(define join-rect-pair-rect Join-Rect-pair-rect)
+(define-syntax join-rect? (make-rename-transformer #'Join-Rect?))
+(define-syntax join-rect-interval (make-rename-transformer #'Join-Rect-interval))
+(define-syntax join-rect-boolean-set (make-rename-transformer #'Join-Rect-boolean-set))
+(define-syntax join-rect-null-rect (make-rename-transformer #'Join-Rect-null-rect))
+(define-syntax join-rect-pair-rect (make-rename-transformer #'Join-Rect-pair-rect))
 
 (: make-join-rect ((U #f Empty-Set Interval)
                    (U #f Empty-Set Null-Rect)
@@ -541,8 +541,12 @@
 
 (: pair-rect-intersect (Pair-Rect Pair-Rect -> (U Empty-Set Pair-Rect)))
 (define (pair-rect-intersect A1×A2 B1×B2)
-  (match-define (pair-rect A1 A2) A1×A2)
-  (match-define (pair-rect B1 B2) B1×B2)
+  (define A1 (pair-rect-fst A1×A2))
+  (define A2 (pair-rect-snd A1×A2))
+  (define B1 (pair-rect-fst B1×B2))
+  (define B2 (pair-rect-snd B1×B2))
+  ;(match-define (pair-rect A1 A2) A1×A2)
+  ;(match-define (pair-rect B1 B2) B1×B2)
   (define C1 (rect-intersect A1 B1))
   (define C2 (rect-intersect A2 B2))
   (define A1? (eq? C1 A1))
@@ -715,7 +719,7 @@
   (define make-node (omega-node default))
   (λ (t r v)
     (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1])
-      (define mid (* 1/2 (+ r0 r1)))
+      (define mid (/ (+ r0 r1) 2))
       (if (not t)
           (cond [(r . < . mid)  (define new-fst (loop #f r0 mid))
                                 (if (eq? #f new-fst) t (make-node default new-fst #f))]
@@ -801,21 +805,45 @@
 
 (define-type Omega-Rect (Omega-Tree Interval))
 
-(define (omega-rect) #f)
-
-(define omega-rect-node ((inst omega-node Interval) unit-interval))
 (define omega-rect-ref ((inst omega-tree-ref Interval) unit-interval))
 (define omega-rect-set ((inst omega-tree-set Interval) unit-interval))
+
+(: omega-rect-fst (Omega-Rect -> Omega-Rect))
+(define (omega-rect-fst Ω)
+  (and Ω (Omega-Node-fst Ω)))
+
+(: omega-rect-snd (Omega-Rect -> Omega-Rect))
+(define (omega-rect-snd Ω)
+  (and Ω (Omega-Node-snd Ω)))
+
+(: omega-rect-value (Omega-Rect -> Interval))
+(define (omega-rect-value Ω)
+  (cond [Ω  (Omega-Node-value Ω)]
+        [else  unit-interval]))
+
+(define (omega-rect) #f)
 
 (: omega-rect-map (All (B) (Omega-Rect (Omega-Idx Interval -> B) -> (Listof B))))
 (define (omega-rect-map Ω f)
   (((inst omega-tree-map Interval B) unit-interval) Ω f))
+
+(define just-omega-rect-node ((inst omega-node Interval) unit-interval))
 
 (define just-omega-rect-join
   ((inst omega-tree-join Interval) unit-interval interval-join))
 
 (define just-omega-rect-intersect
   ((inst omega-tree-intersect Interval) unit-interval interval-intersect))
+
+(: omega-rect-node
+   (case-> (Interval Empty-Set Empty-Set -> Empty-Set)
+           (Interval (U Empty-Set Omega-Rect) Empty-Set -> Empty-Set)
+           (Interval Empty-Set (U Empty-Set Omega-Rect) -> Empty-Set)
+           (Interval (U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
+(define (omega-rect-node I Ω1 Ω2)
+  (cond [(empty-set? Ω1)  Ω1]
+        [(empty-set? Ω2)  Ω2]
+        [else  (just-omega-rect-node I Ω1 Ω2)]))
 
 (: omega-rect-join
    (case-> (Empty-Set Empty-Set -> Empty-Set)
