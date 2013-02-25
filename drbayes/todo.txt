@@ -1,3 +1,1 @@
-Use something other than #f for full Omega-Tree
 Use Omega-Tree for Branches-Rect
-Replace `ap/arr' with wrapper for `rap/arr'

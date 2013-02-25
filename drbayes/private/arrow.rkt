@@ -241,6 +241,45 @@
      (expression-meaning empty fwd (c/comp X)))))
 
 ;; ---------------------------------------------------------------------------------------------------
+;; Arrow composition (reverse composition)
+
+(: rcompose/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
+(define ((rcompose/fwd f-fwd g-fwd) ω γ bs)
+  (let* ([γ  (f-fwd ω γ bs)]
+         [γ  (g-fwd ω γ bs)])
+    γ))
+
+(: rcompose/pre (Omega-Rect Preimage-Fun Preimage-Fun -> Simple-Preimage-Fun))
+(define (rcompose/pre Ω f-pre g-pre)
+  (define Ω1 (omega-rect-fst Ω))
+  (define Ω2 (omega-rect-snd Ω))
+  (λ (C)
+    (let*-values ([(Ωg B)  (g-pre C)]
+                  [(Ωf A)  (f-pre B)])
+      (values (cond [(and (eq? Ωf Ω1) (eq? Ωg Ω2))  Ω]
+                    [else  (unit-omega-rect-node Ωf Ωg)])
+              A))))
+
+(: rcompose/comp (Computation Computation -> Computation))
+(define (rcompose/comp f-comp g-comp)
+  (simple-computation
+   (λ (Ω Γ bs)
+     (match-let* ([(computation-meaning bs f-range f-pre)  (f-comp (omega-rect-fst Ω) Γ bs)]
+                  [(computation-meaning bs g-range g-pre)  (g-comp (omega-rect-snd Ω) f-range bs)])
+       (computation-meaning bs g-range (simple-preimage Ω Γ g-range (rcompose/pre Ω f-pre g-pre)))))))
+
+(: rcompose/arr (expression expression -> expression))
+(define (rcompose/arr f-expr g-expr)
+  (expression
+   (λ (r0 r1)
+     (define r (omega-expr-idx r0 r1))
+     (match-define (expression-meaning f-idxs f-fwd f-comp) (run-expression f-expr r0 r))
+     (match-define (expression-meaning g-idxs g-fwd g-comp) (run-expression g-expr r r1))
+     (expression-meaning (append f-idxs g-idxs)
+                         (rcompose/fwd f-fwd g-fwd)
+                         (rcompose/comp f-comp g-comp)))))
+#|
+;; ---------------------------------------------------------------------------------------------------
 ;; Application
 
 (: ap/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
@@ -278,46 +317,7 @@
      (expression-meaning (append f-idxs g-idxs)
                          (ap/fwd f-fwd g-fwd)
                          (ap/comp f-comp g-comp)))))
-
-;; ---------------------------------------------------------------------------------------------------
-;; Reverse application
-
-(: rap/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
-(define ((rap/fwd f-fwd g-fwd) ω γ bs)
-  (let* ([γ  (f-fwd ω γ bs)]
-         [γ  (g-fwd ω γ bs)])
-    γ))
-
-(: rap/pre (Omega-Rect Preimage-Fun Preimage-Fun -> Simple-Preimage-Fun))
-(define (rap/pre Ω f-pre g-pre)
-  (define Ω1 (omega-rect-fst Ω))
-  (define Ω2 (omega-rect-snd Ω))
-  (λ (C)
-    (let*-values ([(Ωg B)  (g-pre C)]
-                  [(Ωf A)  (f-pre B)])
-      (values (cond [(and (eq? Ωf Ω1) (eq? Ωg Ω2))  Ω]
-                    [else  (unit-omega-rect-node Ωf Ωg)])
-              A))))
-
-(: rap/comp (Computation Computation -> Computation))
-(define (rap/comp f-comp g-comp)
-  (simple-computation
-   (λ (Ω Γ bs)
-     (match-let* ([(computation-meaning bs f-range f-pre)  (f-comp (omega-rect-fst Ω) Γ bs)]
-                  [(computation-meaning bs g-range g-pre)  (g-comp (omega-rect-snd Ω) f-range bs)])
-       (computation-meaning bs g-range (simple-preimage Ω Γ g-range (rap/pre Ω f-pre g-pre)))))))
-
-(: rap/arr (expression expression -> expression))
-(define (rap/arr f-expr g-expr)
-  (expression
-   (λ (r0 r1)
-     (define r (omega-expr-idx r0 r1))
-     (match-define (expression-meaning f-idxs f-fwd f-comp) (run-expression f-expr r0 r))
-     (match-define (expression-meaning g-idxs g-fwd g-comp) (run-expression g-expr r r1))
-     (expression-meaning (append f-idxs g-idxs)
-                         (rap/fwd f-fwd g-fwd)
-                         (rap/comp f-comp g-comp)))))
-
+|#
 ;; ---------------------------------------------------------------------------------------------------
 ;; Pairs and lists
 
@@ -822,10 +822,10 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; Inequalities
 
-(define lt/arr (ap/arr negative?/arr -/arr))
-(define gt/arr (ap/arr positive?/arr -/arr))
-(define lte/arr (ap/arr nonpositive?/arr -/arr))
-(define gte/arr (ap/arr nonnegative?/arr -/arr))
+(define lt/arr (rcompose/arr -/arr negative?/arr))
+(define gt/arr (rcompose/arr -/arr positive?/arr))
+(define lte/arr (rcompose/arr -/arr nonpositive?/arr))
+(define gte/arr (rcompose/arr -/arr nonnegative?/arr))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Conditionals
@@ -935,11 +935,11 @@
 (define strict-if/arr (if/arr #t))
 
 (define */arr
-  (strict-if/arr (ap/arr negative?/arr (ref/arr 'fst))
-                 (strict-if/arr (ap/arr negative?/arr (ref/arr 'snd))
+  (strict-if/arr (rcompose/arr (ref/arr 'fst) negative?/arr)
+                 (strict-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
                                 neg-neg-mul/arr
                                 neg-pos-mul/arr)
-                 (strict-if/arr (ap/arr negative?/arr (ref/arr 'snd))
+                 (strict-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
                                 pos-neg-mul/arr
                                 pos-pos-mul/arr)))
 
@@ -951,16 +951,17 @@
                                 bottom/arr)))
 
 (define //arr
-  (strict-if/arr (ap/arr positive?/arr (ref/arr 'snd))
-                 (strict-if/arr (ap/arr positive?/arr (ref/arr 'fst))
+  (strict-if/arr (rcompose/arr (ref/arr 'snd) positive?/arr)
+                 (strict-if/arr (rcompose/arr (ref/arr 'fst) positive?/arr)
                                 pos-pos-div/arr
-                                (strict-if/arr (ap/arr negative?/arr (ref/arr 'fst))
+                                (strict-if/arr (rcompose/arr (ref/arr 'fst) negative?/arr)
                                                neg-pos-div/arr
                                                (c/arr 0.0)))
-                 (strict-if/arr (ap/arr negative?/arr (ref/arr 'snd))
-                                (strict-if/arr (ap/arr positive?/arr (ref/arr 'fst))
+                 (strict-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
+                                (strict-if/arr (rcompose/arr (ref/arr 'fst) positive?/arr)
                                                pos-neg-div/arr
-                                               (strict-if/arr (ap/arr negative?/arr (ref/arr 'fst))
+                                               (strict-if/arr (rcompose/arr (ref/arr 'fst)
+                                                                            negative?/arr)
                                                               neg-neg-div/arr
                                                               (c/arr 0.0)))
                                 bottom/arr)))

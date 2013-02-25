@@ -46,8 +46,7 @@
 
 #;
 (begin
-  (define f-expr
-    (ap/arr sqr/arr random/arr))
+  (define f-expr (rcompose/arr random/arr sqr/arr))
   (define B (interval 0.25 0.5 #t #t)))
 
 #;; Test: list/arr random/arr ap/arr sqr/arr
@@ -55,16 +54,14 @@
 (begin
   (define f-expr
     (list/arr random/arr
-              (ap/arr sqr/arr random/arr)
-              (ap/arr sqr/arr random/arr)))
+              (rcompose/arr random/arr sqr/arr)
+              (rcompose/arr random/arr sqr/arr)))
   (define I (interval 0.25 0.5 #t #t))
   (define B (list-rect I I I)))
 
 #;; Test: same as above, using expressions
 (begin
-  (define f-expr
-    (drbayes
-     (list (uniform) (sqr (uniform)) (sqr (uniform)))))
+  (define f-expr (drbayes (list (uniform) (sqr (uniform)) (sqr (uniform)))))
   (define I (interval 0.25 0.5 #t #t))
   (define B (list-rect I I I)))
 
@@ -72,12 +69,12 @@
 ;; Preimage is the same as just above: [0.25,0.5] × [0.5,sqrt(1/2)] × [0.5,sqrt(1/2)]
 (begin
   (define f-expr
-    (ap/arr (list/arr (ref/arr 0)
-                      (ref/arr 1)
-                      (ref/arr 2))
-            (list/arr random/arr
-                      (ap/arr sqr/arr random/arr)
-                      (ap/arr sqr/arr random/arr))))
+    (rcompose/arr (list/arr random/arr
+                            (rcompose/arr random/arr sqr/arr)
+                            (rcompose/arr random/arr sqr/arr))
+                  (list/arr (ref/arr 0)
+                            (ref/arr 1)
+                            (ref/arr 2))))
   (define I (interval 0.25 0.5 #t #t))
   (define B (list-rect I I I)))
 
@@ -85,11 +82,11 @@
 ;; Preimage is a 2D downard diagonal strip × [0,1]
 (begin
   (define f-expr
-    (ap/arr (list/arr (ref/arr 0)
-                      (ref/arr 1)
-                      (ap/arr +/arr (pair/arr (ref/arr 0) (ref/arr 1))))
-            (list/arr random/arr
-                      random/arr)))
+    (rcompose/arr (list/arr random/arr
+                            random/arr)
+                  (list/arr (ref/arr 0)
+                            (ref/arr 1)
+                            (rcompose/arr (pair/arr (ref/arr 0) (ref/arr 1)) +/arr))))
   (define B (list-rect reals reals (interval 0.45 0.7 #t #t))))
 
 #;; Test: same as above, with expressions
@@ -104,7 +101,7 @@
   
   (define B (list-rect reals reals (interval 0.45 0.7))))
 
-;; Test: arithmetic
+#;; Test: arithmetic
 (begin
   (interval-max-splits 4)
   
@@ -112,9 +109,9 @@
     (drbayes
      (let* ([x  (uniform -1 1)]
             [y  (uniform -1 1)])
-       (list x y (* x y)))))
+       (list x y (/ x y)))))
   
-  (define B (list-rect reals reals (interval -0.1 0.2))))
+  (define B (list-rect reals reals (interval -1.25 0.85))))
 
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:
@@ -122,8 +119,7 @@
 ;;    #f: (0.5,1]
 ;;  both: [0,1]
 (begin
-  (define f-expr
-    (list/arr (ap/arr negative?/arr (ap/arr normal/arr random/arr))))
+  (define f-expr (list/arr (rcompose/arr (rcompose/arr random/arr normal/arr) negative?/arr)))
   ;(define B (list-rect 't))
   (define B (list-rect 'f))
   ;(define B (list-rect 'tf))
@@ -135,8 +131,7 @@
 ;;    #f: lower triangle (points below y = x)
 ;;  both: [0,1] × [0,1]
 (begin
-  (define f-expr
-    (list/arr (ap/arr lt/arr (pair/arr random/arr random/arr))))
+  (define f-expr (list/arr (rcompose/arr (pair/arr random/arr random/arr) lt/arr)))
   (define B (list-rect 't))
   ;(define B (list-rect 'f))
   ;(define B (list-rect 'tf))
@@ -157,11 +152,11 @@
 ;; Preimage should be a banana shape
 (begin
   (define f-expr
-    (ap/arr (let* ([X0  (ap/arr normal/arr (ref/arr 0))]
-                   [X1  (ap/arr +/arr (pair/arr X0 (ap/arr normal/arr (ref/arr 1))))])
-              (list/arr X0 X1))
-            (list/arr random/arr
-                      random/arr)))
+    (rcompose/arr
+     (list/arr random/arr random/arr)
+     (let* ([X0  (rcompose/arr (ref/arr 0) normal/arr)]
+            [X1  (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 1) normal/arr)) +/arr)])
+       (list/arr X0 X1))))
   (define B (list-rect reals (interval 0.9 1.1 #t #t)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
@@ -190,12 +185,14 @@
 ;; Preimage should look like a football set up for a field goal
 (begin
   (define f-expr
-    (ap/arr (let* ([X0  (ap/arr normal/arr (ref/arr 0))]
-                   [X1  (ap/arr +/arr (pair/arr X0 (ap/arr normal/arr (ref/arr 1))))])
-              (list/arr X0 X1 (ap/arr sqrt/arr (ap/arr +/arr (pair/arr (ap/arr sqr/arr X0)
-                                                                       (ap/arr sqr/arr X1))))))
-            (list/arr random/arr
-                      random/arr)))
+    (rcompose/arr
+     (list/arr random/arr random/arr)
+     (let* ([X0  (rcompose/arr (ref/arr 0) normal/arr)]
+            [X1  (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 1) normal/arr)) +/arr)])
+       (list/arr X0 X1 (rcompose/arr (rcompose/arr (pair/arr (rcompose/arr X0 sqr/arr)
+                                                             (rcompose/arr X1 sqr/arr))
+                                                   +/arr)
+                                     sqrt/arr)))))
   (define B (list-rect reals reals (interval 0.95 1.05 #t #t))))
 
 #;; Test: Normal-Normal model with circular condition, using expressions
@@ -211,16 +208,19 @@
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
   (define f-expr
-    (ap/arr (let* ([B  (ap/arr negative?/arr (ap/arr -/arr (pair/arr (ref/arr 0)
-                                                                     (c/arr #i499/1000))))]
-                   [X0  (strict-if/arr B
-                                       (ap/arr normal/arr (ref/arr 1))
-                                       (ap/arr cauchy/arr (ref/arr 1)))]
-                   [X1  (strict-if/arr B
-                                       (ap/arr +/arr (pair/arr X0 (ap/arr normal/arr (ref/arr 2))))
-                                       (ap/arr +/arr (pair/arr X0 (ap/arr cauchy/arr (ref/arr 2)))))])
-              (list/arr X0 X1 B))
-            (list/arr random/arr random/arr random/arr)))
+    (rcompose/arr
+     (list/arr random/arr random/arr random/arr)
+     (let* ([B  (rcompose/arr (rcompose/arr (pair/arr (ref/arr 0) (c/arr #i499/1000)) -/arr)
+                              negative?/arr)]
+            [X0  (strict-if/arr
+                  B
+                  (rcompose/arr (ref/arr 1) normal/arr)
+                  (rcompose/arr (ref/arr 1) cauchy/arr))]
+            [X1  (strict-if/arr
+                  B
+                  (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 2) normal/arr)) +/arr)
+                  (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 2) cauchy/arr)) +/arr))])
+       (list/arr X0 X1 B))))
   (define B (list-rect reals (interval 0.9 1.1 #t #t) 'tf)))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
@@ -238,7 +238,7 @@
 ;; Preimage should be [0,p)
 (begin
   (define p #i2/5)
-  (define f-expr (list/arr (random-boolean/arr p)))
+  (define f-expr (list/arr (boolean/arr p)))
   (define B (list-rect 't)))
 
 #;; Test: Geometric(p) distribution
@@ -267,8 +267,7 @@
   (define p #i499/1000)
   
   (define/drbayes (geometric-p)
-    (lazy-cond [((uniform) . >= . (const p))  (+ 1 (geometric-p))]
-               [else  0]))
+    (lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p))))
   
   (define f-expr
     (drbayes
@@ -309,10 +308,11 @@
                (interval 0.4 0.6 #t #t)
                (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
-#;
+
 (begin
+  (interval-max-splits 2)
   (define f-expr
-    (drbayes (strict-if ((uniform) . < . 1/2) (fail) #f)))
+    (drbayes (strict-if ((uniform) . < . 2/3) (fail) #f)))
   (define B 'tf))
 
 ;; ===================================================================================================

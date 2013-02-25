@@ -238,7 +238,7 @@
                      (syntax-case inner-stx ()
                        [(_ arg ...)
                         (syntax/loc inner-stx
-                          (apply/arr value-name (list (parse arg) ...)))]
+                          (apply/exp value-name (list (parse arg) ...)))]
                        [(_ e (... ...))
                         (raise-syntax-arity-error 'drbayes #,arity inner-stx)]
                        [_

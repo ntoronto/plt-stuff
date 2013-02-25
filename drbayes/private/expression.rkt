@@ -9,20 +9,20 @@
 
 (provide (all-defined-out))
 
-(: apply/arr (expression (Listof expression) -> expression))
-(define (apply/arr body args)
-  (ap/arr body (list/arr (apply list/arr args))))
+(: apply/exp (expression (Listof expression) -> expression))
+(define (apply/exp body args)
+  (rcompose/arr (list/arr (apply list/arr args)) body))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Primitives
 
 (define-syntax-rule (define-wrapped-unary/arr name f/arr)
   (begin (: name (expression -> expression))
-         (define (name x) (ap/arr f/arr x))))
+         (define (name x) (rcompose/arr x f/arr))))
 
 (define-syntax-rule (define-wrapped-binary/arr name f/arr)
   (begin (: name (expression expression -> expression))
-         (define (name x y) (ap/arr f/arr (pair/arr x y)))))
+         (define (name x y) (rcompose/arr (pair/arr x y) f/arr))))
 
 (define-wrapped-unary/arr neg/exp neg/arr)
 (define-wrapped-unary/arr inv/exp inv/arr)
@@ -45,10 +45,10 @@
 (define-wrapped-binary/arr gte/exp gte/arr)
 
 (: scale/exp (expression Flonum -> expression))
-(define (scale/exp x c) (ap/arr (scale/arr c) x))
+(define (scale/exp x c) (rcompose/arr x (scale/arr c)))
 
 (: translate/exp (expression Flonum -> expression))
-(define (translate/exp x c) (ap/arr (translate/arr c) x))
+(define (translate/exp x c) (rcompose/arr x (translate/arr c)))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Pairs and lists
@@ -59,22 +59,22 @@
 
 (: fst/exp (expression -> expression))
 (define (fst/exp p)
-  (ap/arr (ref/arr 'fst) p))
+  (rcompose/arr p (ref/arr 'fst)))
 
 (: snd/exp (expression -> expression))
 (define (snd/exp p)
-  (ap/arr (ref/arr 'snd) p))
+  (rcompose/arr p (ref/arr 'snd)))
 
 (: list-ref/exp (expression Idx -> expression))
 (define (list-ref/exp lst j)
-  (ap/arr (ref/arr j) lst))
+  (rcompose/arr lst (ref/arr j)))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Environment
 
 (: let/exp (expression expression -> expression))
 (define (let/exp expr body)
-  (rap/arr (pair/arr expr id/arr) body))
+  (rcompose/arr (pair/arr expr id/arr) body))
 
 (define env/exp ref/arr)
 
@@ -98,7 +98,7 @@
                       (expression expression -> expression)))
 (define normal/exp
   (case-lambda
-    [()  (ap/arr normal/arr (uniform/exp))]
+    [()  (rcompose/arr (uniform/exp) normal/arr)]
     [(m)  (+/exp m (normal/exp))]
     [(m s)  (+/exp m (*/exp (normal/exp) s))]))
 
@@ -107,7 +107,7 @@
                       (expression expression -> expression)))
 (define cauchy/exp
   (case-lambda
-    [()  (ap/arr cauchy/arr (uniform/exp))]
+    [()  (rcompose/arr (uniform/exp) cauchy/arr)]
     [(m)  (+/exp m (cauchy/exp))]
     [(m s)  (+/exp m (*/exp (cauchy/exp) s))]))
 
