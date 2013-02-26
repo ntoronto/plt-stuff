@@ -3,9 +3,10 @@
 (require racket/match
          racket/list
          racket/promise
-         "types.rkt"
+         "omega.rkt"
          "rect.rkt"
-         "arrow.rkt")
+         "arrow.rkt"
+         "arrow-prims.rkt")
 
 (provide (all-defined-out))
 

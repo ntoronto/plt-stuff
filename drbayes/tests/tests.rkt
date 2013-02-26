@@ -238,19 +238,25 @@
 ;; Preimage should be [0,p)
 (begin
   (define p #i2/5)
-  (define f-expr (list/arr (boolean/arr p)))
-  (define B (list-rect 't)))
+  (define f-expr (boolean/arr p))
+  (define B 't))
 
-#;; Test: Geometric(p) distribution
+;; Test: Geometric(p) distribution
 (begin
   (define p #i2/5)
   
   (define/drbayes (geometric-p)
-    (lazy-if (boolean (const p)) 0 (+ 1 (geometric-p))))
+    #;(lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))
+    ;; Forces backtracking earlier:
+    (let ([x  (lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))])
+      (strict-if (negative? x) (fail) x)))
   
   #;
   (define/drbayes (geometric-p)
-    (lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p))))
+    (lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p)))
+    #;; Forces backtracking earlier
+    (let ([x  (lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p)))])
+      (strict-if (negative? x) (fail) x)))
   
   (define f-expr
     (drbayes (geometric-p)))
@@ -309,11 +315,39 @@
                (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
+#;
 (begin
   (interval-max-splits 2)
   (define f-expr
-    (drbayes (strict-if ((uniform) . < . 2/3) (fail) #f)))
+    (drbayes (strict-if ((uniform) . < . 2/3)
+                        (strict-if ((uniform) . < . 2/3)
+                                   #t
+                                   (fail))
+                        (fail))))
   (define B 'tf))
+
+#;
+(begin
+  (define/drbayes (S)
+    (lazy-if (boolean (const 0.5)) (T) (F)))
+
+  (define/drbayes (T)
+    (lazy-cond [(boolean (const 0.4))  (cons #t (T))]
+               [(boolean (const 0.5))  (cons #t (F))]
+               [else  null]))
+  
+  (define/drbayes (F)
+    (lazy-cond [(boolean (const 0.4))  (cons #f (F))]
+               [(boolean (const 0.5))  #;(cons #f (T))
+                                       (cons #f (let ([s  (T)])
+                                                  (strict-if (list-ref s (const 1))
+                                                             (fail)
+                                                             s)))]
+               [else  null]))
+  
+  (define f-expr (drbayes (S)))
+  
+  (define B (pair-rect 'tf (pair-rect 't universal-set))))
 
 ;; ===================================================================================================
 
@@ -325,13 +359,13 @@
 (define refine
   (if (empty-set? B) (empty-set-error) (preimage-refiner f-comp B)))
 
-(define-values (Ω bs)
-  (let-values ([(Ω bs)  (refine (omega-rect) branches-rect)])
-    (if (or (empty-set? Ω) (empty-set? bs)) (empty-set-error) (values Ω bs))))
+(define-values (Ω Z)
+  (let-values ([(Ω Z)  (refine omega-rect branches-rect)])
+    (if (or (empty-set? Ω) (empty-set? Z)) (empty-set-error) (values Ω Z))))
 
 (printf "idxs = ~v~n" idxs)
 (printf "Ω = ~v~n" Ω)
-(printf "bs = ~v~n" bs)
+(printf "Z = ~v~n" Z)
 (newline)
 
 (struct: domain-sample ([Ω : Omega-Rect]
@@ -356,7 +390,7 @@
      (when (= 0 (remainder (+ i 1) 100))
        (printf "i = ~v~n" (+ i 1))
        (flush-output))
-     (cond [(i . < . n)  (define s (refinement-sample Ω bs idxs refine))
+     (cond [(i . < . n)  (define s (refinement-sample Ω Z idxs refine))
                          (loop (cons s ss) (+ i 1))]
            [else  ss]))))
 (newline)
@@ -364,12 +398,12 @@
 (: all-samples (Listof domain-sample))
 (define all-samples
   (for/list: : (Listof domain-sample) ([s  (in-list orig-samples)])
-    (match-define (weighted-sample (cons Ω bs) p) s)
+    (match-define (weighted-sample (cons Ω Z) p) s)
     (define ω (omega-rect-sample-point Ω))
     (define x (with-handlers ([if-bad-branch?  (λ (_) (void))])
-                (f-fwd ω null bs)))
+                (f-fwd ω null Z)))
     (define m (omega-rect-measure Ω))
-    (domain-sample Ω bs ω x m p (/ m p))))
+    (domain-sample Ω Z ω x m p (/ m p))))
 
 (define samples (filter accept-sample? all-samples))
 (define ws (map domain-sample-weight samples))

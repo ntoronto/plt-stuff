@@ -1,8 +1,6 @@
 #lang typed/racket
 
-(require math/distributions
-         "types.rkt"
-         "rect.rkt")
+(require "rect.rkt")
 
 (provide (all-defined-out))
 
@@ -39,13 +37,16 @@
   (with-handlers ([bad?  (λ (res) (raise-bad-value orig-v (bad-value res) stx))])
     (any->value orig-v)))
 
-(define-syntax (strict-if stx) (raise-syntax-error 'strict-if "undefined" stx))
-(define-syntax (strict-cond stx) (raise-syntax-error 'strict-cond "undefined" stx))
+(define-for-syntax (undefined-outside-drbayes stx)
+  (syntax-case stx ()
+    [(name . args)  (raise-syntax-error 'drbayes "undefined outside DrBayes" #'name)]
+    [_  (raise-syntax-error 'drbayes "undefined outside DrBayes" stx)]))
 
-(define-syntax (lazy-if stx) (raise-syntax-error 'lazy-if "undefined" stx))
-(define-syntax (lazy-cond stx) (raise-syntax-error 'lazy-cond "undefined" stx))
-
-(define-syntax (uniform stx) (raise-syntax-error 'uniform "undefined" stx))
-(define-syntax (normal stx) (raise-syntax-error 'normal "undefined" stx))
-(define-syntax (cauchy stx) (raise-syntax-error 'cauchy "undefined" stx))
-(define-syntax (boolean stx) (raise-syntax-error 'boolean "undefined" stx))
+(define-syntax (strict-if stx) (undefined-outside-drbayes stx))
+(define-syntax (strict-cond stx) (undefined-outside-drbayes stx))
+(define-syntax (lazy-if stx) (undefined-outside-drbayes stx))
+(define-syntax (lazy-cond stx) (undefined-outside-drbayes stx))
+(define-syntax (uniform stx) (undefined-outside-drbayes stx))
+(define-syntax (normal stx) (undefined-outside-drbayes stx))
+(define-syntax (cauchy stx) (undefined-outside-drbayes stx))
+(define-syntax (boolean stx) (undefined-outside-drbayes stx))

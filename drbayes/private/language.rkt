@@ -16,9 +16,10 @@
          (except-in typed/racket/base Refinement)
          racket/stxparam
          "functions.rkt"
-         "types.rkt"
+         "omega.rkt"
          "rect.rkt"
          "arrow.rkt"
+         "arrow-prims.rkt"
          "expression.rkt"
          (only-in "sample.rkt" refinement-sample))
 
