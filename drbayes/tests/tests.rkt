@@ -241,9 +241,9 @@
   (define f-expr (boolean/arr p))
   (define B 't))
 
-#;; Test: Geometric(p) distribution
+;; Test: Geometric(p) distribution
 (begin
-  (define p #i1/10)
+  (define p #i2/5)
   
   (define/drbayes (geometric-p)
     ;(lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))
@@ -261,9 +261,11 @@
   (define f-expr
     (drbayes (geometric-p)))
   
-  (define B (interval 1.0 3.0 #t #t))
+  (define B-min 10.0)
+  (define B-max 13.0)
+  (define B (interval B-min B-max #t #t))
   
-  (let ([xs  (filter (λ: ([x : Flonum]) (<= 1.0 x 3.0)) (sample (geometric-dist p) 100000))])
+  (let ([xs  (filter (λ: ([x : Flonum]) (<= B-min x B-max)) (sample (geometric-dist p) 100000))])
     (printf "E[x] = ~v~n" (mean xs))
     (printf "sd[x] = ~v~n" (stddev xs))))
 
@@ -292,29 +294,39 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 5)
   ;(interval-min-length (flexpt 0.5 14.0))
+  
+  (define/drbayes (list-append lst1 lst2)
+    (lazy-if (null? lst1)
+             lst2
+             (cons (car lst1) (list-append (cdr lst1) lst2))))
+  
   (define f-expr
     (drbayes
      (let ([x  (normal)])
        (list x
-             (normal x)
-             (normal x)
-             (normal x)
-             (normal x)
-             (normal x)
-             (normal x)))))
+             (list
+              (normal x)
+              (normal x)
+              (normal x))
+             (list
+              (normal x)
+              (normal x)
+              (normal x))))))
   (define B
     (list-rect reals
-               (interval 2.2 2.4 #t #t)
-               (interval 0.9 1.1 #t #t)
-               (interval -0.1 0.1 #t #t)
-               (interval -0.9 -0.7 #t #t)
-               (interval 0.4 0.6 #t #t)
-               (interval 1.3 1.5 #t #t)))
+               (list-rect
+                (interval 2.2 2.4 #t #t)
+                (interval 0.9 1.1 #t #t)
+                (interval -0.1 0.1 #t #t))
+               (list-rect
+                (interval -0.9 -0.7 #t #t)
+                (interval 0.4 0.6 #t #t)
+                (interval 1.3 1.5 #t #t))))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
 #;

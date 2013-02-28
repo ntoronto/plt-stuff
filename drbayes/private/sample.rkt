@@ -29,7 +29,7 @@
 
 (: preimage-refiner (Computation Nonempty-Rect -> Refiner))
 (define ((preimage-refiner e-comp B) Ω Z)
-  (match-let ([(computation-meaning Z range e-pre)  (e-comp Ω null-rect Z)])
+  (match-let ([(computation-meaning Z _ e-pre)  (e-comp Ω null-rect Z)])
     (let-values ([(Ω Γ)  (e-pre B)])
       (cond [(not (or (empty-set? Γ) (null-rect? Γ)))
              (raise-result-error 'preimage-refiner "(U Empty-Set Null-Rect)" Γ)]
@@ -55,7 +55,7 @@
 (struct: fail-info ([idxs : Indexes]
                     [m : Natural]
                     [Ω : (U Empty-Set Omega-Rect)]
-                    [branches : Branches-Rect])
+                    [Z : Branches-Rect])
   #:transparent)
 
 (define splits 0)

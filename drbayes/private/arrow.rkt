@@ -68,8 +68,12 @@
 
 (define comp-hash-hits 0)
 (define comp-hash-misses 0)
+(define comp-hash-eq-misses 0)
 (define (print-comp-hash-stats)
-  (printf "comp-hash-hits = ~v~ncomp-hash-misses = ~v~n" comp-hash-hits comp-hash-misses))
+  (printf "comp-hash-hits = ~v~ncomp-hash-misses = ~v~ncomp-hash-eq-misses = ~v~n"
+          comp-hash-hits
+          comp-hash-misses
+          comp-hash-eq-misses))
 
 (: simple-computation (Simple-Computation -> Computation))
 (define (simple-computation comp)
@@ -85,6 +89,9 @@
                     (set! comp-hash-hits (+ 1 comp-hash-hits))
                     m]
                    [else
+                    (when (and (equal? Ω last-Ω) (equal? Γ last-Γ) (equal? last-Z Z))
+                      ;(printf "simple-computation~n")
+                      (set! comp-hash-eq-misses (+ 1 comp-hash-eq-misses)))
                     (set! comp-hash-misses (+ 1 comp-hash-misses))
                     (define m (comp Ω Γ Z))
                     (set! last-Ω Ω)
@@ -110,6 +117,9 @@
                              (set! comp-hash-hits (+ 1 comp-hash-hits))
                              m]
                             [else
+                             (when (and (equal? Γ last-Γ))
+                               ;(printf "simple-computation/domain~n")
+                               (set! comp-hash-eq-misses (+ 1 comp-hash-eq-misses)))
                              (set! comp-hash-misses (+ 1 comp-hash-misses))
                              (define m (comp Ω Γ Z))
                              (set! last-Γ Γ)

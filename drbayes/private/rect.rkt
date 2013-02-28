@@ -488,20 +488,20 @@
   (match-define (join-rect A0 A1 A2 A3) A)
   (match-define (join-rect B0 B1 B2 B3) B)
   (assert
-   (join-rect (and A0 B0 (interval-join A0 B0))
-              (and A1 B1 null-rect)
-              (and A2 B2 (pair-rect-join A2 B2))
-              (and A3 B3 (boolean-set-join A3 B3)))
+   (join-rect (if (and A0 B0) (interval-join A0 B0) (if A0 A0 B0))
+              (if A1 A1 B1)
+              (if (and A2 B2) (pair-rect-join A2 B2) (if A2 A2 B2))
+              (if (and A3 B3) (boolean-set-join A3 B3) (if A3 A3 B3)))
    rect-nonempty?))
 
 (: join-rect-join (Join-Rect Joinable-Rect -> Nonempty-Rect))
 (define (join-rect-join A B)
   (match-define (join-rect A0 A1 A2 A3) A)
   (assert
-   (cond [(interval? B)   (join-rect (and A0 (interval-join A0 B)) A1 A2 A3)]
-         [(null-rect? B)  (join-rect A0 (and A1 null-rect) A2 A3)]
-         [(pair-rect? B)  (join-rect A0 A1 (and A2 (pair-rect-join A2 B)) A3)]
-         [else            (join-rect A0 A1 A2 (and A3 (boolean-set-join A3 B)))])
+   (cond [(interval? B)   (join-rect (if A0 (interval-join A0 B) B) A1 A2 A3)]
+         [(null-rect? B)  (join-rect A0 B A2 A3)]
+         [(pair-rect? B)  (join-rect A0 A1 (if A2 (pair-rect-join A2 B) B) A3)]
+         [else            (join-rect A0 A1 A2 (if A3 (boolean-set-join A3 B) B))])
    rect-nonempty?))
 
 ;; ---------------------------------------------------------------------------------------------------
