@@ -617,49 +617,39 @@
 ;; ===================================================================================================
 ;; Infinite product space values
 
-(define-type Omega-Hash (HashTable Omega-Idx Flonum))
-(define: empty-omega-hash : Omega-Hash  (make-immutable-hash empty))
-
-(: print-omega (Omega Output-Port (U #t #f 0 1) -> Any))
-(define (print-omega ω port mode)
-  (define lst (hash-map (unbox (Omega-hash ω))
-                        (λ: ([k : Omega-Idx] [x : Flonum]) (cons k x))))
-  (pretty-print-constructor 'omega lst port mode))
+(define-type Omega-Hash (Omega-Tree Flonum))
 
 (struct: Omega ([hash : (Boxof Omega-Hash)])
-  #:transparent
-  #:property prop:custom-print-quotable 'never
-  #:property prop:custom-write print-omega)
+  #:transparent)
 
 (define-syntax omega? (make-rename-transformer #'Omega?))
+(define-syntax omega-hash (make-rename-transformer #'Omega-hash))
 
-(: omega (case-> (-> Omega)
-                 (Omega-Hash -> Omega)))
-(define (omega [h empty-omega-hash])
-  (cond [(immutable? h)  (Omega (box h))]
-        [else  (raise-argument-error 'omega "immutable Omega-Hash" h)]))
-
-(: omega-hash (Omega -> Omega-Hash))
-(define (omega-hash ω)
-  (unbox (Omega-hash ω)))
+(define omega-hash-default +nan.0)
+(define omega-hash-ref ((inst omega-tree-ref Flonum) omega-hash-default))
+(define omega-hash-set ((inst omega-tree-set Flonum) omega-hash-default))
+(define omega-hash-domain ((inst omega-tree-keys Flonum) omega-hash-default))
 
 (: omega-ref (Omega Omega-Idx -> Flonum))
-(define (omega-ref ω r)
-  (define bx (Omega-hash ω))
-  (define h (unbox bx))
-  (cond [(hash-has-key? h r)  (hash-ref h r)]
-        [else  (define v (random))
-               (set-box! bx (hash-set h r v))
-               v]))
+(define (omega-ref ω k)
+  (define h (omega-hash ω))
+  (define x (omega-hash-ref (unbox h) k))
+  (cond [(rational? x)  x]
+        [else  (define x (random))
+               (set-box! h (omega-hash-set (unbox h) k x))
+               x]))
 
 (: omega-domain (Omega -> (Listof Omega-Idx)))
 (define (omega-domain ω)
-  (sort (hash-keys (omega-hash ω)) <))
+  (omega-hash-domain (unbox (omega-hash ω))))
 
 ;; ===================================================================================================
 ;; Infinite product space rectangles
 
 (define-type Omega-Rect (Omega-Tree Interval))
+
+(define omega-nonempty?
+  (λ: ([Ω : (U Empty-Set Omega-Rect)]) (not (empty-set? Ω))))
 
 (define omega-rect-ref ((inst omega-tree-ref Interval) unit-interval))
 (define omega-rect-set ((inst omega-tree-set Interval) unit-interval))
@@ -738,11 +728,13 @@
 (: omega-rect-domain (Omega-Rect -> (Listof Omega-Idx)))
 (define omega-rect-domain (omega-tree-keys unit-interval))
 
+(define omega-rect->omega-hash
+  ((inst omega-tree->omega-tree Interval Flonum) unit-interval omega-hash-default))
+
 (: omega-rect-sample-point (Omega-Rect -> Omega))
 (define (omega-rect-sample-point Ω)
-  (omega ((inst make-immutable-hash Omega-Idx Flonum)
-          (omega-rect-map Ω (λ: ([k : Omega-Idx] [I : Interval])
-                              (cons k (interval-sample-point I)))))))
+  (Omega (box (omega-rect->omega-hash Ω (λ: ([k : Omega-Idx] [I : Interval])
+                                          (interval-sample-point I))))))
 
 (: omega-rect-measure (Omega-Rect -> Flonum))
 (define (omega-rect-measure Ω)

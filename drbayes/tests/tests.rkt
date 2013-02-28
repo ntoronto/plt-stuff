@@ -39,8 +39,7 @@
 
 #;; Test: same as above, using expressions
 (begin
-  (define f-expr
-    (drbayes (list (uniform) (uniform) (uniform))))
+  (define f-expr (drbayes (list (uniform) (uniform) (uniform))))
   (define I (interval 0.25 0.5 #t #t))
   (define B (list-rect I I I)))
 
@@ -109,9 +108,9 @@
     (drbayes
      (let* ([x  (uniform -1 1)]
             [y  (uniform -1 1)])
-       (list x y (/ x y)))))
+       (list x y (* x y)))))
   
-  (define B (list-rect reals reals (interval -1.25 0.85))))
+  (define B (list-rect reals reals (interval -0.1 0.2))))
 
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:
@@ -157,7 +156,7 @@
      (let* ([X0  (rcompose/arr (ref/arr 0) normal/arr)]
             [X1  (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 1) normal/arr)) +/arr)])
        (list/arr X0 X1))))
-  (define B (list-rect reals (interval 0.9 1.1 #t #t)))
+  (define B (list-rect reals (interval 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
 #;; Test: Normal-Normal model, using expressions
@@ -168,15 +167,16 @@
      (let* ([x  (normal)]
             [y  (normal x)])
        (list x y))))
-  (define B (list-rect reals (interval 0.9 1.1 #t #t)))
+  (define B (list-rect reals (interval 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
 #;; Test: thermometer that goes to 100
 (begin
+  (interval-max-splits 5)
   (define f-expr
     (drbayes
      (let* ([x  (normal 90 10)]
-            [y  (normal x 1)])
+            [y  (normal x)])
        (list x (strict-if (y . > . 100) 100 y)))))
   
   (define B (list-rect reals (interval 100.0 100.0))))
@@ -203,7 +203,7 @@
      (let* ([x0  (normal)]
             [x1  (normal x0)])
        (list x0 x1 (sqrt (+ (sqr x0) (sqr x1)))))))
-  (define B (list-rect reals reals (interval 0.95 1.05 #t #t))))
+  (define B (list-rect reals reals (interval 0.95 1.05))))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
@@ -232,7 +232,7 @@
                   (list x (normal x)))
                 (let ([x  (cauchy)])
                   (list x (cauchy x))))))
-  (define B (list-rect reals (interval 0.9 1.1 #t #t))))
+  (define B (list-rect reals (interval 0.9 1.1))))
 
 #;; Test: Bernoulli(p) distribution
 ;; Preimage should be [0,p)
@@ -241,12 +241,12 @@
   (define f-expr (boolean/arr p))
   (define B 't))
 
-;; Test: Geometric(p) distribution
+#;; Test: Geometric(p) distribution
 (begin
-  (define p #i2/5)
+  (define p #i1/10)
   
   (define/drbayes (geometric-p)
-    #;(lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))
+    ;(lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))
     ;; Forces backtracking earlier:
     (let ([x  (lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))])
       (strict-if (negative? x) (fail) x)))
@@ -292,9 +292,11 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
+  (interval-max-splits 5)
+  ;(interval-min-length (flexpt 0.5 14.0))
   (define f-expr
     (drbayes
      (let ([x  (normal)])
@@ -407,6 +409,7 @@
 
 (define samples (filter accept-sample? all-samples))
 (define ws (map domain-sample-weight samples))
+(define ps (map domain-sample-prob samples))
 (define ms (map domain-sample-measure samples))
 
 (define not-samples (filter (compose not accept-sample?) all-samples))
@@ -477,11 +480,11 @@
   (plot (density ws) #:x-label "weight" #:y-label "density"))
 
 (with-handlers ([exn?  (λ (_) (printf "weight/measure scatter plot failed~n"))])
-  (plot (points (map (λ: ([w : Flonum] [m : Flonum]) (list w m)) ws ms)
+  (plot (points (map (λ: ([p : Flonum] [m : Flonum]) (list p m)) ps ms)
                 #:sym 'dot #:size 12 #:alpha alpha)
-        #:x-label "weight" #:y-label "measure"))
+        #:x-label "probability" #:y-label "measure"))
 
-(printf "Corr(W,M) = ~v~n" (correlation ws ms))
+(printf "Corr(P,M) = ~v~n" (correlation ps ms))
 
 (plot (density (sample (discrete-dist x0s ws) num-samples))
       #:x-label "x0" #:y-label "density")

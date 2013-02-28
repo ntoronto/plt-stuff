@@ -1,4 +1,5 @@
-Piecewise monotone R -> R functions
+Piecewise monotone R -> R functions (prim-if?)
 Piecewise monotone R x R -> R functions
 Test whether DrBayes-level "let" is faster than manual substitution (when manual substitution is possible)
 Try reusing fail records to sample (push fail record for returned sample before returning it)
+Change Omega-Idx to be (Listof (U 0 1)) (initially built in reverse)

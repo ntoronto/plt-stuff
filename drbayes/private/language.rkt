@@ -9,6 +9,7 @@
                      racket/string)
          racket/list
          racket/math
+         racket/promise
          (for-template "functions.rkt"
                        racket/base
                        racket/list
@@ -252,11 +253,13 @@
   ;; Make sure `stx' has the source location of the inner expression; without this, there would be a
   ;; lot of (quasisyntax/loc stx (... #,(syntax/loc #'e (parse e)) ...)) in the following code
   (let ([stx  (syntax-case stx () [(_ e)  (syntax/loc #'e (parse e))])])
-    (syntax-parse stx #:literals (const racket
-                                        strict-if lazy-if
-                                        strict-cond lazy-cond
-                                        let let*
-                                        list-ref scale translate boolean)
+    (syntax-parse stx #:literals (const
+                                  racket
+                                  lazy
+                                  strict-if lazy-if
+                                  strict-cond lazy-cond
+                                  let let*
+                                  list-ref scale translate boolean)
       [(_ e:constant)
        (syntax/loc stx e.expression)]
       
@@ -275,6 +278,9 @@
            (cond [(expression? v)  v]
                  [else  (raise-syntax-error 'drbayes "does not evaluate to a DrBayes expression"
                                             #'e)])))]
+      
+      [(_ (lazy e:expr))
+       (syntax/loc stx (delay/exp (λ () (parse e))))]
       
       [(_ (~and (lazy-if . _) ~! e:if-expr))
        (syntax/loc stx (lazy-if/exp (parse e.cond) (λ () (parse e.then)) (λ () (parse e.else))))]

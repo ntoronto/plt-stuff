@@ -3,6 +3,7 @@
 (require racket/match
          racket/list
          racket/promise
+         math/flonum
          math/distributions
          "omega.rkt"
          "rect.rkt"
@@ -41,7 +42,7 @@
 (define (take-index lst i)
   (cond [(index? i)
          (let: loop ([i : Index  i] [lst lst] [fst : (Listof A)  empty])
-           (cond [(empty? lst)  (raise-argument-error 'take-index "nonempty List" 0 list i)]
+           (cond [(empty? lst)  (raise-argument-error 'take-index "nonempty List" 0 lst i)]
                  [(zero? i)  (values (first lst) (append (reverse fst) (rest lst)))]
                  [else  (loop (- i 1) (rest lst) (cons (first lst) fst))]))]
         [else
@@ -109,7 +110,7 @@
           (cond
             [(m . < . max-splits)
              (define I (omega-rect-ref Ω idx))
-             (define-values (Is ps) (split I min-ivl))
+             (define-values (Is ls) (split I min-ivl))
              (cond
                [(empty? Is)  (backtrack)]
                [(empty? (rest Is))
@@ -121,10 +122,11 @@
                [else
                 (set! splits (+ 1 splits))
                 
-                (define d (index-dist ps))
-                (define i (sample d))
+                (define total-l (flsum ls))
+                (define ps (map (λ: ([l : Flonum]) (/ l total-l)) ls))
+                (define i (sample (index-dist ps)))
                 (let-values ([(I Is)  (take-index Is i)]
-                             [(p ps)  (take-index (discrete-dist-probs d) i)])
+                             [(p ps)  (take-index ps i)])
                   (define new-fails
                     (map (λ: ([I : Interval])
                            (delay

@@ -137,3 +137,14 @@
 (: omega-tree-keys (All (A) (A -> ((Omega-Tree A) -> (Listof Omega-Idx)))))
 (define ((omega-tree-keys default) t)
   (((inst omega-tree-map A Omega-Idx) default) t (λ: ([k : Omega-Idx] [_ : A]) k)))
+
+(: omega-tree->omega-tree (All (A B) (A B -> ((Omega-Tree A) (Omega-Idx A -> B) -> (Omega-Tree B)))))
+(define ((omega-tree->omega-tree a-default b-default) t f)
+  (define make-node (omega-node b-default))
+  (let: loop ([t t] [r0 : Omega-Idx  0] [r1 : Omega-Idx  1])
+    (define mid (* 1/2 (+ r0 r1)))
+    (cond [(omega-leaf? t)  omega-leaf]
+          [else
+           (define a (Omega-Node-value t))
+           (define b (if (eq? a a-default) b-default (f mid a)))
+           (make-node b (loop (Omega-Node-fst t) r0 mid) (loop (Omega-Node-snd t) mid r1))])))

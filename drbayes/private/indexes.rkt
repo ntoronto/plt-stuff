@@ -11,7 +11,11 @@
 (define-type Interval-Splitter
   (Interval Flonum -> (Values (Listof Interval) (Listof Positive-Flonum))))
 
-(define-type Indexes (Listof (U Omega-Idx (Pair Omega-Idx Interval-Splitter) if-indexes)))
+(define-type Indexes (Listof (U Omega-Idx
+                                ;(Pair Omega-Idx Natural)
+                                (Pair Omega-Idx Interval-Splitter)
+                                ;(Pair (Pair Omega-Idx Natural) Interval-Splitter)
+                                if-indexes)))
 (struct: if-indexes ([index : Omega-Idx] [true : (Promise Indexes)] [false : (Promise Indexes)])
   #:transparent)
 
