@@ -10,17 +10,20 @@
          "indexes.rkt"
          "arrow.rkt")
 
-(provide Refiner preimage-refiner
-         (struct-out weighted-sample)
-         print-sampler-stats
-         interval-max-splits interval-min-length
-         Omega-Sample refinement-sample drbayes-sample)
+(provide (all-defined-out))
 
 (: interval-max-splits (Parameterof Natural))
 (define interval-max-splits (make-parameter 5))
 
 (: interval-min-length (Parameterof Nonnegative-Flonum))
 (define interval-min-length (make-parameter 1e-14))
+
+(define splits 0)
+(define branches 0)
+(define backtracks 0)
+(define (print-sampler-stats)
+  (printf "splits = ~a~nbranches = ~a~nbacktracks = ~a~n"
+          splits branches backtracks))
 
 ;; ===================================================================================================
 
@@ -36,7 +39,20 @@
             [else  (values Ω Z)]))))
 
 ;; ===================================================================================================
-;; Helper functions
+;; Helpers
+
+(define-type (Listof+2 A) (Pair A (Pair A (Listof A))))
+
+(: map/+2 (All (A B) ((A -> B) (Listof+2 A) -> (Listof+2 B))))
+(define (map/+2 f xs)
+  (list* (f (first xs))
+         (f (second xs))
+         (map f (rest (rest xs)))))
+
+(: normalize-probs/+2 ((Listof+2 Flonum) -> (Listof+2 Flonum)))
+(define (normalize-probs/+2 qs)
+  (define p (flsum qs))
+  (map/+2 (λ: ([q : Flonum]) (/ q p)) qs))
 
 (: take-index (All (A) ((Listof A) Integer -> (Values A (Listof A)))))
 (define (take-index lst i)
@@ -48,138 +64,179 @@
         [else
          (raise-argument-error 'take-index "Index" 1 lst i)]))
 
-;; ===================================================================================================
+(: take-index/+2 (All (A) ((Listof+2 A) Integer -> (Values A (Pair A (Listof A))))))
+(define (take-index/+2 lst i)
+  (cond [(= i 0)  (values (first lst) (cdr lst))]
+        [(= i 1)  (values (second lst) (cons (first lst) (rest (rest lst))))]
+        [else
+         (let-values ([(x rest-lst)  (take-index (rest (rest lst)) (- i 2))])
+           (values x (list* (first lst) (second lst) rest-lst)))]))
 
-(struct: (T) weighted-sample ([value : T] [weight : Flonum]) #:transparent)
+(define-syntax-rule (maybe-force p-expr)
+  (let ([p p-expr])
+    (if (promise? p) (force p) p)))
 
-(struct: fail-info ([idxs : Indexes]
-                    [m : Natural]
-                    [Ω : (U Empty-Set Omega-Rect)]
-                    [Z : Branches-Rect])
-  #:transparent)
-
-(define splits 0)
-(define branches 0)
-(define backtracks 0)
-(define (print-sampler-stats)
-  (printf "splits = ~a~nbranches = ~a~nbacktracks = ~a~n"
-          splits branches backtracks))
+(: indexes->search-indexes (Indexes -> Indexes))
+(define (indexes->search-indexes idxs)
+  (define m (interval-max-splits))
+  (let loop ([idxs idxs])
+    (cond [(empty? idxs)  empty]
+          [else
+           (let-values ([(idx idxs)  (values (first idxs) (rest idxs))])
+             (define new-idx
+               (match idx
+                 [(? rational? idx)  (cons (interval-index idx interval-split) m)]
+                 [(interval-index idx split)  (cons (interval-index idx split) m)]
+                 [(if-indexes idx t-idxs f-idxs)
+                  (if-indexes idx (delay (loop (force t-idxs))) (delay (loop (force f-idxs))))]
+                 [_  idx]))
+             (cons new-idx (loop idxs)))])))
 
 (: index-dist ((Listof Real) -> (Discrete-Dist Index)))
 (define (index-dist ps)
   (discrete-dist (build-list (length ps) (λ: ([i : Index]) i)) ps))
 
-(define-type Omega-Sample (weighted-sample (Pair Omega-Rect Branches-Rect)))
+;; ===================================================================================================
 
-(: refinement-sample (Omega-Rect Branches-Rect Indexes Refiner -> Omega-Sample))
-(define (refinement-sample orig-Ω orig-Z idxs refine)
-  (define max-splits (interval-max-splits))
-  (define min-ivl (interval-min-length))
-  (let: loop ([idxs : Indexes  idxs]
-              [m : Natural  0]
-              [Ω : (U Empty-Set Omega-Rect)  orig-Ω]
-              [Z : Branches-Rect  orig-Z]
-              [prob : Flonum  1.0]
-              [fail-queue : (Listof (Promise fail-info))  empty]
-              [prob-queue : (Listof Flonum)  empty])
-    (define (backtrack)
-      (cond
-        ;; Pick from the fail stack
-        [(not (empty? fail-queue))
-         (set! backtracks (+ 1 backtracks))
-         (define i (sample (index-dist prob-queue)))
-         (let-values ([(f fail-queue)  (take-index fail-queue i)]
-                      [(p prob-queue)  (take-index prob-queue i)])
-           (match-let ([(fail-info idxs m Ω Z)  (force f)])
-             (loop idxs m Ω Z p fail-queue prob-queue)))]
-        ;; Empty preimage, no recourses: total fail!
-        [else
-         (error 'drbayes-sample "cannot sample from the empty set")]))
-    
+(struct: (T) weighted-sample ([value : T] [weight : Flonum]) #:transparent)
+
+(define-type Omega-Pair (Pair Omega-Rect Branches-Rect))
+(define-type Omega-Sample (weighted-sample Omega-Pair))
+
+(define-type Search-Tree (U Search-Leaf search-node))
+(define-type Search-Leaf (U #f Omega-Pair))
+(struct: search-node ([trees : (Listof+2 (U Search-Tree (Promise Search-Tree)))]
+                      [probs : (Listof+2 Flonum)]
+                      [split? : Boolean])
+  #:transparent)
+
+(: build-search-tree (Omega-Rect Branches-Rect Indexes Refiner -> Search-Tree))
+(define (build-search-tree Ω Z idxs refine)
+  (define min-length (interval-min-length))
+  (let: loop ([Ω : (U Empty-Set Omega-Rect)  Ω] [Z Z] [idxs  (indexes->search-indexes idxs)])
     (cond
-      ;; Empty preimage: failure!
-      [(or (empty-set? Ω) (empty-set? Z))  (backtrack)]
-      ;; Empty indexes: success!
-      [(empty? idxs)  (weighted-sample (cons Ω Z) prob)]
+      [(empty-set? Ω)  #f]
       [else
-       (define idx (let ([idx  (first idxs)])
-                     (cond [(rational? idx)  (cons idx interval-split)]
-                           [else  idx])))
-       (match idx
-         [(cons idx split)
+       (match idxs
+         [(cons (cons (and iidx (interval-index idx split)) m) idxs)
           (cond
-            [(m . < . max-splits)
-             (define I (omega-rect-ref Ω idx))
-             (define-values (Is ls) (split I min-ivl))
-             (cond
-               [(empty? Is)  (backtrack)]
-               [(empty? (rest Is))
-                (define new-I (first Is))
-                (cond [(eq? I new-I)  (loop (rest idxs) 0 Ω Z prob fail-queue prob-queue)]
-                      [else
-                       (let-values ([(Ω Z)  (refine (omega-rect-set Ω idx new-I) Z)])
-                         (loop idxs (+ m 1) Ω Z prob fail-queue prob-queue))])]
-               [else
-                (set! splits (+ 1 splits))
-                
-                (define total-l (flsum ls))
-                (define ps (map (λ: ([l : Flonum]) (/ l total-l)) ls))
-                (define i (sample (index-dist ps)))
-                (let-values ([(I Is)  (take-index Is i)]
-                             [(p ps)  (take-index ps i)])
-                  (define new-fails
-                    (map (λ: ([I : Interval])
-                           (delay
-                             (let-values ([(Ω Z)  (refine (omega-rect-set Ω idx I) Z)])
-                               (fail-info idxs (+ m 1) Ω Z))))
-                         Is))
-                  (define new-probs (map (λ: ([p : Flonum]) (* prob p)) ps))
-                  
-                  (let-values ([(Ω Z)  (refine (omega-rect-set Ω idx I) Z)])
-                    (loop idxs (+ m 1) Ω Z (* prob p)
-                          (append new-fails fail-queue)
-                          (append new-probs prob-queue))))])]
-               [else
-                (loop (rest idxs) 0 Ω Z prob fail-queue prob-queue)])]
-         [(if-indexes r t-idxs f-idxs)
-          
-          (: choose-branch ((U 't 'f) (Promise Indexes)
-                                      -> (Values Indexes
-                                                 (U Empty-Set Omega-Rect)
-                                                 Branches-Rect)))
-          (define (choose-branch b b-idxs)
-            (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z r b))])
-              (values (append (force b-idxs) (rest idxs)) Ω Z)))
-          
-          (define b (branches-rect-ref Z r))
-          (case b
-            [(t)  (let-values ([(idxs Ω Z)  (choose-branch 't t-idxs)])
-                    (loop idxs 0 Ω Z prob fail-queue prob-queue))]
-            [(f)  (let-values ([(idxs Ω Z)  (choose-branch 'f f-idxs)])
-                    (loop idxs 0 Ω Z prob fail-queue prob-queue))]
+            [(zero? m)  (loop Ω Z idxs)]
             [else
-             (set! branches (+ 1 branches))
-             
-             (define (choice1) (choose-branch 't t-idxs))
-             (define (choice2) (choose-branch 'f f-idxs))
-             
-             (define p 0.5)
-             (define 1-p (- 1.0 p))
-             (let-values ([(choice1 choice2 p 1-p)  (if (< (random) p)
-                                                        (values choice1 choice2 p 1-p)
-                                                        (values choice2 choice1 1-p p))])
-               (define f (delay (let-values ([(idxs Ω Z)  (choice2)])
-                                  (fail-info idxs 0 Ω Z))))
-               (let-values ([(idxs Ω Z)  (choice1)])
-                 (loop idxs 0 Ω Z (* prob p)
-                       (cons f fail-queue)
-                       (cons (* prob 1-p) prob-queue))))])])])))
+             (define I (omega-rect-ref Ω idx))
+             (define-values (Is ls) (split I min-length))
+             (cond
+               [(or (empty? Is) (empty? ls))
+                (loop Ω Z idxs)]
+               [(or (empty? (rest Is)) (empty? (rest ls)))
+                (let-values ([(Ω Z)  (refine (omega-rect-set Ω idx (first Is)) Z)])
+                  (loop Ω Z idxs))]
+               [else
+                (: make-node (Interval -> (Promise Search-Tree)))
+                (define (make-node I)
+                  (delay (let-values ([(Ω Z)  (refine (omega-rect-set Ω idx I) Z)])
+                           (loop Ω Z (cons (cons iidx (- m 1)) idxs)))))
+                
+                (search-node (map/+2 make-node Is) (normalize-probs/+2 ls) #t)])])]
+         [(cons (if-indexes idx t-idxs f-idxs) idxs)
+          (: make-node ((U 't 'f) (Promise Indexes) -> Search-Tree))
+          (define (make-node b b-idxs)
+            (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z idx b))])
+              (loop Ω Z (append (force b-idxs) idxs))))
+          
+          (define b (branches-rect-ref Z idx))
+          (case b
+            [(t)  (make-node 't t-idxs)]
+            [(f)  (make-node 'f f-idxs)]
+            [else  (search-node (list (delay (make-node 't t-idxs)) (delay (make-node 'f f-idxs)))
+                                (list 0.5 0.5)
+                                #f)])]
+         [(cons idx idxs)
+          (error 'impossible)]
+         [(list)
+          (cons Ω Z)])])))
+
+(: sample-search-tree (Search-Tree -> (U #f Omega-Sample)))
+(define (sample-search-tree t)
+  (let loop ([t t] [p 1.0])
+    (match t
+      [(search-node ts qs split?)
+       (cond [split?  (set! splits (+ 1 splits))]
+             [else    (set! branches (+ 1 branches))])
+       (define i (sample (index-dist qs)))
+       (let ([t  (list-ref ts i)]
+             [q  (list-ref qs i)])
+         (loop (if (promise? t) (force t) t) (* p q)))]
+      [(? pair? t)
+       (weighted-sample t p)]
+      [_  #f])))
+
+(: refinement-sample (Omega-Rect Branches-Rect Indexes Refiner -> (U #f Omega-Sample)))
+(define (refinement-sample Ω Z idxs refine)
+  (sample-search-tree (build-search-tree Ω Z idxs refine)))
+
+#|
+(: refinement-sample* (Omega-Rect Branches-Rect Indexes Refiner Natural -> (Listof Omega-Sample)))
+;; Stupid rejection sampler (no backtracking)
+(define (refinement-sample* Ω Z idxs refine n)
+  (let: loop ([i 0] [ss : (Listof Omega-Sample)  empty])
+    (cond [(i . < . n)
+           (when (= 0 (remainder (+ i 1) 100))
+             (printf "i = ~v~n" (+ i 1))
+             (flush-output))
+           (define s (refinement-sample Ω Z idxs refine))
+           (cond [s     (loop (+ i 1) (cons s ss))]
+                 [else  (loop i ss)])]
+          [else  ss])))
+|#
+
+(: sample-search-tree* (Search-Tree -> (Values (U #f Omega-Pair) Flonum Search-Tree)))
+(define (sample-search-tree* t)
+  (match t
+    [(search-node cs qs split?)
+     (cond [split?  (set! splits (+ 1 splits))]
+           [else    (set! branches (+ 1 branches))])
+     (define i (sample (index-dist qs)))
+     (let*-values ([(c cs)  (take-index/+2 cs i)]
+                   [(q qs)  (take-index/+2 qs i)]
+                   [(s p c)  (sample-search-tree* (maybe-force c))]
+                   [(p)  (* p q)])
+       (define new-t
+         (cond [s  t]
+               [(q . > . p)
+                (search-node (cons c cs)
+                             (normalize-probs/+2 (cons (- q p) qs))
+                             split?)]
+               [(or (empty? (rest cs)) (empty? (rest qs)))
+                (maybe-force (first cs))]
+               [else
+                (search-node cs (normalize-probs/+2 qs) split?)]))
+       (values s p new-t))]
+    [(? pair? t)
+     (values t 1.0 t)]
+    [_
+     (values #f 1.0 #f)]))
+
+(: refinement-sample* (Omega-Rect Branches-Rect Indexes Refiner Natural -> (Listof Omega-Sample)))
+(define (refinement-sample* Ω Z idxs refine n)
+  (let: loop ([i  0]
+              [ss : (Listof Omega-Sample)  empty]
+              [t  (build-search-tree Ω Z idxs refine)]
+              [q  1.0])
+    (cond [(i . < . n)
+           (when (= 0 (remainder (+ i 1) 100))
+             (printf "i = ~v~n" (+ i 1))
+             (flush-output))
+           (let-values ([(s p t)  (sample-search-tree* t)])
+             (cond [s     (loop (+ i 1) (cons (weighted-sample s (* p q)) ss) t q)]
+                   [else  (set! backtracks (+ 1 backtracks))
+                          (loop i ss t (- q (* p q)))]))]
+          [else  ss])))
 
 ;; ===================================================================================================
 ;; Front end to sampler
 
-(: drbayes-sample (case-> (expression Integer -> (Values (Listof Value) (Listof Flonum)))
-                          (expression Integer Rect -> (Values (Listof Value) (Listof Flonum)))))
+(: drbayes-sample (case-> (expression Natural -> (Values (Listof Value) (Listof Flonum)))
+                          (expression Natural Rect -> (Values (Listof Value) (Listof Flonum)))))
 (define (drbayes-sample f n [B universal-set])
   (match-define (expression-meaning idxs f-fwd f-comp) (run-expression f))
   
@@ -195,14 +252,7 @@
       (if (or (empty-set? Ω) (empty-set? Z)) (empty-set-error) (values Ω Z))))
   
   (: omega-samples (Listof Omega-Sample))
-  (define omega-samples
-    (let: loop ([ss : (Listof Omega-Sample)  empty] [i 0])
-      (when (= 0 (remainder (+ i 1) 100))
-        (printf "i = ~v~n" (+ i 1))
-        (flush-output))
-      (cond [(i . < . n)  (define s (refinement-sample Ω Z idxs refine))
-                          (loop (cons s ss) (+ i 1))]
-            [else  ss])))
+  (define omega-samples (refinement-sample* Ω Z idxs refine n))
   
   (: image-samples (Listof (weighted-sample Value)))
   (define image-samples

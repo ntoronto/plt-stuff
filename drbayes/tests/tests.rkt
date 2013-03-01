@@ -108,9 +108,9 @@
     (drbayes
      (let* ([x  (uniform -1 1)]
             [y  (uniform -1 1)])
-       (list x y (* x y)))))
+       (list x y (/ x y)))))
   
-  (define B (list-rect reals reals (interval -0.1 0.2))))
+  (define B (list-rect reals reals (interval -1.25 0.85))))
 
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:
@@ -241,9 +241,9 @@
   (define f-expr (boolean/arr p))
   (define B 't))
 
-;; Test: Geometric(p) distribution
+#;; Test: Geometric(p) distribution
 (begin
-  (define p #i2/5)
+  (define p #i1/2)
   
   (define/drbayes (geometric-p)
     ;(lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))
@@ -265,7 +265,7 @@
   (define B-max 13.0)
   (define B (interval B-min B-max #t #t))
   
-  (let ([xs  (filter (λ: ([x : Flonum]) (<= B-min x B-max)) (sample (geometric-dist p) 100000))])
+  (let ([xs  (sample (truncated-dist (geometric-dist p) (- B-min 1.0) B-max) 50000)])
     (printf "E[x] = ~v~n" (mean xs))
     (printf "sd[x] = ~v~n" (stddev xs))))
 
@@ -294,7 +294,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 5)
@@ -309,24 +309,20 @@
     (drbayes
      (let ([x  (normal)])
        (list x
-             (list
-              (normal x)
-              (normal x)
-              (normal x))
-             (list
-              (normal x)
-              (normal x)
-              (normal x))))))
+             (normal x)
+             (normal x)
+             (normal x)
+             (normal x)
+             (normal x)
+             (normal x)))))
   (define B
     (list-rect reals
-               (list-rect
-                (interval 2.2 2.4 #t #t)
-                (interval 0.9 1.1 #t #t)
-                (interval -0.1 0.1 #t #t))
-               (list-rect
-                (interval -0.9 -0.7 #t #t)
-                (interval 0.4 0.6 #t #t)
-                (interval 1.3 1.5 #t #t))))
+               (interval 2.2 2.4 #t #t)
+               (interval 0.9 1.1 #t #t)
+               (interval -0.1 0.1 #t #t)
+               (interval -0.9 -0.7 #t #t)
+               (interval 0.4 0.6 #t #t)
+               (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
 #;
@@ -383,9 +379,9 @@
 (newline)
 
 (struct: domain-sample ([Ω : Omega-Rect]
-                        [branches : Branches-Rect]
-                        [point : Omega]
-                        [image-point : (U Void Value)]
+                        [Z : Branches-Rect]
+                        [ω : Omega]
+                        [x : (U Void Value)]
                         [measure : Flonum]
                         [prob : Flonum]
                         [weight : Flonum])
@@ -393,11 +389,13 @@
 
 (: accept-sample? (domain-sample -> Boolean))
 (define (accept-sample? s)
-  (define x (domain-sample-image-point s))
+  (define x (domain-sample-x s))
   (and (not (void? x)) (rect-member? B x)))
 
 (: orig-samples (Listof Omega-Sample))
 (define orig-samples
+  (time (refinement-sample* Ω Z idxs refine n))
+  #;
   (time
    ;profile-expr
    (let: loop : (Listof Omega-Sample) ([ss : (Listof Omega-Sample)  empty] [i : Natural  0])
@@ -457,14 +455,14 @@
         #:x-min 0 #:x-max 1 #:y-min 0 #:y-max 1 #:z-min 0 #:z-max 1
         #:x-label "x1" #:y-label "x2" #:z-label "x3")
 
-(plot3d (list (points3d (map (compose omega->point domain-sample-point) not-samples)
+(plot3d (list (points3d (map (compose omega->point domain-sample-ω) not-samples)
                         #:sym 'dot #:size 12 #:alpha all-alpha #:color 1 #:fill-color 1)
-              (points3d (map (compose omega->point domain-sample-point) samples)
+              (points3d (map (compose omega->point domain-sample-ω) samples)
                         #:sym 'dot #:size 12 #:alpha all-alpha #:color 3 #:fill-color 3))
         #:x-min 0 #:x-max 1 #:y-min 0 #:y-max 1 #:z-min 0 #:z-max 1
         #:x-label "x1" #:y-label "x2" #:z-label "x3")
 
-(plot3d (points3d (sample (discrete-dist (map (compose omega->point domain-sample-point) samples) ws)
+(plot3d (points3d (sample (discrete-dist (map (compose omega->point domain-sample-ω) samples) ws)
                           num-samples)
                   #:sym 'dot #:size 12 #:alpha alpha)
         #:x-min 0 #:x-max 1 #:y-min 0 #:y-max 1 #:z-min 0 #:z-max 1
@@ -473,9 +471,36 @@
 (: xss (Listof (Listof Flonum)))
 (define xss
   (map (λ: ([s : domain-sample])
-         (define lst (value->listof-flonum (cast (domain-sample-image-point s) Value)))
+         (define lst (value->listof-flonum (cast (domain-sample-x s) Value)))
          (maybe-pad-list lst 3 random))
        samples))
+
+#|
+(define all-Ωs (map domain-sample-Ω all-samples))
+(define all-Zs (map domain-sample-Z all-samples))
+
+(define resamples
+  (sample (discrete-dist (map (λ: ([s : (weighted-sample (Pair Omega-Rect Branches-Rect))])
+                                (weighted-sample-value s))
+                              orig-samples)
+                         (map domain-sample-weight all-samples))
+          n))
+
+(: resampled-xss (Listof (Listof Flonum)))
+(define resampled-xss
+  (let loop ([ss  resamples])
+    (cond [(empty? ss)  empty]
+          [else
+           (match-define (cons Ω Z) (first ss))
+           (define ω (omega-rect-sample-point Ω))
+           (define x (with-handlers ([if-bad-branch?  (λ (_) (void))])
+                       (f-fwd ω null Z)))
+           (cond [(and (not (void? x)) (rect-member? B x))
+                  (define lst (value->listof-flonum x))
+                  (cons (maybe-pad-list lst 3 random) (loop (rest ss)))]
+                 [else
+                  (loop (rest ss))])])))
+|#
 
 (with-handlers ([exn?  (λ (_) (printf "image points scatter plot failed~n"))])
   (plot3d (points3d xss #:sym 'dot #:size 12 #:alpha alpha)
@@ -492,11 +517,11 @@
   (plot (density ws) #:x-label "weight" #:y-label "density"))
 
 (with-handlers ([exn?  (λ (_) (printf "weight/measure scatter plot failed~n"))])
-  (plot (points (map (λ: ([p : Flonum] [m : Flonum]) (list p m)) ps ms)
+  (plot (points (map (λ: ([w : Flonum] [m : Flonum]) (list w m)) ws ms)
                 #:sym 'dot #:size 12 #:alpha alpha)
-        #:x-label "probability" #:y-label "measure"))
+        #:x-label "weight" #:y-label "measure"))
 
-(printf "Corr(P,M) = ~v~n" (correlation ps ms))
+(printf "Corr(W,M) = ~v~n" (correlation ws ms))
 
 (plot (density (sample (discrete-dist x0s ws) num-samples))
       #:x-label "x0" #:y-label "density")

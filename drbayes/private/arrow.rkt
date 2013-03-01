@@ -496,7 +496,7 @@
      (expression
       (λ (r0 r1)
         (define r (omega-expr-idx r0 r1))
-        (expression-meaning (list (cons r split))
+        (expression-meaning (list (interval-index r split))
                             (boolean/fwd r p)
                             (boolean/comp r It If))))]
     [(= p 0.0)  (c/arr #f)]

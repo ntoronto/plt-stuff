@@ -6,6 +6,7 @@
 (provide (all-defined-out))
 
 (define-type Omega-Idx Nonnegative-Exact-Rational)
+(define-predicate omega-idx? Omega-Idx)
 
 (: omega-expr-idx (Omega-Idx Omega-Idx -> Omega-Idx))
 (define (omega-expr-idx r0 r1)
@@ -132,6 +133,19 @@
              (let ([bs  (loop (Omega-Node-fst t) r0 mid bs)])
                (cond [(eq? v default)  (loop (Omega-Node-snd t) mid r1 bs)]
                      [else  (loop (Omega-Node-snd t) mid r1 (cons (f mid v) bs))]))])))
+  (reverse bs))
+
+(: omega-tree-map* (All (A B) (A -> ((Omega-Tree A) (A -> B) -> (Listof B)))))
+(define ((omega-tree-map* default) t f)
+  (: bs (Listof B))
+  (define bs
+    (let: loop ([t t] [bs : (Listof B)  null])
+      (cond [(omega-leaf? t)  bs]
+            [else
+             (define v (Omega-Node-value t))
+             (let ([bs  (loop (Omega-Node-fst t) bs)])
+               (cond [(eq? v default)  (loop (Omega-Node-snd t) bs)]
+                     [else  (loop (Omega-Node-snd t) (cons (f v) bs))]))])))
   (reverse bs))
 
 (: omega-tree-keys (All (A) (A -> ((Omega-Tree A) -> (Listof Omega-Idx)))))

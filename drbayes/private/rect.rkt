@@ -280,6 +280,12 @@
 (define (list-rect . As)
   (foldr pair-rect null-rect As))
 
+(: list*-rect (Rect Rect * -> Rect))
+(define (list*-rect A . As)
+  (let loop ([A A] [As As])
+    (cond [(empty? As)  A]
+          [else  (pair-rect A (loop (first As) (rest As)))])))
+
 ;; ===================================================================================================
 ;; Polymorphic join
 
@@ -670,6 +676,10 @@
 (define (omega-rect-map Ω f)
   (((inst omega-tree-map Interval B) unit-interval) Ω f))
 
+(: omega-rect-map* (All (B) (Omega-Rect (Interval -> B) -> (Listof B))))
+(define (omega-rect-map* Ω f)
+  (((inst omega-tree-map* Interval B) unit-interval) Ω f))
+
 (define just-omega-rect-node ((inst omega-node Interval) unit-interval))
 
 (define just-omega-rect-join
@@ -738,8 +748,7 @@
 
 (: omega-rect-measure (Omega-Rect -> Flonum))
 (define (omega-rect-measure Ω)
-  (fl (apply * (omega-rect-map Ω (λ: ([k : Omega-Idx] [A : Interval])
-                                   (interval-measure A))))))
+  (fl (apply * (omega-rect-map* Ω (λ: ([A : Interval]) (interval-measure A))))))
 
 ;; ===================================================================================================
 ;; Conditional bisection rectangles
