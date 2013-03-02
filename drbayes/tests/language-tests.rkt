@@ -34,38 +34,39 @@
                      (list*-rect 'tf 't 'f 't 'f 't 'f universal-set)))
    (list ss ws)))
 
-(print-sampler-stats)
+(printf "search-stats = ~v~n" (get-search-stats))
 
-#|
-(: racket-S (-> (U #f (Listof Boolean))))
-(define (racket-S)
-  (if ((random) . < . 0.5) (racket-T) (racket-F)))
-
-(: racket-T (-> (U #f (Listof Boolean))))
-(define (racket-T)
-  (cond [((random) . < . 0.4)  (let ([s  (racket-T)])
-                                 (and s (cons #t s)))]
-        [((random) . < . 0.5)  (let ([s  (racket-F)])
-                                 (and s (cons #t s)))]
-        [else  null]))
-
-(: racket-F (-> (U #f (Listof Boolean))))
-(define (racket-F)
-  (cond [((random) . < . 0.4)  (let ([s  (racket-F)])
-                                 (and s (cons #f s)))]
-        [((random) . < . 0.5)  (let ([s  (racket-T)])
-                                 (and s
-                                      (or (empty? s) (empty? (rest s)) (not (list-ref s 1)))
-                                      (cons #f s)))]
-        [else  null]))
-
-(time
- (let: loop : (Listof (Listof Boolean)) ([i : Nonnegative-Fixnum  0])
-   (cond [(i . < . 200)
-          (define s (racket-S))
-          (match s
-            [(list _ #t #f #t #f #t #f _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
-            [_  (loop i)])]
-         [else
-          empty])))
-|#
+#;; Racket version of the above, using rejection sampling
+(let ()
+  (: racket-S (-> (U #f (Listof Boolean))))
+  (define (racket-S)
+    (if ((random) . < . 0.5) (racket-T) (racket-F)))
+  
+  (: racket-T (-> (U #f (Listof Boolean))))
+  (define (racket-T)
+    (cond [((random) . < . 0.4)  (let ([s  (racket-T)])
+                                   (and s (cons #t s)))]
+          [((random) . < . 0.5)  (let ([s  (racket-F)])
+                                   (and s (cons #t s)))]
+          [else  null]))
+  
+  (: racket-F (-> (U #f (Listof Boolean))))
+  (define (racket-F)
+    (cond [((random) . < . 0.4)  (let ([s  (racket-F)])
+                                   (and s (cons #f s)))]
+          [((random) . < . 0.5)  (let ([s  (racket-T)])
+                                   (and s
+                                        (or (empty? s) (empty? (rest s)) (not (list-ref s 1)))
+                                        (cons #f s)))]
+          [else  null]))
+  
+  (time
+   (let: loop : (Listof (Listof Boolean)) ([i : Nonnegative-Fixnum  0])
+     (cond [(i . < . 200)
+            (define s (racket-S))
+            (match s
+              [(list _ #t #f #t #f #t #f _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
+              [_  (loop i)])]
+           [else
+            empty])))
+  )

@@ -393,18 +393,7 @@
   (and (not (void? x)) (rect-member? B x)))
 
 (: orig-samples (Listof Omega-Sample))
-(define orig-samples
-  (time (refinement-sample* Ω Z idxs refine n))
-  #;
-  (time
-   ;profile-expr
-   (let: loop : (Listof Omega-Sample) ([ss : (Listof Omega-Sample)  empty] [i : Natural  0])
-     (when (= 0 (remainder (+ i 1) 100))
-       (printf "i = ~v~n" (+ i 1))
-       (flush-output))
-     (cond [(i . < . n)  (define s (refinement-sample Ω Z idxs refine))
-                         (loop (cons s ss) (+ i 1))]
-           [else  ss]))))
+(define orig-samples (time (refinement-sample* Ω Z idxs refine n)))
 (newline)
 
 (: all-samples (Listof domain-sample))
@@ -430,7 +419,7 @@
 
 (define accept-prob (fl (/ num-samples num-all-samples)))
 
-(print-sampler-stats)
+(printf "search-stats = ~v~n" (get-search-stats))
 (newline)
 
 (printf "unique numbers of primitive rvs: ~v~n"

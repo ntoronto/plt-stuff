@@ -8,3 +8,4 @@ Custom data structures (for NLP tests)
 Fail on measure-zero Ω, not just empty Ω
 Log probabilities
 Bootstrap sampling resamples point within Ω
+Gamma distribution

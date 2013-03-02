@@ -21,8 +21,7 @@
          "rect.rkt"
          "arrow.rkt"
          "arrow-prims.rkt"
-         "expression.rkt"
-         (only-in "sample.rkt" refinement-sample))
+         "expression.rkt")
 
 (provide define/drbayes drbayes racket)
 
