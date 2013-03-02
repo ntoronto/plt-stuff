@@ -115,9 +115,7 @@
      (computation-meaning Z range (simple-preimage Ω Γ range (sqr/pre Ω Γ))))))
 
 (define sqr/arr
-  (expression
-   (λ (r0 r1)
-     (expression-meaning empty sqr/fwd (sqr/comp)))))
+  (expression (λ (r) (expression-meaning empty sqr/fwd (sqr/comp)))))
 
 ;; ===================================================================================================
 ;; Monotone R x R -> R functions

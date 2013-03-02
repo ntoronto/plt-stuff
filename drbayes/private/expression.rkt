@@ -118,7 +118,7 @@
 (: delay/exp ((-> expression) -> expression))
 (define (delay/exp e)
   (let ([e  (delay (e))])
-    (expression (λ (r0 r1) (run-expression (force e) r0 r1)))))
+    (expression (λ (r) (run-expression (force e) r)))))
 
 (: lazy-if/exp (expression (-> expression) (-> expression) -> expression))
 (define (lazy-if/exp c t f)

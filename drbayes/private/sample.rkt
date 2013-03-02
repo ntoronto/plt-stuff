@@ -42,7 +42,8 @@
     (let-values ([(Ω Γ)  (e-pre B)])
       (cond [(not (or (empty-set? Γ) (null-rect? Γ)))
              (raise-result-error 'preimage-refiner "(U Empty-Set Null-Rect)" Γ)]
-            [else  (values Ω Z)]))))
+            [else
+             (values Ω Z)]))))
 
 (: indexes->search-indexes (Indexes -> Indexes))
 (define (indexes->search-indexes idxs)
@@ -53,7 +54,6 @@
            (let-values ([(idx idxs)  (values (first idxs) (rest idxs))])
              (define new-idx
                (match idx
-                 [(? rational? idx)  (cons (interval-index idx interval-split) m)]
                  [(interval-index idx split)  (cons (interval-index idx split) m)]
                  [(if-indexes idx t-idxs f-idxs)
                   (if-indexes idx (delay (loop (force t-idxs))) (delay (loop (force f-idxs))))]

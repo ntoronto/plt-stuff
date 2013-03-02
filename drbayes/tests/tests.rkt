@@ -20,7 +20,7 @@
 
 #;
 (begin
-  (define f-expr (pair/arr random/arr random/arr))
+  (define f-expr (pair/arr random/arr (rcompose/arr random/arr sqr/arr)))
   (define I (interval 0.25 0.5 #t #t))
   (define B (pair-rect I I)))
 
@@ -261,8 +261,8 @@
   (define f-expr
     (drbayes (geometric-p)))
   
-  (define B-min 10.0)
-  (define B-max 13.0)
+  (define B-min 50.0)
+  (define B-max 51.0)
   (define B (interval B-min B-max #t #t))
   
   (let ([xs  (sample (truncated-dist (geometric-dist p) (- B-min 1.0) B-max) 50000)])
@@ -393,7 +393,7 @@
   (and (not (void? x)) (rect-member? B x)))
 
 (: orig-samples (Listof Omega-Sample))
-(define orig-samples (time (refinement-sample* Ω Z idxs refine n)))
+(define orig-samples (time #;profile-expr (refinement-sample* Ω Z idxs refine n)))
 (newline)
 
 (: all-samples (Listof domain-sample))
@@ -426,7 +426,7 @@
         (sort
          (remove-duplicates
           (map (λ: ([s : domain-sample])
-                 (length (omega-rect-domain (domain-sample-Ω s))))
+                 (length (omega-rect-map (domain-sample-Ω s) (λ (_) #t))))
                all-samples))
          <))
 (newline)

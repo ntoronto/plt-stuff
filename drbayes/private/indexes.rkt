@@ -11,8 +11,7 @@
 (define-type Interval-Splitter
   (Interval Flonum -> (Values (Listof Interval) (Listof Positive-Flonum))))
 
-(define-type Indexes (Listof (U Omega-Idx
-                                interval-index
+(define-type Indexes (Listof (U interval-index
                                 if-indexes
                                 (Pair interval-index Natural))))
 

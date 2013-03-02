@@ -131,8 +131,15 @@
         [(and (fl= a a2) (fl= b b2) (eq? a? a2?) (eq? b? b2?))  I2]
         [else  (assert (interval a b a? b?) rect-nonempty?)]))
 
-(: interval-contains? (Interval Flonum -> Boolean))
-(define (interval-contains? I x)
+(: interval-subseteq? (Interval Interval -> Boolean))
+(define (interval-subseteq? I1 I2)
+  (match-define (interval a1 b1 a1? b1?) I1)
+  (match-define (interval a2 b2 a2? b2?) I2)
+  (and (or (a1 . > . a2) (and (= a1 a2) (or (not a1?) a2?)))
+       (or (b1 . < . b2) (and (= b1 b2) (or (not b1?) b2?)))))
+
+(: interval-member? (Interval Flonum -> Boolean))
+(define (interval-member? I x)
   (match-define (interval a b a? b?) I)
   (cond [(< a x b)  #t]
         [(< x a)  #f]
@@ -183,6 +190,12 @@
         [(eq? B 'tf)  A]
         [(eq? A B)  A]
         [else  empty-set]))
+
+(: boolean-set-subseteq? (Boolean-Set Boolean-Set -> Boolean))
+(define (boolean-set-subseteq? A B)
+  (cond [(eq? B 'tf)  #t]
+        [(eq? A B)  #t]
+        [else  #f]))
 
 (: boolean-set (case-> (-> Empty-Set)
                        (#t -> 't)
@@ -243,6 +256,8 @@
 
 ;; ===================================================================================================
 ;; Pair rectangle
+
+(define-type Idx (U Symbol Natural))
 
 (: print-pair-rect (Pair-Rect Output-Port (U #t #f 0 1) -> Any))
 (define (print-pair-rect p port mode)
@@ -316,7 +331,7 @@
       [(0)  empty-set]
       [(1)  (if A0 A0 (if A1 A1 (if A2 A2 (if A3 A3 empty-set))))]  ; empty-set won't happen
       [else
-       (if (and (eq? A0 reals) A1 (eq? A2 universal-pair) (eq? A3 'tf))
+       (if (and (equal? A0 reals) A1 (eq? A2 universal-pair) (eq? A3 'tf))
            universal-set
            (Join-Rect A0 A1 A2 A3))])))
 
@@ -593,6 +608,57 @@
                 (and (rect-disjoint2? A (first Bs)) (loop1 (rest Bs)))))))))
 
 ;; ---------------------------------------------------------------------------------------------------
+;; Subset or equal
+
+(: rect-subseteq? (Rect Rect -> Boolean))
+(define (rect-subseteq? A B)
+  (cond [(empty-set? A)  #t]
+        [(empty-set? B)  #f]
+        [(universal-set? B)  #t]
+        [(universal-set? A)  #f]
+        [(eq? A B)  #t]
+        [(and (join-rect? A) (join-rect? B))  (join-join-subseteq? A B)]
+        [(join-rect? B)  (rect-join-subseteq? A B)]
+        [(join-rect? A)  #f]
+        [(and (interval? A) (interval? B))  (interval-subseteq? A B)]
+        [(and (null-rect? A) (null-rect? B))  #t]
+        [(and (pair-rect? A) (pair-rect? B))  (pair-rect-subseteq? A B)]
+        [(and (boolean-set? A) (boolean-set? B))  (boolean-set-subseteq? A B)]
+        [else  #f]))
+
+(: pair-rect-subseteq? (Pair-Rect Pair-Rect -> Boolean))
+(define (pair-rect-subseteq? A B)
+  (and (rect-subseteq? (pair-rect-fst A) (pair-rect-fst B))
+       (rect-subseteq? (pair-rect-snd A) (pair-rect-snd B))))
+
+(: maybe-rect->rect ((U #f Nonempty-Rect) -> Rect))
+(define (maybe-rect->rect A) (if A A empty-set))
+
+(: join-join-subseteq? (Join-Rect Join-Rect -> Boolean))
+(define (join-join-subseteq? A B)
+  (match-define (join-rect (app maybe-rect->rect A0)
+                           (app maybe-rect->rect A1)
+                           (app maybe-rect->rect A2)
+                           (app maybe-rect->rect A3))
+    A)
+  (match-define (join-rect (app maybe-rect->rect B0)
+                           (app maybe-rect->rect B1)
+                           (app maybe-rect->rect B2)
+                           (app maybe-rect->rect B3))
+    B)
+  (and (rect-subseteq? A0 B0)
+       (rect-subseteq? A1 B1)
+       (rect-subseteq? A2 B2)
+       (rect-subseteq? A3 B3)))
+
+(: rect-join-subseteq? (Joinable-Rect Join-Rect -> Boolean))
+(define (rect-join-subseteq? A B)
+  (cond [(interval? A)  (rect-subseteq? A (maybe-rect->rect (join-rect-interval B)))]
+        [(null-rect? A)  (null-rect? (join-rect-null-rect B))]
+        [(pair-rect? A)  (rect-subseteq? A (maybe-rect->rect (join-rect-pair-rect B)))]
+        [else  (rect-subseteq? A (maybe-rect->rect (join-rect-boolean-set B)))]))
+
+;; ---------------------------------------------------------------------------------------------------
 ;; Membership
 
 (: rect-member? (case-> (Empty-Set Value -> #f)
@@ -601,7 +667,7 @@
   (cond [(empty-set? A)  #f]
         [(universal-set? A)  #t]
         [(join-rect? A)  (join-rect-member? A x)]
-        [(interval? A)   (and (flonum? x) (interval-contains? A x))]
+        [(interval? A)   (and (flonum? x) (interval-member? A x))]
         [(null-rect? A)  (null? x)]
         [(pair-rect? A)  (and (pair? x) (pair-rect-member? A x))]
         [else            (and (boolean? x) (boolean-set-member? A x))]))
@@ -634,7 +700,6 @@
 (define omega-hash-default +nan.0)
 (define omega-hash-ref ((inst omega-tree-ref Flonum) omega-hash-default))
 (define omega-hash-set ((inst omega-tree-set Flonum) omega-hash-default))
-(define omega-hash-domain ((inst omega-tree-keys Flonum) omega-hash-default))
 
 (: omega-ref (Omega Omega-Idx -> Flonum))
 (define (omega-ref ω k)
@@ -645,9 +710,9 @@
                (set-box! h (omega-hash-set (unbox h) k x))
                x]))
 
-(: omega-domain (Omega -> (Listof Omega-Idx)))
-(define (omega-domain ω)
-  (omega-hash-domain (unbox (omega-hash ω))))
+(: omega-map (All (B) (Omega (Flonum -> B) -> (Listof B))))
+(define (omega-map ω f)
+  (((inst omega-tree-map Flonum B) omega-hash-default) (unbox (Omega-hash ω)) f))
 
 ;; ===================================================================================================
 ;; Infinite product space rectangles
@@ -672,13 +737,9 @@
 (: omega-rect Omega-Rect)
 (define omega-rect omega-leaf)
 
-(: omega-rect-map (All (B) (Omega-Rect (Omega-Idx Interval -> B) -> (Listof B))))
+(: omega-rect-map (All (B) (Omega-Rect (Interval -> B) -> (Listof B))))
 (define (omega-rect-map Ω f)
   (((inst omega-tree-map Interval B) unit-interval) Ω f))
-
-(: omega-rect-map* (All (B) (Omega-Rect (Interval -> B) -> (Listof B))))
-(define (omega-rect-map* Ω f)
-  (((inst omega-tree-map* Interval B) unit-interval) Ω f))
 
 (define just-omega-rect-node ((inst omega-node Interval) unit-interval))
 
@@ -699,7 +760,7 @@
    (Omega-Rect Interval (U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect)
                -> (U Empty-Set Omega-Rect)))
 (define (omega-rect-node/last Ω I Ω1 Ω2)
-  (cond [(and (eq? I (omega-rect-value Ω))
+  (cond [(and (equal? I (omega-rect-value Ω))
               (eq? Ω1 (omega-rect-fst Ω))
               (eq? Ω2 (omega-rect-snd Ω)))
          Ω]
@@ -735,20 +796,16 @@
         [(empty-set? Ω2)  Ω2]
         [else  (just-omega-rect-intersect Ω1 Ω2)]))
 
-(: omega-rect-domain (Omega-Rect -> (Listof Omega-Idx)))
-(define omega-rect-domain (omega-tree-keys unit-interval))
-
 (define omega-rect->omega-hash
   ((inst omega-tree->omega-tree Interval Flonum) unit-interval omega-hash-default))
 
 (: omega-rect-sample-point (Omega-Rect -> Omega))
 (define (omega-rect-sample-point Ω)
-  (Omega (box (omega-rect->omega-hash Ω (λ: ([k : Omega-Idx] [I : Interval])
-                                          (interval-sample-point I))))))
+  (Omega (box (omega-rect->omega-hash Ω interval-sample-point))))
 
 (: omega-rect-measure (Omega-Rect -> Flonum))
 (define (omega-rect-measure Ω)
-  (fl (apply * (omega-rect-map* Ω (λ: ([A : Interval]) (interval-measure A))))))
+  (fl (apply * (omega-rect-map Ω interval-measure))))
 
 ;; ===================================================================================================
 ;; Conditional bisection rectangles

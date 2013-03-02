@@ -29,14 +29,12 @@
 
 (: omega-rect->plot-rect (Omega-Rect -> (Listof ivl)))
 (define (omega-rect->plot-rect Ω)
-  (define rs (omega-rect-domain Ω))
-  (define lst (map (λ: ([r : Omega-Idx]) (interval->ivl (omega-rect-ref Ω r))) rs))
+  (define lst (omega-rect-map Ω interval->ivl))
   (maybe-pad-list lst 3 (λ () (ivl 0 1))))
 
 (: omega->point (Omega -> (Listof Flonum)))
 (define (omega->point ω)
-  (define rs (omega-domain ω))
-  (define lst (map (λ: ([r : Omega-Idx]) (omega-ref ω r)) rs))
+  (define lst (omega-map ω (λ: ([x : Flonum]) x)))
   (maybe-pad-list lst 3 random))
 
 (: value->listof-flonum (Value -> (Listof Flonum)))

@@ -31,12 +31,12 @@
    (define-values (ss ws)
      (drbayes-sample (drbayes (S))
                      200
-                     (list*-rect 'tf 't 'f 't 'f 't 'f universal-set)))
+                     (list*-rect 'tf 't 'f 't 'f 't universal-set)))
    (list ss ws)))
 
 (printf "search-stats = ~v~n" (get-search-stats))
 
-#;; Racket version of the above, using rejection sampling
+;; Racket version of the above, using rejection sampling
 (let ()
   (: racket-S (-> (U #f (Listof Boolean))))
   (define (racket-S)
@@ -65,7 +65,7 @@
      (cond [(i . < . 200)
             (define s (racket-S))
             (match s
-              [(list _ #t #f #t #f #t #f _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
+              [(list _ #t #f #t #f #t _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
               [_  (loop i)])]
            [else
             empty])))
