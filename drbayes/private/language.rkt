@@ -123,7 +123,7 @@
              #:when (raise-syntax-error 'drbayes "expected 1 or 2 arguments" #'e)
              #:attr combinator #'(λ () bottom/arr))
     
-    (pattern (~and (/ arg) (/ args ...)) #:attr combinator #'inv/exp)
+    (pattern (~and (/ arg) (/ args ...)) #:attr combinator #'recip/exp)
     (pattern (~and (/ arg0 arg1) (/ args ...)) #:attr combinator #'//exp)
     (pattern (~and e (/ args ...))
              #:when (raise-syntax-error 'drbayes "expected 1 or 2 arguments" #'e)

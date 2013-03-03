@@ -108,9 +108,9 @@
     (drbayes
      (let* ([x  (uniform -1 1)]
             [y  (uniform -1 1)])
-       (list x y (/ x y)))))
+       (list x y (* x y)))))
   
-  (define B (list-rect reals reals (interval -1.25 0.85))))
+  (define B (list-rect reals reals (interval -0.1 0.2))))
 
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:

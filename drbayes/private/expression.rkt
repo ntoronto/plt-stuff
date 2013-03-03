@@ -26,7 +26,7 @@
          (define (name x y) (rcompose/arr (pair/arr x y) f/arr))))
 
 (define-wrapped-unary/arr neg/exp neg/arr)
-(define-wrapped-unary/arr inv/exp inv/arr)
+(define-wrapped-unary/arr recip/exp recip/arr)
 (define-wrapped-unary/arr exp/exp exp/arr)
 (define-wrapped-unary/arr log/exp log/arr)
 (define-wrapped-unary/arr sqrt/exp sqrt/arr)
