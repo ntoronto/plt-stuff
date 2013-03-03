@@ -14,14 +14,6 @@
 
 (provide (all-defined-out))
 
-;; Refinement control
-
-(: interval-max-splits (Parameterof Natural))
-(define interval-max-splits (make-parameter 5))
-
-(: interval-min-length (Parameterof Nonnegative-Flonum))
-(define interval-min-length (make-parameter 1e-14))
-
 ;; ===================================================================================================
 
 (define-type Omega-Pair (Pair Omega-Rect Branches-Rect))
@@ -45,67 +37,6 @@
             [else
              (values Ω Z)]))))
 
-(: indexes->search-indexes (Indexes -> Indexes))
-(define (indexes->search-indexes idxs)
-  (define m (interval-max-splits))
-  (let loop ([idxs idxs])
-    (cond [(empty? idxs)  empty]
-          [else
-           (let-values ([(idx idxs)  (values (first idxs) (rest idxs))])
-             (define new-idx
-               (match idx
-                 [(interval-index idx split)  (cons (interval-index idx split) m)]
-                 [(if-indexes idx t-idxs f-idxs)
-                  (if-indexes idx (delay (loop (force t-idxs))) (delay (loop (force f-idxs))))]
-                 [_  idx]))
-             (cons new-idx (loop idxs)))])))
-
-(: build-search-tree (Omega-Rect Branches-Rect Indexes Refiner -> Omega-Search-Tree))
-(define (build-search-tree Ω Z idxs refine)
-  (define min-length (interval-min-length))
-  (let: loop ([Ω : (U Empty-Set Omega-Rect)  Ω] [Z Z] [idxs  (indexes->search-indexes idxs)])
-    (cond
-      [(empty-set? Ω)  (failure-leaf)]
-      [else
-       (match idxs
-         [(cons (cons (and iidx (interval-index idx split)) m) idxs)
-          (cond
-            [(zero? m)  (loop Ω Z idxs)]
-            [else
-             (define I (omega-rect-ref Ω idx))
-             (define-values (Is ls) (split I min-length))
-             (cond
-               [(or (empty? Is) (empty? ls))
-                (loop Ω Z idxs)]
-               [(or (empty? (rest Is)) (empty? (rest ls)))
-                (let-values ([(Ω Z)  (refine (omega-rect-set Ω idx (first Is)) Z)])
-                  (loop Ω Z idxs))]
-               [else
-                (: make-node (Interval -> (Promise Omega-Search-Tree)))
-                (define (make-node I)
-                  (delay (let-values ([(Ω Z)  (refine (omega-rect-set Ω idx I) Z)])
-                           (loop Ω Z (cons (cons iidx (- m 1)) idxs)))))
-                
-                (search-node (map/+2 make-node Is) (normalize-probs/+2 ls) 'splits)])])]
-         [(cons (if-indexes idx t-idxs f-idxs) idxs)
-          (: make-node ((U 't 'f) (Promise Indexes) -> Omega-Search-Tree))
-          (define (make-node b b-idxs)
-            (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z idx b))])
-              (loop Ω Z (append (force b-idxs) idxs))))
-          
-          (define b (branches-rect-ref Z idx))
-          (case b
-            [(t)  (make-node 't t-idxs)]
-            [(f)  (make-node 'f f-idxs)]
-            [else  (search-node (list (delay (make-node 't t-idxs)) (delay (make-node 'f f-idxs)))
-                                (list 0.5 0.5)
-                                'branches)])]
-         [(cons idx idxs)
-          (error 'build-search-tree "internal error: did not expect index ~e" idx)]
-         [(list)
-          (success-leaf (cons Ω Z))])])))
-
-
 (: refinement-sample* (Omega-Rect Branches-Rect Indexes Refiner Natural -> (Listof Omega-Sample)))
 (define (refinement-sample* Ω Z idxs refine n)
   (define t (build-search-tree Ω Z idxs refine))
@@ -113,6 +44,58 @@
   (map (λ: ([t : (success-leaf Omega-Pair)] [p : Flonum])
          (weighted-sample (success-leaf-value t) p))
        ts ps))
+
+(: build-search-tree ((U Empty-Set Omega-Rect) Branches-Rect Indexes Refiner -> Omega-Search-Tree))
+(define (build-search-tree Ω Z idxs refine)
+  (cond
+    [(empty-set? Ω)  (failure-leaf)]
+    [(empty? idxs)  (success-leaf (cons Ω Z))]
+    [(if-indexes? (first idxs))
+     (build-search-tree/if Ω Z (first idxs) (rest idxs) refine)]
+    [else  
+     (build-search-tree/ivl Ω Z (first idxs) (rest idxs) refine)]))
+
+(: build-search-tree/if (Omega-Rect Branches-Rect if-indexes Indexes Refiner
+                                    -> Omega-Search-Tree))
+(define (build-search-tree/if Ω Z idx idxs refine)
+  (match-define (if-indexes i t-idxs f-idxs) idx)
+  
+  (: make-node ((U 't 'f) (Promise Indexes) -> Omega-Search-Tree))
+  (define (make-node b b-idxs)
+    (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z i b))])
+      (build-search-tree Ω Z (append (force b-idxs) idxs) refine)))
+  
+  (define b (branches-rect-ref Z i))
+  (case b
+    [(t)  (make-node 't t-idxs)]
+    [(f)  (make-node 'f f-idxs)]
+    [else  (search-node (list (delay (make-node 't t-idxs)) (delay (make-node 'f f-idxs)))
+                        (list 0.5 0.5)
+                        'branches)]))
+
+(: build-search-tree/ivl (Omega-Rect Branches-Rect interval-index Indexes Refiner
+                                     -> Omega-Search-Tree))
+(define (build-search-tree/ivl Ω Z idx idxs refine)
+  (match-define (interval-index i split m min-length) idx)
+  (cond
+    [(zero? m)  (build-search-tree Ω Z idxs refine)]
+    [else
+     (define I (omega-rect-ref Ω i))
+     (define-values (Is ls) (split I min-length))
+     (cond
+       [(or (empty? Is) (empty? ls))
+        (build-search-tree Ω Z idxs refine)]
+       [(or (empty? (rest Is)) (empty? (rest ls)))
+        (let-values ([(Ω Z)  (refine (omega-rect-set Ω i (first Is)) Z)])
+          (build-search-tree Ω Z idxs refine))]
+       [else
+        (: make-node (Interval -> (Promise Omega-Search-Tree)))
+        (define (make-node I)
+          (delay (let-values ([(Ω Z)  (refine (omega-rect-set Ω i I) Z)]
+                              [(idx)  (interval-index i split (- m 1) min-length)])
+                   (build-search-tree Ω Z (cons idx idxs) refine))))
+        
+        (search-node (map/+2 make-node Is) (normalize-probs/+2 ls) 'splits)])]))
 
 ;; ===================================================================================================
 ;; Front end to sampler

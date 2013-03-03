@@ -8,24 +8,35 @@
 
 (provide (all-defined-out))
 
+(: interval-max-splits (Parameterof Natural))
+(define interval-max-splits (make-parameter 5))
+
+(: interval-min-length (Parameterof Nonnegative-Flonum))
+(define interval-min-length (make-parameter 1e-14))
+
 (define-type Interval-Splitter
   (Interval Flonum -> (Values (Listof Interval) (Listof Positive-Flonum))))
 
-(define-type Indexes (Listof (U interval-index
-                                if-indexes
-                                (Pair interval-index Natural))))
+(define-type Indexes (Listof (U interval-index if-indexes)))
 
-(struct: interval-index ([index : Omega-Idx] [split : Interval-Splitter])
+(struct: interval-index ([index : Omega-Idx]
+                         [split : Interval-Splitter]
+                         [count : Natural]
+                         [min-length : Nonnegative-Flonum])
   #:transparent)
 (struct: if-indexes ([index : Omega-Idx] [true : (Promise Indexes)] [false : (Promise Indexes)])
   #:transparent)
+
+(: make-interval-index (Omega-Idx Interval-Splitter -> interval-index))
+(define (make-interval-index idx split)
+  (interval-index idx split (interval-max-splits) (interval-min-length)))
 
 (: interval-split Interval-Splitter)
 (define (interval-split I min-ivl)
   (match-define (interval a b a? b?) I)
   (cond [((fl- b a) . fl<= . min-ivl)  (values (list I) (list 1.0))]
         [else
-         (define c (* 0.5 (+ a b)))
+         (define c (fl* 0.5 (fl+ a b)))
          (define m1 (fl- c a))
          (define m2 (fl- b c))
          (cond [(and (positive? m1) (positive? m2))

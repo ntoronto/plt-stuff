@@ -454,7 +454,7 @@
   (expression
    (λ (r)
      (define idx (reverse r))
-     (expression-meaning (list (interval-index idx interval-split))
+     (expression-meaning (list (make-interval-index idx interval-split))
                          (random/fwd idx)
                          (random/comp)))))
 
@@ -502,7 +502,7 @@
      (expression
       (λ (r)
         (define idx (reverse r))
-        (expression-meaning (list (interval-index idx split))
+        (expression-meaning (list (interval-index idx split 1 0.0))
                             (boolean/fwd idx p)
                             (boolean/comp It If))))]
     [(= p 0.0)  (c/arr #f)]
