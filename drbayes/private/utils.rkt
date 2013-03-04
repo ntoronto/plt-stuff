@@ -2,6 +2,7 @@
 
 (require racket/list
          racket/promise
+         racket/unsafe/ops
          math/flonum
          math/distributions)
 
@@ -44,10 +45,9 @@
   (let ([p p-expr])
     (if (promise? p) (force p) p)))
 
-(: index-dist ((Listof Real) -> (Discrete-Dist Index)))
-(define (index-dist ps)
-  (discrete-dist (build-list (length ps) (λ: ([i : Index]) i)) ps))
-
-(: sample-index ((Listof Real) -> Index))
+(: sample-index ((Listof+2 Flonum) -> Index))
 (define (sample-index ps)
-  (sample (index-dist ps)))
+  (define r (random))
+  (let: loop ([i : Nonnegative-Fixnum  0] [p  (first ps)] [ps  (rest ps)])
+    (cond [(or (empty? ps) (r . < . p))  (assert i index?)]
+          [else  (loop (unsafe-fx+ i 1) (+ p (first ps)) (rest ps))])))
