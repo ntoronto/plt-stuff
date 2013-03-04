@@ -37,35 +37,33 @@
 ;; ===================================================================================================
 ;; Search
 
-(: sample-search-tree (All (T) ((Search-Tree T) -> (Values (Search-Tree T) Flonum))))
+(: sample-search-tree (All (T) ((Search-Tree T) Flonum -> (Values (Search-Tree T) Flonum))))
 ;; Straightforward sampler, useful only for rejection sampling
 ;; Returns a leaf in the search tree, and the probability of finding that leaf
-(define (sample-search-tree t)
-  (let loop ([t t] [p 1.0])
-    (cond [(search-node? t)
-           (match-define (search-node cs qs name) t)
-           (increment-search-stat name)
-           (define i (sample-index qs))
-           (define c (list-ref cs i))
-           (define q (list-ref qs i))
-           (loop (maybe-force c) (* p q))]
-          [else
-           (values t p)])))
+(define (sample-search-tree t p)
+  (cond [(search-node? t)
+         (match-define (search-node cs qs name) t)
+         (increment-search-stat name)
+         (define i (sample-index qs))
+         (define c (list-ref cs i))
+         (define q (list-ref qs i))
+         (sample-search-tree (maybe-force c) (* p q))]
+        [else
+         (values t p)]))
 
 (: sample-search-tree/remove-failure
-   (All (T) ((Search-Tree T) -> (Values (Search-Leaf T) Flonum (Search-Tree T)))))
+   (All (T) ((Search-Tree T) Flonum -> (Values (Search-Leaf T) Flonum (Search-Tree T)))))
 ;; Like `sample-search-tree', but when it returns failure, it also returns a tree without that failure
 ;; The returned tree is equivalent in the sense that successes are returned with the same
 ;; probabilities in future searches (up to floating-point error)
-(define (sample-search-tree/remove-failure t)
+(define (sample-search-tree/remove-failure t u)
   (cond [(search-node? t)
          (match-define (search-node cs qs name) t)
          ;(increment-search-stat name)
          (define i (sample-index qs))
          (define c (list-ref cs i))
          (define q (list-ref qs i))
-         (let*-values ([(s p c)  (sample-search-tree/remove-failure (maybe-force c))]
-                       [(p)  (* p q)])
+         (let-values ([(s p c)  (sample-search-tree/remove-failure (maybe-force c) q)])
            (define new-t
              (cond [(not (failure-leaf? s))  t]
                    [(q . > . p)
@@ -79,9 +77,9 @@
                              (maybe-force (first cs))]
                             [else
                              (search-node cs (normalize-probs/+2 qs) name)]))]))
-           (values s p new-t))]
+           (values s (* p u) new-t))]
         [else
-         (values t 1.0 t)]))
+         (values t u t)]))
 
 (: sample-search-tree* (All (T) ((Search-Tree T) Integer -> (Values (Listof (success-leaf T))
                                                                     (Listof Flonum)))))
@@ -92,16 +90,16 @@
      (define: ss : (Listof (success-leaf T))  empty)
      (define: ps : (Listof Flonum)  empty)
      (let: loop ([i : Nonnegative-Fixnum  0] [ss ss] [ps ps] [t t] [q 1.0])
-       (cond [(i . < . n)
-              (when (= 0 (remainder (+ i 1) 100))
-                (printf "i = ~v~n" (+ i 1))
-                (flush-output))
-              (let*-values ([(s p t)  (sample-search-tree/remove-failure t)]
-                            [(p)  (* p q)])
+       (cond [(and (i . < . n) (q . > . 0.0) (not (failure-leaf? t)))
+              (let-values ([(s p t)  (sample-search-tree/remove-failure t q)])
                 (cond [(success-leaf? s)
-                       (loop (+ i 1) (list* s ss) (cons p ps) t q)]
+                       (let ([i  (+ i 1)])
+                         (when (= 0 (remainder i 100))
+                           (printf "i = ~v~n" i)
+                           (flush-output))
+                         (loop i (list* s ss) (cons p ps) t q))]
                       [else
-                       (increment-search-stat 'backtracks)
+                       (increment-search-stat 'restarts)
                        (loop i ss ps t (- q p))]))]
              [else  (values ss ps)]))]
     [else
