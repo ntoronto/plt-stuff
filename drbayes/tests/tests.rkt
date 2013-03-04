@@ -314,6 +314,7 @@
              (normal x)
              (normal x)
              (normal x)
+             (normal x)
              (normal x)))))
   (define B
     (list-rect reals
@@ -322,8 +323,9 @@
                (interval -0.1 0.1 #t #t)
                (interval -0.9 -0.7 #t #t)
                (interval 0.4 0.6 #t #t)
-               (interval 1.3 1.5 #t #t)))
-  (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
+               (interval 1.3 1.5 #t #t)
+               (interval -2.5 -2.3 #t #t)))
+  (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4 -2.4) '(1.0 1.0 1.0 1.0 1.0 1.0 1.0)))
 
 #;
 (begin
@@ -393,7 +395,10 @@
   (and (not (void? x)) (rect-member? B x)))
 
 (: orig-samples (Listof Omega-Sample))
-(define orig-samples (time #;profile-expr (refinement-sample* Ω Z idxs refine n)))
+(define orig-samples
+  (time
+   ;profile-expr
+   (refinement-sample* Ω Z idxs refine n)))
 (newline)
 
 (: all-samples (Listof domain-sample))

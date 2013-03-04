@@ -26,7 +26,7 @@
 
 (struct: failure-leaf () #:transparent)
 (struct: (T) success-leaf ([value : T]) #:transparent)
-(struct: (T) search-node ([trees : (Listof+2 (U (Search-Tree T) (Promise (Search-Tree T))))]
+(struct: (T) search-node ([trees : (Listof+2 (U (Promise (Search-Tree T)) (Search-Tree T)))]
                           [probs : (Listof+2 Flonum)]  ; assumes (flsum probs) ≈ 1.0
                           [name : Symbol])
   #:transparent)
@@ -37,7 +37,7 @@
 ;; ===================================================================================================
 ;; Search
 
-(: sample-search-tree (All (T) ((Search-Tree T) -> (Values (Search-Leaf T) Flonum))))
+(: sample-search-tree (All (T) ((Search-Tree T) -> (Values (Search-Tree T) Flonum))))
 ;; Straightforward sampler, useful only for rejection sampling
 ;; Returns a leaf in the search tree, and the probability of finding that leaf
 (define (sample-search-tree t)
@@ -60,7 +60,7 @@
 (define (sample-search-tree/remove-failure t)
   (cond [(search-node? t)
          (match-define (search-node cs qs name) t)
-         (increment-search-stat name)
+         ;(increment-search-stat name)
          (define i (sample-index qs))
          (define c (list-ref cs i))
          (define q (list-ref qs i))
@@ -91,18 +91,18 @@
     [(index? n)
      (define: ss : (Listof (success-leaf T))  empty)
      (define: ps : (Listof Flonum)  empty)
-     (let: loop ([i : Nonnegative-Fixnum  0] [ss ss] [ps ps] [t t] [1-q 0.0])
+     (let: loop ([i : Nonnegative-Fixnum  0] [ss ss] [ps ps] [t t] [q 1.0])
        (cond [(i . < . n)
               (when (= 0 (remainder (+ i 1) 100))
                 (printf "i = ~v~n" (+ i 1))
                 (flush-output))
               (let*-values ([(s p t)  (sample-search-tree/remove-failure t)]
-                            [(p)  (* p (- 1.0 1-q))])
+                            [(p)  (* p q)])
                 (cond [(success-leaf? s)
-                       (loop (+ i 1) (cons s ss) (cons p ps) t 1-q)]
+                       (loop (+ i 1) (list* s ss) (cons p ps) t q)]
                       [else
                        (increment-search-stat 'backtracks)
-                       (loop i ss ps t (+ 1-q p))]))]
+                       (loop i ss ps t (- q p))]))]
              [else  (values ss ps)]))]
     [else
      (raise-argument-error 'sample-search-tree* "Index" 1 t n)]))
