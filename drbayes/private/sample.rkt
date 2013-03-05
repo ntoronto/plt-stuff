@@ -49,7 +49,7 @@
 (define (build-search-tree Ω Z idxs refine)
   (cond
     [(empty-set? Ω)  (failure-leaf)]
-    [(empty? idxs)  (success-leaf (cons Ω Z))]
+    [(empty? idxs)  (success-leaf (cons Ω Z) (omega-rect-measure Ω))]
     [(if-indexes? (first idxs))
      (build-search-tree/if Ω Z (first idxs) (rest idxs) refine)]
     [else  

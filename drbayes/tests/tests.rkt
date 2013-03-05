@@ -170,13 +170,14 @@
   (define B (list-rect reals (interval 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
-#;; Test: thermometer that goes to 100
+;; Test: thermometer that goes to 100
 (begin
   (interval-max-splits 5)
+  (interval-min-length 0.0)
   (define f-expr
     (drbayes
      (let* ([x  (normal 90 10)]
-            [y  (normal x)])
+            [y  (- x (normal))])
        (list x (strict-if (y . > . 100) 100 y)))))
   
   (define B (list-rect reals (interval 100.0 100.0))))
@@ -294,10 +295,10 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
-  (interval-max-splits 5)
+  (interval-max-splits 6)
   ;(interval-min-length (flexpt 0.5 14.0))
   
   (define/drbayes (list-append lst1 lst2)
@@ -314,7 +315,6 @@
              (normal x)
              (normal x)
              (normal x)
-             (normal x)
              (normal x)))))
   (define B
     (list-rect reals
@@ -323,9 +323,8 @@
                (interval -0.1 0.1 #t #t)
                (interval -0.9 -0.7 #t #t)
                (interval 0.4 0.6 #t #t)
-               (interval 1.3 1.5 #t #t)
-               (interval -2.5 -2.3 #t #t)))
-  (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4 -2.4) '(1.0 1.0 1.0 1.0 1.0 1.0 1.0)))
+               (interval 1.3 1.5 #t #t)))
+  (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
 #;
 (begin
