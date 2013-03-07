@@ -44,6 +44,8 @@
 
 (define-syntax (strict-if stx) (undefined-outside-drbayes stx))
 (define-syntax (strict-cond stx) (undefined-outside-drbayes stx))
+(define-syntax (prim-if stx) (undefined-outside-drbayes stx))
+(define-syntax (prim-cond stx) (undefined-outside-drbayes stx))
 (define-syntax (lazy-if stx) (undefined-outside-drbayes stx))
 (define-syntax (lazy-cond stx) (undefined-outside-drbayes stx))
 (define-syntax (uniform stx) (undefined-outside-drbayes stx))

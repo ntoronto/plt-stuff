@@ -193,6 +193,20 @@
                             bottom/arr)))
 
 (define */arr
+  (prim-if/arr (rcompose/arr (ref/arr 'fst) positive?/arr)
+               (prim-if/arr (rcompose/arr (ref/arr 'snd) positive?/arr)
+                            pos-pos-mul/arr
+                            (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
+                                         pos-neg-mul/arr
+                                         (c/arr 0.0 (pair-rect reals reals))))
+               (prim-if/arr (rcompose/arr (ref/arr 'fst) negative?/arr)
+                            (prim-if/arr (rcompose/arr (ref/arr 'snd) positive?/arr)
+                                         neg-pos-mul/arr
+                                         (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
+                                                      neg-neg-mul/arr
+                                                      (c/arr 0.0 (pair-rect reals reals))))
+                            (c/arr 0.0 (pair-rect reals reals))))
+  #;
   (prim-if/arr (rcompose/arr (ref/arr 'fst) negative?/arr)
                (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
                             neg-neg-mul/arr

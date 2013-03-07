@@ -18,9 +18,9 @@
   (lazy-cond [(boolean (const 0.4))  (cons #f (F))]
              [(boolean (const 0.5))  #;(cons #f (T))
                                      (cons #f (let ([s  (T)])
-                                                (strict-if (list-ref s (const 1))
-                                                           (fail)
-                                                           s)))]
+                                                (prim-if (list-ref s (const 1))
+                                                         (fail)
+                                                         s)))]
              [else  null]))
 
 #;
@@ -34,9 +34,15 @@
                      (list*-rect 'tf 't 'f 't 'f 't universal-set)))
    (list ss ws)))
 
-(printf "search-stats = ~v~n" (get-search-stats))
+(printf "search stats:~n")
+(get-search-stats)
+(newline)
 
-;; Racket version of the above, using rejection sampling
+(printf "cache stats:~n")
+(get-cache-stats)
+(newline)
+
+#;; Racket version of the above, using rejection sampling
 (let ()
   (: racket-S (-> (U #f (Listof Boolean))))
   (define (racket-S)
@@ -56,7 +62,7 @@
                                    (and s (cons #f s)))]
           [((random) . < . 0.5)  (let ([s  (racket-T)])
                                    (and s
-                                        (or (empty? s) (empty? (rest s)) (not (list-ref s 1)))
+                                        #;(or (empty? s) (empty? (rest s)) (not (list-ref s 1)))
                                         (cons #f s)))]
           [else  null]))
   
@@ -65,7 +71,8 @@
      (cond [(i . < . 200)
             (define s (racket-S))
             (match s
-              [(list _ #t #f #t #f #t _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
+              #;[(list _ #t #f #t #f #t _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
+              [_  (cons (cast s (Listof Boolean)) (loop (+ i 1)))]
               [_  (loop i)])]
            [else
             empty])))

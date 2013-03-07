@@ -255,8 +255,9 @@
     (syntax-parse stx #:literals (const
                                   racket
                                   lazy
-                                  strict-if lazy-if
-                                  strict-cond lazy-cond
+                                  prim-if prim-cond
+                                  strict-if strict-cond
+                                  lazy-if lazy-cond
                                   let let*
                                   list-ref scale translate boolean)
       [(_ e:constant)
@@ -281,11 +282,20 @@
       [(_ (lazy e:expr))
        (syntax/loc stx (delay/exp (λ () (parse e))))]
       
+      [(_ (~and (prim-if . _) ~! e:if-expr))
+       (syntax/loc stx (prim-if/arr (parse e.cond) (parse e.then) (parse e.else)))]
+      
       [(_ (~and (lazy-if . _) ~! e:if-expr))
        (syntax/loc stx (lazy-if/exp (parse e.cond) (λ () (parse e.then)) (λ () (parse e.else))))]
       
       [(_ (~and (strict-if . _) ~! e:if-expr))
        (syntax/loc stx (strict-if/exp (parse e.cond) (λ () (parse e.then)) (λ () (parse e.else))))]
+      
+      [(_ (~and (prim-cond _) ~! (prim-cond e:cond-else)))
+       (syntax/loc stx (parse e.expr))]
+      
+      [(_ (~and (prim-cond . _) ~! (prim-cond c0:cond-case c:cond-case ... ~! e:cond-else)))
+       (syntax/loc stx (parse (prim-if c0.cond c0.then (prim-cond c ... e))))]
       
       [(_ (~and (lazy-cond _) ~! (lazy-cond e:cond-else)))
        (syntax/loc stx (parse e.expr))]

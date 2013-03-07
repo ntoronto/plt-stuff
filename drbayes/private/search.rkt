@@ -10,6 +10,8 @@
 ;; ===================================================================================================
 ;; Statistics
 
+(define search-stats? #f)
+
 (define: search-stats : (HashTable Symbol Natural)  (make-hasheq empty))
 
 (: increment-search-stat (Symbol -> Void))
@@ -19,8 +21,13 @@
 (define (reset-search-stats)
   (set! search-stats ((inst make-hasheq Symbol Natural) empty)))
 
+(: get-search-stats (-> (Listof (Pair Symbol Natural))))
 (define (get-search-stats)
-  search-stats)
+  ((inst sort (Pair Symbol Natural) String)
+   (hash-map search-stats (λ: ([k : Symbol] [v : Natural]) (cons k v)))
+   string<?
+   #:key (λ: ([kv : (Pair Symbol Natural)]) (symbol->string (car kv)))
+   #:cache-keys? #t))
 
 ;; ===================================================================================================
 ;; Search tree types
@@ -44,7 +51,7 @@
 (define (sample-search-tree t p)
   (cond [(search-node? t)
          (match-define (search-node cs qs name) t)
-         (increment-search-stat name)
+         (when search-stats? (increment-search-stat name))
          (define i (sample-index qs))
          (define c (list-ref cs i))
          (define q (list-ref qs i))
@@ -60,7 +67,7 @@
 (define (sample-search-tree/remove-failure t p)
   (cond [(search-node? t)
          (match-define (search-node cs qs name) t)
-         ;(increment-search-stat name)
+         (when search-stats? (increment-search-stat name))
          (define i (sample-index qs))
          (define c (list-ref cs i))
          (define q (list-ref qs i))
@@ -103,7 +110,7 @@
                            (flush-output))
                          (loop i (list* s ss) (cons p ps) t q))]
                       [else
-                       (increment-search-stat 'restarts)
+                       (when search-stats? (increment-search-stat 'restarts))
                        (loop i ss ps t q)]))]
              [else  (values ss ps)]))]
     [else

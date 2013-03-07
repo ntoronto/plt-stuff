@@ -25,13 +25,13 @@
 
 ;; ===================================================================================================
 
-(define-type Refiner
-  ((U Empty-Set Omega-Rect) Branches-Rect -> (Values (U Empty-Set Omega-Rect) Branches-Rect)))
+(define-type Refiner (Omega-Rect Branches-Rect -> (Values Maybe-Omega-Rect Maybe-Branches-Rect)))
 
 (: preimage-refiner (Computation Nonempty-Rect -> Refiner))
-(define ((preimage-refiner e-comp B) Ω Z)
-  (match-let ([(computation-meaning Z _ e-pre)  (e-comp Ω null-rect Z)])
-    (let-values ([(Ω Γ)  (e-pre B)])
+(define ((preimage-refiner e-comp K) Ω Z)
+  (match-let ([(computation-meaning _ Ze e-pre)  (e-comp Ω null-rect)])
+    (let*-values ([(Z)  (branches-rect-intersect Z Ze)]
+                  [(Ω Γ)  (e-pre K Z)])
       (cond [(not (or (empty-set? Γ) (null-rect? Γ)))
              (raise-result-error 'preimage-refiner "(U Empty-Set Null-Rect)" Γ)]
             [else
@@ -45,10 +45,10 @@
          (weighted-sample (success-leaf-value t) p))
        ts ps))
 
-(: build-search-tree ((U Empty-Set Omega-Rect) Branches-Rect Indexes Refiner -> Omega-Search-Tree))
+(: build-search-tree (Maybe-Omega-Rect Maybe-Branches-Rect Indexes Refiner -> Omega-Search-Tree))
 (define (build-search-tree Ω Z idxs refine)
   (cond
-    [(empty-set? Ω)  (failure-leaf)]
+    [(or (empty-set? Ω) (empty-set? Z))  (failure-leaf)]
     [(empty? idxs)  (success-leaf (cons Ω Z) (omega-rect-measure Ω))]
     [(if-indexes? (first idxs))
      (build-search-tree/if Ω Z (first idxs) (rest idxs) refine)]
@@ -60,10 +60,10 @@
 (define (build-search-tree/if Ω Z idx idxs refine)
   (match-define (if-indexes i t-idxs f-idxs) idx)
   
-  (: make-node ((U 't 'f) (Promise Indexes) -> Omega-Search-Tree))
+  (: make-node ((U 't 'f) (-> Indexes) -> Omega-Search-Tree))
   (define (make-node b b-idxs)
     (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z i b))])
-      (build-search-tree Ω Z (append (force b-idxs) idxs) refine)))
+      (build-search-tree Ω Z (append (b-idxs) idxs) refine)))
   
   (define b (branches-rect-ref Z i))
   (case b
@@ -102,15 +102,15 @@
 
 (: drbayes-sample (case-> (expression Natural -> (Values (Listof Value) (Listof Flonum)))
                           (expression Natural Rect -> (Values (Listof Value) (Listof Flonum)))))
-(define (drbayes-sample f n [B universal-set])
+(define (drbayes-sample f n [K universal-set])
   (match-define (expression-meaning idxs f-fwd f-comp) (run-expression f))
   
   (define (empty-set-error)
     (error 'drbayes-sample "cannot sample from the empty set"))
   
   (define refine
-    (cond [(empty-set? B)  (empty-set-error)]
-          [else  (preimage-refiner f-comp B)]))
+    (cond [(empty-set? K)  (empty-set-error)]
+          [else  (preimage-refiner f-comp K)]))
   
   (define-values (Ω Z)
     (let-values ([(Ω Z)  (refine omega-rect branches-rect)])
@@ -126,13 +126,12 @@
             [else
              (match-define (weighted-sample (cons Ω Z) p) (first omega-samples))
              (define ω (omega-rect-sample-point Ω))
-             (with-handlers ([if-bad-branch?  (λ (_) (loop (rest omega-samples)))])
-               (define x (f-fwd ω null Z))
-               (cond [(rect-member? B x)
-                      (define m (omega-rect-measure Ω))
-                      (cons (weighted-sample x (/ m p)) (loop (rest omega-samples)))]
-                     [else
-                      (loop (rest omega-samples))]))])))
+             (define-values (k z) (f-fwd ω null))
+             (cond [(and (rect-member? K k) (not (empty-set? (branches-rect-intersect Z z))))
+                    (define m (omega-rect-measure Ω))
+                    (cons (weighted-sample k (/ m p)) (loop (rest omega-samples)))]
+                   [else
+                    (loop (rest omega-samples))])])))
   
   (values (map (inst weighted-sample-value Value) image-samples)
           (map (inst weighted-sample-weight Value) image-samples)))

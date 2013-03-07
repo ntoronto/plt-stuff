@@ -24,7 +24,7 @@
                          [count : Natural]
                          [min-length : Nonnegative-Flonum])
   #:transparent)
-(struct: if-indexes ([index : Omega-Idx] [true : (Promise Indexes)] [false : (Promise Indexes)])
+(struct: if-indexes ([index : Omega-Idx] [true : (-> Indexes)] [false : (-> Indexes)])
   #:transparent)
 
 (: make-interval-index (Omega-Idx Interval-Splitter -> interval-index))

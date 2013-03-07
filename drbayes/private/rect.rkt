@@ -718,9 +718,10 @@
 ;; Infinite product space rectangles
 
 (define-type Omega-Rect (Omega-Tree Interval))
+(define-type Maybe-Omega-Rect (U Empty-Set Omega-Rect))
 
 (define omega-nonempty?
-  (λ: ([Ω : (U Empty-Set Omega-Rect)]) (not (empty-set? Ω))))
+  (λ: ([Ω : Maybe-Omega-Rect]) (not (empty-set? Ω))))
 
 (define omega-rect-ref ((inst omega-tree-ref Interval) unit-interval))
 (define omega-rect-set ((inst omega-tree-set Interval) unit-interval))
@@ -742,23 +743,17 @@
   (((inst omega-tree-map Interval B) unit-interval) Ω f))
 
 (define just-omega-rect-node ((inst omega-node Interval) unit-interval))
-
-(define just-omega-rect-join
-  ((inst omega-tree-join Interval) unit-interval interval-join))
-
+(define just-omega-rect-join ((inst omega-tree-join Interval) unit-interval interval-join))
 (define just-omega-rect-intersect
   ((inst omega-tree-intersect Interval Empty-Set) unit-interval interval-intersect empty-set?))
 
-(: omega-rect-node
-   (Interval (U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect)))
+(: omega-rect-node (Interval Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect))
 (define (omega-rect-node I Ω1 Ω2)
   (cond [(empty-set? Ω1)  Ω1]
         [(empty-set? Ω2)  Ω2]
         [else  (just-omega-rect-node I Ω1 Ω2)]))
 
-(: omega-rect-node/last
-   (Omega-Rect Interval (U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect)
-               -> (U Empty-Set Omega-Rect)))
+(: omega-rect-node/last (Omega-Rect Interval Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect))
 (define (omega-rect-node/last Ω I Ω1 Ω2)
   (cond [(and (equal? I (omega-rect-value Ω))
               (eq? Ω1 (omega-rect-fst Ω))
@@ -766,31 +761,22 @@
          Ω]
         [else  (unit-omega-rect-node Ω1 Ω2)]))
 
-(: unit-omega-rect-node
-   ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect)))
+(: unit-omega-rect-node (Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect))
 (define (unit-omega-rect-node Ω1 Ω2)
   (omega-rect-node unit-interval Ω1 Ω2))
 
-(: unit-omega-rect-node/last
-   (Omega-Rect (U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect)))
+(: unit-omega-rect-node/last (Omega-Rect Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect))
 (define (unit-omega-rect-node/last Ω Ω1 Ω2)
   (cond [(and (eq? Ω1 (omega-rect-fst Ω)) (eq? Ω2 (omega-rect-snd Ω)))  Ω]
         [else  (unit-omega-rect-node Ω1 Ω2)]))
 
-(: omega-rect-join
-   (case-> (Empty-Set Empty-Set -> Empty-Set)
-           ((U Empty-Set Omega-Rect) Omega-Rect -> Omega-Rect)
-           (Omega-Rect (U Empty-Set Omega-Rect) -> Omega-Rect)
-           ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
+(: omega-rect-join (Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect))
 (define (omega-rect-join Ω1 Ω2)
   (cond [(empty-set? Ω1)  Ω2]
         [(empty-set? Ω2)  Ω1]
         [else  (just-omega-rect-join Ω1 Ω2)]))
 
-(: omega-rect-intersect
-   (case-> (Empty-Set (U Empty-Set Omega-Rect) -> Empty-Set)
-           ((U Empty-Set Omega-Rect) Empty-Set -> Empty-Set)
-           ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) -> (U Empty-Set Omega-Rect))))
+(: omega-rect-intersect (Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect))
 (define (omega-rect-intersect Ω1 Ω2)
   (cond [(empty-set? Ω1)  Ω1]
         [(empty-set? Ω2)  Ω2]
@@ -811,6 +797,7 @@
 ;; Conditional bisection rectangles
 
 (define-type Branches-Rect (Omega-Tree Boolean-Set))
+(define-type Maybe-Branches-Rect (U Empty-Set Branches-Rect))
 
 (define branches-rect-ref ((inst omega-tree-ref Boolean-Set) 'tf))
 (define branches-rect-set ((inst omega-tree-set Boolean-Set) 'tf))
@@ -827,13 +814,35 @@
 (: branches-rect Branches-Rect)
 (define branches-rect omega-leaf)
 
-(define branches-rect-node ((inst omega-node Boolean-Set) 'tf))
+(define just-branches-rect-node ((inst omega-node Boolean-Set) 'tf))
+(define just-branches-rect-join ((inst omega-tree-join Boolean-Set) 'tf boolean-set-join))
+(define just-branches-rect-intersect
+  ((inst omega-tree-intersect Boolean-Set Empty-Set) 'tf boolean-set-intersect empty-set?))
+
+(: branches-rect-node
+   (Boolean-Set Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect))
+(define (branches-rect-node b Z1 Z2)
+  (cond [(empty-set? Z1)  Z1]
+        [(empty-set? Z2)  Z2]
+        [else  (just-branches-rect-node b Z1 Z2)]))
 
 (: branches-rect-node/last
-   (Branches-Rect Boolean-Set Branches-Rect Branches-Rect -> Branches-Rect))
+   (Branches-Rect Boolean-Set Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect))
 (define (branches-rect-node/last Z b Z1 Z2)
   (cond [(and (eq? b (branches-rect-value Z))
               (eq? Z1 (branches-rect-fst Z))
               (eq? Z2 (branches-rect-snd Z)))
          Z]
         [else  (branches-rect-node b Z1 Z2)]))
+
+(: branches-rect-join (Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect))
+(define (branches-rect-join Z1 Z2)
+  (cond [(empty-set? Z1)  Z2]
+        [(empty-set? Z2)  Z1]
+        [else  (just-branches-rect-join Z1 Z2)]))
+
+(: branches-rect-intersect (Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect))
+(define (branches-rect-intersect Z1 Z2)
+  (cond [(empty-set? Z1)  Z1]
+        [(empty-set? Z2)  Z2]
+        [else  (just-branches-rect-intersect Z1 Z2)]))

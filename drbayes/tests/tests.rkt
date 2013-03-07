@@ -20,7 +20,7 @@
 
 #;
 (begin
-  (define f-expr (pair/arr random/arr (rcompose/arr random/arr sqr/arr)))
+  (define f-expr (pair/arr random/arr random/arr))
   (define I (interval 0.25 0.5 #t #t))
   (define B (pair-rect I I)))
 
@@ -135,6 +135,18 @@
   ;(define B (list-rect 'f))
   ;(define B (list-rect 'tf))
   )
+#;
+(begin
+  (define f-expr
+    (drbayes
+     (lazy-if (boolean (const 0.5))
+              0.0
+              (lazy-if (boolean (const 0.5))
+                       1.0
+                       (lazy-if (boolean (const 0.5))
+                                2.0
+                                3.0)))))
+  (define B reals))
 
 #;; Test: strict-or
 ;; Preimage should be the union of a large upper triangle and a small lower triangle, and
@@ -144,7 +156,10 @@
     (drbayes
      (let ([x  (uniform)]
            [y  (uniform)])
-       (list x y (or (< x y) (> x (scale y (const 8))))))))
+       ;(list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
+       ;(list x y (lazy-if (< x y) #t (> x (scale y (const 8)))))
+       (list x y (strict-if (< x y) #t (> x (scale y (const 8)))))
+       )))
   (define B (list-rect reals reals 't)))
 
 #;; Test: Normal-Normal model
@@ -170,7 +185,7 @@
   (define B (list-rect reals (interval 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
-;; Test: thermometer that goes to 100
+#;; Test: thermometer that goes to 100
 (begin
   (interval-max-splits 5)
   (interval-min-length 0.0)
@@ -180,7 +195,7 @@
             [y  (- x (normal))])
        (list x (strict-if (y . > . 100) 100 y)))))
   
-  (define B (list-rect reals (interval 100.0 100.0))))
+  (define B (list-rect reals (interval 99.0 100.0))))
 
 #;; Test: Normal-Normal model with circular condition
 ;; Preimage should look like a football set up for a field goal
@@ -228,42 +243,43 @@
 (begin
   (define f-expr
     (drbayes
-     (strict-if ((uniform) . < . (const #i499/1000))
-                (let ([x  (normal)])
-                  (list x (normal x)))
-                (let ([x  (cauchy)])
-                  (list x (cauchy x))))))
+     (lazy-if ((uniform) . < . (const #i499/1000))
+              (let ([x  (normal)])
+                (list x (normal x)))
+              (let ([x  (cauchy)])
+                (list x (cauchy x))))))
   (define B (list-rect reals (interval 0.9 1.1))))
 
-#;; Test: Bernoulli(p) distribution
-;; Preimage should be [0,p)
+#;; Test: Boolean(p) distribution
+;; Preimage should be [0,p); sampler should restart only once
 (begin
   (define p #i2/5)
-  (define f-expr (boolean/arr p))
+  (define f-expr (lazy-if/arr (boolean/arr p) (c/arr #t) (c/arr #f)))
   (define B 't))
 
 #;; Test: Geometric(p) distribution
 (begin
-  (define p #i1/2)
+  (interval-max-splits 0)
+  (define p #i1/16)
   
   (define/drbayes (geometric-p)
     ;(lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))
     ;; Forces backtracking earlier:
     (let ([x  (lazy-if (boolean (const p)) 0 (+ 1 (geometric-p)))])
-      (strict-if (negative? x) (fail) x)))
+      (prim-if (negative? x) (fail) x)))
   
   #;
   (define/drbayes (geometric-p)
-    (lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p)))
-    #;; Forces backtracking earlier
+    ;(lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p)))
+    ;; Forces backtracking earlier
     (let ([x  (lazy-if ((uniform) . < . (const p)) 0 (+ 1 (geometric-p)))])
-      (strict-if (negative? x) (fail) x)))
+      (prim-if (negative? x) (fail) x)))
   
   (define f-expr
     (drbayes (geometric-p)))
   
-  (define B-min 50.0)
-  (define B-max 51.0)
+  (define B-min 1.0)
+  (define B-max 3.0)
   (define B (interval B-min B-max #t #t))
   
   (let ([xs  (sample (truncated-dist (geometric-dist p) (- B-min 1.0) B-max) 50000)])
@@ -295,10 +311,10 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
-  (interval-max-splits 6)
+  (interval-max-splits 5)
   ;(interval-min-length (flexpt 0.5 14.0))
   
   (define/drbayes (list-append lst1 lst2)
@@ -328,17 +344,6 @@
 
 #;
 (begin
-  (interval-max-splits 2)
-  (define f-expr
-    (drbayes (strict-if ((uniform) . < . 2/3)
-                        (strict-if ((uniform) . < . 2/3)
-                                   #t
-                                   (fail))
-                        (fail))))
-  (define B 'tf))
-
-#;
-(begin
   (define/drbayes (S)
     (lazy-if (boolean (const 0.5)) (T) (F)))
 
@@ -351,14 +356,14 @@
     (lazy-cond [(boolean (const 0.4))  (cons #f (F))]
                [(boolean (const 0.5))  #;(cons #f (T))
                                        (cons #f (let ([s  (T)])
-                                                  (strict-if (list-ref s (const 1))
+                                                  s #;(strict-if (list-ref s (const 1))
                                                              (fail)
                                                              s)))]
                [else  null]))
   
   (define f-expr (drbayes (S)))
   
-  (define B (pair-rect 'tf (pair-rect 't universal-set))))
+  (define B (list*-rect 'tf 't 'f 't 'f 't 'f universal-set)))
 
 ;; ===================================================================================================
 
@@ -383,6 +388,7 @@
                         [Z : Branches-Rect]
                         [ω : Omega]
                         [x : (U Void Value)]
+                        [z : Maybe-Branches-Rect]
                         [measure : Flonum]
                         [prob : Flonum]
                         [weight : Flonum])
@@ -391,12 +397,14 @@
 (: accept-sample? (domain-sample -> Boolean))
 (define (accept-sample? s)
   (define x (domain-sample-x s))
-  (and (not (void? x)) (rect-member? B x)))
+  (and (not (void? x))
+       (rect-member? B x)
+       (not (empty-set? (branches-rect-intersect (domain-sample-Z s) (domain-sample-z s))))))
 
 (: orig-samples (Listof Omega-Sample))
 (define orig-samples
-  (time
-   ;profile-expr
+  (;time
+   profile-expr
    (refinement-sample* Ω Z idxs refine n)))
 (newline)
 
@@ -405,10 +413,9 @@
   (for/list: : (Listof domain-sample) ([s  (in-list orig-samples)])
     (match-define (weighted-sample (cons Ω Z) p) s)
     (define ω (omega-rect-sample-point Ω))
-    (define x (with-handlers ([if-bad-branch?  (λ (_) (void))])
-                (f-fwd ω null Z)))
+    (define-values (x z) (f-fwd ω null))
     (define m (omega-rect-measure Ω))
-    (domain-sample Ω Z ω x m p (/ m p))))
+    (domain-sample Ω Z ω x z m p (/ m p))))
 
 (define samples (filter accept-sample? all-samples))
 (define ws (map domain-sample-weight samples))
@@ -423,7 +430,12 @@
 
 (define accept-prob (fl (/ num-samples num-all-samples)))
 
-(printf "search-stats = ~v~n" (get-search-stats))
+(printf "search stats:~n")
+(get-search-stats)
+(newline)
+
+(printf "cache stats:~n")
+(get-cache-stats)
 (newline)
 
 (printf "unique numbers of primitive rvs: ~v~n"

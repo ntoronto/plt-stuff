@@ -9,10 +9,36 @@
 
 (provide (all-defined-out))
 
+(define cache-preimages? #t)
+(define prim-cache-preimages? #t)
+(define pair-cache-preimages? #t)
+(define cache-computations? #t)
+(define prim-cache-computations? #t)
+
+(define preimage-stats? #f)
+(define prim-preimage-stats? #f)
+(define pair-preimage-stats? #f)
+(define computation-stats? #f)
+(define prim-computation-stats? #f)
+
+(define: cache-stats : (HashTable Symbol Natural)  (make-hasheq empty))
+
+(: increment-cache-stat (Symbol -> Void))
+(define (increment-cache-stat name)
+  (hash-set! cache-stats name (+ 1 (hash-ref cache-stats name (λ () 0)))))
+
+(: get-cache-stats (-> (Listof (Pair Symbol Natural))))
+(define (get-cache-stats)
+  ((inst sort (Pair Symbol Natural) String)
+   (hash-map cache-stats (λ: ([k : Symbol] [v : Natural]) (cons k v)))
+   string<?
+   #:key (λ: ([kv : (Pair Symbol Natural)]) (symbol->string (car kv)))
+   #:cache-keys? #t))
+
 ;; ===================================================================================================
 ;; Expression type
 
-;; An expression is a function from an index prefix to the expression's meaning
+;; An expression is a function from a reversed index to the expression's meaning
 (struct: expression ([fun : (Omega-Idx -> expression-meaning)])
   #:transparent)
 
@@ -28,7 +54,7 @@
                              [computation : Computation])
   #:transparent)
 
-(define-type Forward-Fun (Omega Value Branches-Rect -> Value))
+(define-type Forward-Fun (Omega Value -> (Values Value Maybe-Branches-Rect)))
 
 (: run-expression (case-> (expression -> expression-meaning)
                           (expression Omega-Idx -> expression-meaning)))
@@ -36,142 +62,159 @@
   ((expression-fun e) r))
 
 ;; A computation is a function from a domain and branches to its meaning
-(define-type Computation
-  ((U Empty-Set Omega-Rect) Rect Branches-Rect -> computation-meaning))
+(define-type Computation (Maybe-Omega-Rect Rect -> computation-meaning))
 
 ;; A computation means:
 ;;  1. A branches rectangle (which bounds the branches the forward computation can take)
 ;;  2. The approximate range of its forward function
 ;;  3. A function that computes approximate preimages under its forward function
-(struct: computation-meaning ([branches : Branches-Rect]
-                              [range : Rect]
+(struct: computation-meaning ([range : Rect]
+                              [branches : Maybe-Branches-Rect]
                               [preimage : Preimage-Fun])
   #:transparent)
 
-(define-type Preimage-Fun (Rect -> (Values (U Empty-Set Omega-Rect) Rect)))
+(define-type Preimage-Fun (Rect Maybe-Branches-Rect -> (Values Maybe-Omega-Rect Rect)))
 
 ;; ===================================================================================================
-;; Conveniences
+;; Convenience and caching wrappers
 
-(define-type Simple-Preimage-Fun (Nonempty-Rect -> (Values (U Empty-Set Omega-Rect) Rect)))
+(define-type Simple-Preimage-Fun (Nonempty-Rect Branches-Rect -> (Values Maybe-Omega-Rect Rect)))
+(define-type Prim-Preimage-Fun (Nonempty-Rect -> Rect))
 
-(: simple-preimage ((U Empty-Set Omega-Rect) Rect Rect Simple-Preimage-Fun -> Preimage-Fun))
+(: simple-preimage (Maybe-Omega-Rect Rect Rect Maybe-Branches-Rect Simple-Preimage-Fun
+                                     -> Preimage-Fun))
 ;; Wraps a Prim-Preimage-Fun with code that ensures the argument is a subset of the range and is
-;; nonempty; also performs an optimization
-(define ((simple-preimage Ω Γ range pre) B)
-  (let ([B  (rect-intersect range B)])
-    (cond [(empty-set? B)  (values empty-set empty-set)]
-          [(eq? B range)   (values Ω Γ)]  ; optimization
-          [else  (pre B)]
-          #;
+;; nonempty
+(define ((simple-preimage Ω Γ K Z pre) Ksub Zsub)
+  (let ([Ksub  (rect-intersect K Ksub)]
+        [Zsub  (branches-rect-intersect Z Zsub)])
+    (cond [(or (empty-set? Ksub) (empty-set? Zsub))
+           (values empty-set empty-set)]
+          [(not cache-preimages?)
+           (pre Ksub Zsub)]
+          [(and (eq? Ksub K) (eq? Zsub Z))
+           (when preimage-stats? (increment-cache-stat 'preimage-hits))
+           (values Ω Γ)]
           [else
-           (define-values (new-Ω new-Γ) (pre B))
-           (values (omega-rect-intersect Ω new-Ω)
-                   (rect-intersect Γ new-Γ))])))
+           (when preimage-stats?
+             (increment-cache-stat 'preimage-misses)
+             (when (and (not (eq? Ksub K)) (equal? Ksub K))
+               (increment-cache-stat 'preimage-misses/bad-K))
+             (when (and (not (eq? Zsub Z)) (equal? Zsub Z))
+               (increment-cache-stat 'preimage-misses/bad-Z)))
+           (pre Ksub Zsub)])))
 
-(define-type Simple-Computation (Omega-Rect Nonempty-Rect Branches-Rect -> computation-meaning))
+(: prim-preimage (Rect Rect Prim-Preimage-Fun -> Preimage-Fun))
+;; Like `simple-preimage' but for preimages under primitives
+(define ((prim-preimage Γ K pre) Ksub Zsub)
+  (let ([Ksub  (rect-intersect K Ksub)])
+    (cond [(empty-set? Ksub)
+           (values empty-set empty-set)]
+          [(not prim-cache-preimages?)
+           (values omega-rect (pre Ksub))]
+          [(eq? Ksub K)
+           (when prim-preimage-stats? (increment-cache-stat 'prim-preimage-hits))
+           (values omega-rect Γ)]
+          [else
+           (when prim-preimage-stats?
+             (increment-cache-stat 'prim-preimage-misses)
+             (when (and (not (eq? Ksub K)) (equal? Ksub K))
+               (increment-cache-stat 'prim-preimage-misses/bad-K)))
+           (values omega-rect (pre Ksub))])))
 
-(define comp-hash-hits 0)
-(define comp-hash-misses 0)
-(define comp-hash-eq-misses 0)
-(define (print-comp-hash-stats)
-  (printf "comp-hash-hits = ~v~ncomp-hash-misses = ~v~ncomp-hash-eq-misses = ~v~n"
-          comp-hash-hits
-          comp-hash-misses
-          comp-hash-eq-misses))
+(define-type Simple-Computation (Omega-Rect Nonempty-Rect -> computation-meaning))
+(define-type Prim-Computation (Nonempty-Rect -> computation-meaning))
 
-(: simple-computation (Simple-Computation -> Computation))
-(define (simple-computation comp)
+(: cached-computation (Simple-Computation -> Computation))
+(define (cached-computation comp)
   (define: last-Ω : (U #f Omega-Rect)  #f)
   (define: last-Γ : (U #f Nonempty-Rect)  #f)
-  (define: last-Z : (U #f Branches-Rect)  #f)
   (define: last-m : (U #f computation-meaning)  #f)
-  (λ (Ω Γ Z)
-    (cond [(or (empty-set? Ω) (empty-set? Γ))  (bottom/comp Ω Γ Z)]
-          [else
-           (let ([m  last-m])
-             (cond [(and (eq? Ω last-Ω) (eq? Γ last-Γ) (eq? last-Z Z) m)
-                    (set! comp-hash-hits (+ 1 comp-hash-hits))
-                    m]
-                   [else
-                    #;
-                    (begin
-                      (when (and (not (eq? Ω last-Ω)) (equal? Ω last-Ω))
-                        (printf "Ω = ~v~n" Ω)
-                        (set! comp-hash-eq-misses (+ 1 comp-hash-eq-misses)))
-                      (when (and (not (eq? Γ last-Γ)) (equal? Γ last-Γ))
-                        (printf "Γ = ~v~n" Γ)
-                        (set! comp-hash-eq-misses (+ 1 comp-hash-eq-misses)))
-                      (when (and (not (eq? Z last-Z)) (equal? Z last-Z))
-                        (printf "Z = ~v~n" Z)
-                        (set! comp-hash-eq-misses (+ 1 comp-hash-eq-misses))))
-                    (set! comp-hash-misses (+ 1 comp-hash-misses))
-                    (define m (comp Ω Γ Z))
-                    (set! last-Ω Ω)
-                    (set! last-Γ Γ)
-                    (set! last-Z Z)
-                    (set! last-m m)
-                    m]))]
-          #;
-          [else  (comp Ω Γ Z)])))
+  (λ (Ω Γ)
+    (define cached-m last-m)
+    (cond
+      [(or (empty-set? Ω) (empty-set? Γ))  (bottom/comp Ω Γ)]
+      [(not cache-computations?)  (comp Ω Γ)]
+      [(and (eq? Ω last-Ω) (eq? Γ last-Γ) cached-m)
+       (when computation-stats? (increment-cache-stat 'computation-hits))
+       cached-m]
+      [else
+       (when computation-stats?
+         (increment-cache-stat 'computation-misses)
+         (when (and (not (eq? Ω last-Ω)) (equal? Ω last-Ω))
+           (increment-cache-stat 'computation-misses/bad-Ω))
+         (when (and (not (eq? Γ last-Γ)) (equal? Γ last-Γ))
+           (increment-cache-stat 'computation-misses/bad-Γ)))
+       (set! last-Ω Ω)
+       (set! last-Γ Γ)
+       (let ([cached-m  (comp Ω Γ)])
+         (set! last-m cached-m)
+         cached-m)])))
 
-(: simple-computation/domain (Rect Simple-Computation -> Computation))
-(define (simple-computation/domain domain comp)
-  (cond [(empty-set? domain)  bottom/comp]
-        [else
-         (define: last-Γ : (U #f Nonempty-Rect)  #f)
-         (define: last-m : (U #f computation-meaning)  #f)
-         (λ (Ω Γ Z)
-           (let ([Γ  (rect-intersect Γ domain)])
-             (cond [(or (empty-set? Ω) (empty-set? Γ))  (bottom/comp Ω Γ Z)]
-                   [else
-                    (let ([m  last-m])
-                      (cond [(and (eq? Γ last-Γ) m)
-                             (set! comp-hash-hits (+ 1 comp-hash-hits))
-                             m]
-                            [else
-                             #;
-                             (when (and (not (eq? Γ last-Γ)) (equal? Γ last-Γ))
-                               (printf "simple: Γ = ~v~n" Γ)
-                               (set! comp-hash-eq-misses (+ 1 comp-hash-eq-misses)))
-                             (set! comp-hash-misses (+ 1 comp-hash-misses))
-                             (define m (comp Ω Γ Z))
-                             (set! last-Γ Γ)
-                             (set! last-m m)
-                             m]))]
-                   #;
-                   [else  (comp Ω Γ Z)])))]))
+(: cached-prim-computation (Rect Prim-Computation -> Computation))
+(define (cached-prim-computation domain comp)
+  (define: last-Γ : (U #f Nonempty-Rect)  #f)
+  (define: last-m : (U #f computation-meaning)  #f)
+  (λ (Ω orig-Γ)
+    (define Γ (rect-intersect orig-Γ domain))
+    (define cached-m last-m)
+    (cond
+      [(or (empty-set? Ω) (empty-set? Γ))  (bottom/comp Ω Γ)]
+      [(not prim-cache-computations?)  (comp Γ)]
+      [(and (eq? Γ last-Γ) cached-m)
+       (when prim-computation-stats? (increment-cache-stat 'prim-computation-hits))
+       cached-m]
+      [else
+       (when prim-computation-stats?
+         (increment-cache-stat 'prim-computation-misses)
+         (when (and (not (eq? Γ last-Γ)) (equal? Γ last-Γ))
+           (increment-cache-stat 'prim-computation-misses/bad-Γ)))
+       (set! last-Γ Γ)
+       (let ([cached-m  (comp Γ)])
+         (set! last-m cached-m)
+         cached-m)])))
 
 ;; ===================================================================================================
 ;; Basic primitives
 
-;; Empty function (aka bottom; i.e. has empty range)
+;; Bottom function: has empty range
 
 (: bottom/fwd Forward-Fun)
-(define (bottom/fwd ω γ z)
-  (error 'bottom/arr "empty range"))
-
-(: bottom/pre Preimage-Fun)
-(define (bottom/pre B) (values empty-set empty-set))
+(define (bottom/fwd ω γ)
+  (error 'bottom/fwd "empty range"))
 
 (: bottom/comp Computation)
-(define (bottom/comp _Ω _Γ _Z)
-  (computation-meaning branches-rect empty-set bottom/pre))
+(define (bottom/comp _Ω _Γ)
+  (computation-meaning empty-set empty-set (λ (Ksub Zsub) (values empty-set empty-set))))
 
 (define bottom/arr
   (expression (λ (r) (expression-meaning empty bottom/fwd bottom/comp))))
 
+;; Top function: has universal range
+
+(: top/fwd Forward-Fun)
+(define (top/fwd ω γ)
+  (error 'top/fwd "universal range"))
+
+(: top/comp (-> Computation))
+(define (top/comp)
+  (cached-computation
+  (λ (Ω Γ)
+    (computation-meaning universal-set branches-rect (λ (Ksub Zsub) (values Ω Γ))))))
+
+(define top/arr
+  (expression (λ (r) (expression-meaning empty top/fwd (top/comp)))))
+
 ;; Identity function
 
 (: id/fwd Forward-Fun)
-(define (id/fwd ω γ z) γ)
-
-(: id/pre (Rect -> Preimage-Fun))
-(define ((id/pre Γ) B) (values omega-rect (rect-intersect Γ B)))
+(define (id/fwd ω γ) (values γ branches-rect))
 
 (: id/comp (-> Computation))
 (define (id/comp)
-  (simple-computation (λ (_Ω Γ _Z) (computation-meaning branches-rect Γ (id/pre Γ)))))
+  (cached-prim-computation
+   universal-set
+   (λ (Γ) (computation-meaning Γ branches-rect (prim-preimage Γ Γ (λ (B) B))))))
 
 (define id/arr
   (expression (λ (r) (expression-meaning empty id/fwd (id/comp)))))
@@ -179,52 +222,47 @@
 ;; Constant functions
 
 (: c/fwd (Value -> Forward-Fun))
-(define ((c/fwd x) ω γ z) x)
+(define ((c/fwd x) ω γ) (values x branches-rect))
 
-(: c/pre (Rect Nonempty-Rect -> Preimage-Fun))
-(define ((c/pre Γ X) B)
-  (if (empty-set? (rect-intersect X B))
-      (values empty-set empty-set)
-      (values omega-rect Γ)))
+(: c/comp (Nonempty-Rect Nonempty-Rect -> Computation))
+(define (c/comp domain X)
+  (cached-prim-computation
+   domain
+   (λ (Γ)
+     (define pre (prim-preimage Γ X (λ (B) (if (empty-set? B) empty-set Γ))))
+     (computation-meaning X branches-rect pre))))
 
-(: c/comp (Nonempty-Rect -> Computation))
-(define (c/comp X)
-  (simple-computation (λ (_Ω Γ _Z) (computation-meaning branches-rect X (c/pre Γ X)))))
-
-(: c/arr (Value -> expression))
-(define (c/arr x)
+(: c/arr (case-> (Value -> expression)
+                 (Value Nonempty-Rect -> expression)))
+(define (c/arr x [domain universal-set])
   (define fwd (c/fwd x))
   (define X (value->singleton x))
-  (expression (λ (r) (expression-meaning empty fwd (c/comp X)))))
+  (expression (λ (r) (expression-meaning empty fwd (c/comp domain X)))))
 
 ;; ===================================================================================================
 ;; Arrow composition (reverse composition)
 
 (: rcompose/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
-(define ((rcompose/fwd f-fwd g-fwd) ω γ z)
-  (let* ([γ  (f-fwd ω γ z)]
-         [γ  (g-fwd ω γ z)])
-    γ))
+(define ((rcompose/fwd f-fwd g-fwd) ω γ)
+  (define-values (kf zf) (f-fwd ω γ))
+  (define-values (kg zg) (g-fwd ω kf))
+  (values kg (branches-rect-node 'tf zf zg)))
 
 (: rcompose/pre (Preimage-Fun Preimage-Fun Omega-Rect -> Simple-Preimage-Fun))
-(define ((rcompose/pre f-pre g-pre Ω) C)
-  (define-values (Ωg B) (g-pre C))
-  (define-values (Ωf Γ) (f-pre B))
-  (values (unit-omega-rect-node/last Ω Ωf Ωg) Γ))
+(define ((rcompose/pre f-pre g-pre Ω) Kg Z)
+  (define-values (Ωg Γg) (g-pre Kg (branches-rect-snd Z)))
+  (define-values (Ωf Γf) (f-pre Γg (branches-rect-fst Z)))
+  (values (unit-omega-rect-node/last Ω Ωf Ωg) Γf))
 
 (: rcompose/comp (Computation Computation -> Computation))
 (define (rcompose/comp f-comp g-comp)
-  (simple-computation
-   (λ (Ω Γf Z)
-     (define Ωf (omega-rect-fst Ω))
-     (define Ωg (omega-rect-snd Ω))
-     (define Zf (branches-rect-fst Z))
-     (define Zg (branches-rect-snd Z))
-     (match-define (computation-meaning new-Zf Γg f-pre)    (f-comp Ωf Γf Zf))
-     (match-define (computation-meaning new-Zg range g-pre) (g-comp Ωg Γg Zg))
-     (define new-Z (branches-rect-node/last Z 'tf new-Zf new-Zg))
-     (define pre (rcompose/pre f-pre g-pre Ω))
-     (computation-meaning new-Z range (simple-preimage Ω Γf range pre)))))
+  (cached-computation
+   (λ (Ω Γf)
+     (match-define (computation-meaning Kf Zf f-pre) (f-comp (omega-rect-fst Ω) Γf))
+     (match-define (computation-meaning Kg Zg g-pre) (g-comp (omega-rect-snd Ω) Kf))
+     (define Z (branches-rect-node 'tf Zf Zg))
+     (define pre (simple-preimage Ω Γf Kg Z (rcompose/pre f-pre g-pre Ω)))
+     (computation-meaning Kg Z pre))))
 
 (: rcompose/arr (expression expression -> expression))
 (define (rcompose/arr f-expr g-expr)
@@ -240,214 +278,169 @@
 ;; Pairs
 
 (: pair/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
-(define ((pair/fwd fst-fwd snd-fwd) ω γ z)
-  (cons (fst-fwd ω γ z) (snd-fwd ω γ z)))
+(define ((pair/fwd fst-fwd snd-fwd) ω γ)
+  (define-values (k1 z1) (fst-fwd ω γ))
+  (define-values (k2 z2) (snd-fwd ω γ))
+  (values (cons k1 k2) (branches-rect-node 'tf z1 z2)))
 
-(: pair/pre (Preimage-Fun Preimage-Fun Omega-Rect Nonempty-Rect Rect Rect -> Simple-Preimage-Fun))
-(define (pair/pre fst-pre snd-pre Ω Γ fst-range snd-range)
-  (define Ω1 (omega-rect-fst Ω))
-  (define Ω2 (omega-rect-snd Ω))
-  (λ (B1×B2)
-    (match-define (pair-rect B1 B2) B1×B2)
-    (define fst? (not (eq? B1 fst-range)))
-    (define snd? (not (eq? B2 snd-range)))
-    (cond [(and fst? snd?)  (define-values (new-Ω1 A1) (fst-pre B1))
-                            (define-values (new-Ω2 A2) (snd-pre B2))
-                            (values (cond [(and (eq? new-Ω1 Ω1) (eq? new-Ω2 Ω2))  Ω]
-                                          [else  (unit-omega-rect-node new-Ω1 new-Ω2)])
-                                    (rect-intersect A1 A2))]
-          [fst?  (define-values (new-Ω1 A1) (fst-pre B1))
-                 (values (if (eq? new-Ω1 Ω1) Ω (unit-omega-rect-node new-Ω1 Ω2)) A1)]
-          [snd?  (define-values (new-Ω2 A2) (snd-pre B2))
-                 (values (if (eq? new-Ω2 Ω2) Ω (unit-omega-rect-node Ω1 new-Ω2)) A2)]
-          [else  (values Ω Γ)])))
+(: pair/pre (Preimage-Fun Preimage-Fun
+                          Omega-Rect Omega-Rect Omega-Rect Nonempty-Rect
+                          Rect Rect Maybe-Branches-Rect Maybe-Branches-Rect
+                          -> Simple-Preimage-Fun))
+(define (pair/pre pre1 pre2 Ω old-Ω1 old-Ω2 Γ old-K1 old-K2 old-Z1 old-Z2)
+  (λ (K Z)
+    (match-define (pair-rect K1 K2) K)
+    (define Z1 (branches-rect-fst Z))
+    (define Z2 (branches-rect-snd Z))
+    (define 1? (if pair-cache-preimages? (not (and (eq? K1 old-K1) (eq? Z1 old-Z1))) #t))
+    (define 2? (if pair-cache-preimages? (not (and (eq? K2 old-K2) (eq? Z2 old-Z2))) #t))
+    (when (and pair-cache-preimages? pair-preimage-stats?)
+      (increment-cache-stat (if 1? 'pair-preimage-hits/fst 'pair-preimage-misses/fst))
+      (increment-cache-stat (if 2? 'pair-preimage-hits/snd 'pair-preimage-misses/snd)))
+    (let-values ([(Ω1 Γ1)  (if 1? (pre1 K1 Z1) (values old-Ω1 Γ))]
+                 [(Ω2 Γ2)  (if 2? (pre2 K2 Z2) (values old-Ω2 Γ))])
+      (values (unit-omega-rect-node/last Ω Ω1 Ω2)
+              (cond [(eq? Γ1 Γ)  (rect-intersect Γ Γ2)]
+                    [(eq? Γ2 Γ)  (rect-intersect Γ Γ1)]
+                    [else  (rect-intersect Γ1 Γ2)])))))
 
 (: pair/comp (Computation Computation -> Computation))
-(define (pair/comp fst-comp snd-comp)
-  (simple-computation
-   (λ (Ω Γ Z)
+(define (pair/comp comp1 comp2)
+  (cached-computation
+   (λ (Ω Γ)
      (define Ω1 (omega-rect-fst Ω))
      (define Ω2 (omega-rect-snd Ω))
-     (define Z1 (branches-rect-fst Z))
-     (define Z2 (branches-rect-snd Z))
-     (match-define (computation-meaning new-Z1 fst-range fst-pre) (fst-comp Ω1 Γ Z1))
-     (match-define (computation-meaning new-Z2 snd-range snd-pre) (snd-comp Ω2 Γ Z2))
-     (define new-Z (branches-rect-node/last Z 'tf new-Z1 new-Z2))
-     (define range (pair-rect fst-range snd-range))
-     (define pre (pair/pre fst-pre snd-pre Ω Γ fst-range snd-range))
-     (computation-meaning new-Z range (simple-preimage Ω Γ range pre)))))
+     (match-define (computation-meaning K1 Z1 pre1) (comp1 Ω1 Γ))
+     (match-define (computation-meaning K2 Z2 pre2) (comp2 Ω2 Γ))
+     (define K (pair-rect K1 K2))
+     (define Z (branches-rect-node 'tf Z1 Z2))
+     (define pre (simple-preimage Ω Γ K Z (pair/pre pre1 pre2 Ω Ω1 Ω2 Γ K1 K2 Z1 Z2)))
+     (computation-meaning K Z pre))))
 
 (: pair/arr (expression expression -> expression))
-(define (pair/arr fst-expr snd-expr)
+(define (pair/arr expr1 expr2)
   (expression
    (λ (r)
-     (match-define (expression-meaning fst-idxs fst-fwd fst-comp)
-       (run-expression fst-expr (cons 0 r)))
-     (match-define (expression-meaning snd-idxs snd-fwd snd-comp)
-       (run-expression snd-expr (cons 1 r)))
-     (expression-meaning (append fst-idxs snd-idxs)
-                         (pair/fwd fst-fwd snd-fwd)
-                         (pair/comp fst-comp snd-comp)))))
+     (match-define (expression-meaning idxs1 fwd1 comp1) (run-expression expr1 (cons 0 r)))
+     (match-define (expression-meaning idxs2 fwd2 comp2) (run-expression expr2 (cons 1 r)))
+     (expression-meaning (append idxs1 idxs2)
+                         (pair/fwd fwd1 fwd2)
+                         (pair/comp comp1 comp2)))))
 
 ;; ===================================================================================================
 ;; Conditionals
 
 (define-predicate if-bad-branch? 'if-bad-branch)
 
-(: if/fwd (Omega-Idx Forward-Fun (Promise Forward-Fun) (Promise Forward-Fun) -> Forward-Fun))
-(define ((if/fwd idx c-fwd t-fwd f-fwd) ω γ z)
-  (define c (c-fwd ω γ z))
-  (define b (branches-rect-ref z idx))
-  (cond [(or (not (boolean? c)) (not (boolean-set-member? b c)))  (raise 'if-bad-branch)]
-        [c     ((force t-fwd) ω γ z)]
-        [else  ((force f-fwd) ω γ z)]))
+(: switch/fwd (Omega-Idx (-> Forward-Fun) (-> Forward-Fun) -> Forward-Fun))
+(define ((switch/fwd idx t-fwd f-fwd) ω γ)
+  (match γ
+    [(cons #t γ)  (define-values (kt zt) ((t-fwd) ω γ))
+                  (values kt (branches-rect-node 't zt branches-rect))]
+    [(cons #f γ)  (define-values (kf zf) ((f-fwd) ω γ))
+                  (values kf (branches-rect-node 'f branches-rect zf))]
+    [_  (raise-argument-error 'switch/fwd "(Pair Boolean Value)" γ)]))
 
-(: if/comp (Boolean Computation (Promise expression-meaning) (Promise expression-meaning)
-                    -> Computation))
-(define (if/comp strict? c-comp t-meaning f-meaning)
-  (simple-computation
-   (λ (orig-Ω orig-Γ orig-Z)
-     (define Ωc (omega-rect-fst orig-Ω))
-     (define Ωtf (omega-rect-snd orig-Ω))
-     (define Ωt (omega-rect-fst Ωtf))
-     (define Ωf (omega-rect-snd Ωtf))
-     
-     (: make-omega-rect ((U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect) (U Empty-Set Omega-Rect)
-                                                  -> (U Empty-Set Omega-Rect)))
-     (define (make-omega-rect new-Ωc new-Ωt new-Ωf)
-       (cond [(and (eq? Ωt new-Ωt) (eq? Ωf new-Ωf))
-              (cond [(eq? Ωc new-Ωc)  orig-Ω]
-                    [else  (unit-omega-rect-node new-Ωc Ωtf)])]
-             [else
-              (unit-omega-rect-node new-Ωc (unit-omega-rect-node new-Ωt new-Ωf))]))
-     
-     (define b (branches-rect-value orig-Z))
-     (define Zc (branches-rect-fst orig-Z))
-     (define Ztf (branches-rect-snd orig-Z))
-     (define Zt (branches-rect-fst Ztf))
-     (define Zf (branches-rect-snd Ztf))
-     
-     (: make-branches-rect (Boolean-Set Branches-Rect Branches-Rect Branches-Rect -> Branches-Rect))
-     (define (make-branches-rect new-b new-Zc new-Zt new-Zf)
-       (cond [(and (eq? Zt new-Zt) (eq? Zf new-Zf))
-              (cond [(and (eq? Zc new-Zc) (eq? b new-b))  orig-Z]
-                    [else  (branches-rect-node new-b new-Zc Ztf)])]
-             [else
-              (branches-rect-node new-b new-Zc (branches-rect-node 'tf new-Zt new-Zf))]))
-     
-     (match-let ([(computation-meaning Zc c-range c-pre)  (c-comp Ωc orig-Γ Zc)])
-       (define-values (Ωct Γt)
-         (cond [(rect-member? c-range #t)  (c-pre 't)]
-               [else  (values empty-set empty-set)]))
-       
-       (define-values (Ωcf Γf)
-         (cond [(rect-member? c-range #f)  (c-pre 'f)]
-               [else  (values empty-set empty-set)]))
-       
-       (define-values (bt? bf?) (boolean-set->booleans b))
-       
-       ;; t? = #t if it's possible to take the true branch
-       ;; f? = #t if it's possible to take the false branch
-       (define-values (t? f?)
-         (values (and bt? (not (empty-set? Ωct)) (not (empty-set? Γt)))
-                 (and bf? (not (empty-set? Ωcf)) (not (empty-set? Γf)))))
-       
-       (: t/pre (Preimage-Fun -> Preimage-Fun))
-       (define ((t/pre t-pre) B)
-         (let-values ([(Ωt At)  (t-pre B)])
-           (values (make-omega-rect Ωct Ωt Ωf) At)))
-       
-       (: f/pre (Preimage-Fun -> Preimage-Fun))
-       (define ((f/pre f-pre) B)
-         (let-values ([(Ωf Af)  (f-pre B)])
-           (values (make-omega-rect Ωcf Ωt Ωf) Af)))
-       
-       (cond
-         [(and t? f?)
-          (cond
-            [strict?
-             (define t-comp (expression-meaning-computation (force t-meaning)))
-             (define f-comp (expression-meaning-computation (force f-meaning)))
-             (match-let* ([(computation-meaning Zt t-range t-pre)  (t-comp Ωt Γt Zt)]
-                          [(computation-meaning Zf f-range f-pre)  (f-comp Ωf Γf Zf)])
-               (define range (rect-join t-range f-range))
-               
-               (: if/pre Simple-Preimage-Fun)
-               (define (if/pre B)
-                 (let-values ([(Ω1 A1)  ((t/pre t-pre) (rect-intersect t-range B))]
-                              [(Ω2 A2)  ((f/pre f-pre) (rect-intersect f-range B))])
-                   (values (omega-rect-join Ω1 Ω2) (rect-join A1 A2))))
-               
-               (let-values ([(Ωt Γt)  ((t/pre t-pre) t-range)]
-                            [(Ωf Γf)  ((f/pre f-pre) f-range)])
-                 (define Ω (omega-rect-join Ωt Ωf))
-                 (define Γ (rect-join Γt Γf))
-                 (define Z (make-branches-rect 'tf Zc Zt Zf))
-                 (computation-meaning Z range (simple-preimage Ω Γ range if/pre))))]
-            [else
-             (define Ω (make-omega-rect (omega-rect-join Ωct Ωcf) Ωt Ωf))
-             (define Γ (rect-join Γt Γf))
-             (define Z (make-branches-rect 'tf Zc branches-rect branches-rect))
-             (define range universal-set)
-             (computation-meaning Z range (simple-preimage Ω Γ range (λ (B) (values Ω Γ))))])]
-         [t?
-          (define t-comp (expression-meaning-computation (force t-meaning)))
-          (match-let ([(computation-meaning Zt t-range t-pre)  (t-comp Ωt Γt Zt)])
-            (define Ω (make-omega-rect Ωct Ωt Ωf))
-            (define Z (make-branches-rect 't Zc Zt Zf))
-            (computation-meaning Z t-range (simple-preimage Ω Γt t-range (t/pre t-pre))))]
-         [f?
-          (define f-comp (expression-meaning-computation (force f-meaning)))
-          (match-let ([(computation-meaning Zf f-range f-pre)  (f-comp Ωf Γf Zf)])
-            (define Ω (make-omega-rect Ωcf Ωt Ωf))
-            (define Z (make-branches-rect 'f Zc Zt Zf))
-            (computation-meaning Z f-range (simple-preimage Ω Γf f-range (f/pre f-pre))))]
-         [else
-          (bottom/comp empty-set empty-set orig-Z)])))))
+(: switch/comp ((-> Computation) (-> Computation) -> Computation))
+(define (switch/comp t-comp f-comp)
+  (cached-computation
+   (λ (Ω Γ)
+     (match (rect-intersect Γ (pair-rect 'tf universal-set))
+       [(pair-rect Γb Γtf)
+        (define Ωt (omega-rect-fst Ω))
+        (define Ωf (omega-rect-snd Ω))
+        
+        (define t-meaning (delay ((t-comp) Ωt Γtf)))
+        (define f-meaning (delay ((f-comp) Ωf Γtf)))
+        
+        (: t/pre Simple-Preimage-Fun)
+        (define (t/pre K Z)
+          (match-define (computation-meaning Kt Zt pre) (force t-meaning))
+          (let-values ([(Ωt Γt)  (pre (rect-intersect Kt K)
+                                      (branches-rect-intersect Zt (branches-rect-fst Z)))])
+            (values (unit-omega-rect-node/last Ω Ωt Ωf)
+                    (pair-rect 't Γt))))
+        
+        (: f/pre Simple-Preimage-Fun)
+        (define (f/pre K Z)
+          (match-define (computation-meaning Kf Zf pre) (force f-meaning))
+          (let-values ([(Ωf Γf)  (pre (rect-intersect Kf K)
+                                      (branches-rect-intersect Zf (branches-rect-snd Z)))])
+            (values (unit-omega-rect-node/last Ω Ωt Ωf)
+                    (pair-rect 'f Γf))))
+        
+        (: switch/pre Simple-Preimage-Fun)
+        (define (switch/pre K Z)
+          (define b (branches-rect-value Z))
+          (cond [(eq? b 'tf)  (values Ω Γ)]
+                [(eq? b 't)   (t/pre K Z)]
+                [(eq? b 'f)   (f/pre K Z)]
+                [else  (values empty-set empty-set)]))
+        
+        (cond
+          [(eq? Γb 'tf)
+           (define K universal-set)
+           (define Z branches-rect)
+           (computation-meaning K Z (simple-preimage Ω Γ K Z switch/pre))]
+          [(eq? Γb 't)
+           (match-define (computation-meaning Kt Zt pre) (force t-meaning))
+           (define Z (branches-rect-node 't Zt branches-rect))
+           (computation-meaning Kt Z (simple-preimage Ω Γ Kt Z t/pre))]
+          [(eq? Γb 'f)
+           (match-define (computation-meaning Kf Zf pre) (force f-meaning))
+           (define Z (branches-rect-node 'f branches-rect Zf))
+           (computation-meaning Kf Z (simple-preimage Ω Γ Kf Z f/pre))]
+          [else
+           (bottom/comp empty-set empty-set)])]
+       [_
+        (bottom/comp empty-set empty-set)]))))
 
-(: if/arr (Boolean -> (expression expression expression -> expression)))
-(define ((if/arr strict?) c-expr t-expr f-expr)
+(: switch/arr (expression expression -> expression))
+(define (switch/arr t-expr f-expr)
   (expression
    (λ (r)
      (define idx (reverse r))
-     (match-define (expression-meaning c-idxs c-fwd c-comp) (run-expression c-expr (cons 0 r)))
-     (define t-meaning (delay (run-expression t-expr (list* 0 1 r))))
-     (define f-meaning (delay (run-expression f-expr (list* 1 1 r))))
-     (define t-idxs (delay (expression-meaning-indexes (force t-meaning))))
-     (define f-idxs (delay (expression-meaning-indexes (force f-meaning))))
+     (define t-meaning (delay (run-expression t-expr (cons 0 r))))
+     (define f-meaning (delay (run-expression f-expr (cons 1 r))))
      (expression-meaning
-      (append c-idxs (list (if-indexes idx t-idxs f-idxs)))
-      (if/fwd idx c-fwd
-              (delay (expression-meaning-forward (force t-meaning)))
-              (delay (expression-meaning-forward (force f-meaning))))
-      (if/comp strict? c-comp t-meaning f-meaning)))))
+      (list (if-indexes idx
+                        (λ () (expression-meaning-indexes (force t-meaning)))
+                        (λ () (expression-meaning-indexes (force f-meaning)))))
+      (switch/fwd idx
+                  (λ () (expression-meaning-forward (force t-meaning)))
+                  (λ () (expression-meaning-forward (force f-meaning))))
+      (switch/comp (λ () (expression-meaning-computation (force t-meaning)))
+                   (λ () (expression-meaning-computation (force f-meaning))))))))
 
-(define lazy-if/arr (if/arr #f))
-(define strict-if/arr (if/arr #t))
+(: lazy-if/arr (expression expression expression -> expression))
+(define (lazy-if/arr c-expr t-expr f-expr)
+  (rcompose/arr (pair/arr c-expr id/arr)
+                (switch/arr t-expr f-expr)))
+
+(define strict-if/arr lazy-if/arr)
 
 ;; ===================================================================================================
 ;; Random
 
 (: random/fwd (Omega-Idx -> Forward-Fun))
-(define ((random/fwd idx) ω γ z)
-  (omega-ref ω idx))
+(define ((random/fwd idx) ω γ)
+  (values (omega-ref ω idx) branches-rect))
 
 (: random/pre (Omega-Rect Nonempty-Rect -> Simple-Preimage-Fun))
 (define (random/pre Ω Γ)
-  (define A (omega-rect-value Ω))
   (define Ω1 (omega-rect-fst Ω))
   (define Ω2 (omega-rect-snd Ω))
-  (λ (B)
-    (cond [(eq? A B)  (values Ω Γ)]
-          [(interval? B)  (values (omega-rect-node B Ω1 Ω2) Γ)]
-          [else  (values empty-set empty-set)])))
+  (λ (K Z)
+    (cond [(interval? K)  (values (omega-rect-node K Ω1 Ω2) Γ)]
+          [else           (values empty-set empty-set)])))
 
 (: random/comp (-> Computation))
 (define (random/comp)
-  (simple-computation
-   (λ (Ω Γ _Z)
-     (define range (omega-rect-value Ω))
-     (computation-meaning branches-rect range (simple-preimage Ω Γ range (random/pre Ω Γ))))))
+  (cached-computation
+   (λ (Ω Γ)
+     (define K (omega-rect-value Ω))
+     (define Z branches-rect)
+     (computation-meaning K Z (simple-preimage Ω Γ K Z (random/pre Ω Γ))))))
 
 (: random/arr expression)
 (define random/arr
@@ -462,35 +455,34 @@
 ;; Random boolean
 
 (: boolean/fwd (Omega-Idx Flonum -> Forward-Fun))
-(define ((boolean/fwd r p) ω γ z)
-  ((omega-ref ω r) . < . p))
+(define ((boolean/fwd r p) ω γ)
+  (values ((omega-ref ω r) . < . p) branches-rect))
 
-(: boolean/pre
-   (Omega-Rect Nonempty-Rect (U Empty-Set Interval) (U Empty-Set Interval) -> Simple-Preimage-Fun))
+(: boolean/pre (Omega-Rect Nonempty-Rect (U Empty-Set Interval) (U Empty-Set Interval)
+                           -> Simple-Preimage-Fun))
 (define (boolean/pre Ω Γ It If)
-  (define A (omega-rect-value Ω))
   (define Ω1 (omega-rect-fst Ω))
   (define Ω2 (omega-rect-snd Ω))
-  (λ (B)
-    (define I (case B
+  (λ (K Z)
+    (define I (case K
                 [(tf)  (rect-join It If)]
                 [(t)   It]
                 [(f)   If]
                 [else  empty-set]))
-    (cond [(eq? A I)  (values Ω Γ)]
-          [(interval? I)  (values (omega-rect-node I Ω1 Ω2) Γ)]
-          [else  (values empty-set empty-set)])))
+    (cond [(interval? I)  (values (omega-rect-node I Ω1 Ω2) Γ)]
+          [else           (values empty-set empty-set)])))
 
 (: boolean/comp (Interval Interval -> Computation))
 (define (boolean/comp It If)
-  (simple-computation
-   (λ (Ω Γ _Z)
+  (cached-computation
+   (λ (Ω Γ)
      (define I (omega-rect-value Ω))
      (let ([It  (interval-intersect I It)]
            [If  (interval-intersect I If)])
-       (define range (booleans->boolean-set (not (empty-set? It)) (not (empty-set? If))))
-       (define pre (boolean/pre Ω Γ It If))
-       (computation-meaning branches-rect range (simple-preimage Ω Γ range pre))))))
+       (define K (booleans->boolean-set (not (empty-set? It)) (not (empty-set? If))))
+       (define Z branches-rect)
+       (define pre (simple-preimage Ω Γ K Z (boolean/pre Ω Γ It If)))
+       (computation-meaning K Z pre)))))
 
 (: boolean/arr (Flonum -> expression))
 (define (boolean/arr p)
@@ -513,48 +505,75 @@
 ;; Primitive conditional
 
 (: prim-if/fwd (Forward-Fun Forward-Fun Forward-Fun -> Forward-Fun))
-(define ((prim-if/fwd c-fwd t-fwd f-fwd) ω γ z)
-  (if (c-fwd ω γ z)
-      (t-fwd ω γ z)
-      (f-fwd ω γ z)))
+(define ((prim-if/fwd c-fwd t-fwd f-fwd) ω γ)
+  (define-values (kc zc) (c-fwd ω γ))
+  (cond [(eq? kc #t)  (define-values (kt zt) (t-fwd ω γ))
+                      (values kt branches-rect)]
+        [(eq? kc #f)  (define-values (kf zf) (f-fwd ω γ))
+                      (values kf branches-rect)]
+        [else  (raise-argument-error 'prim-if/fwd "Boolean" kc)]))
 
 (: prim-if/comp (Computation Computation Computation -> Computation))
 (define (prim-if/comp c-comp t-comp f-comp)
-  (simple-computation
-   (λ (_Ω Γ _Z)
-     (match-define (computation-meaning _Zc c-range c-pre) (c-comp omega-rect Γ branches-rect))
-     (define Γt
-       (cond [(rect-member? c-range #t)  (let-values ([(_ Γt)  (c-pre 't)]) Γt)]
-             [else  empty-set]))
+  (cached-prim-computation
+   universal-set
+   (λ (Γ)
+     (define Ω omega-rect)
+     (define Z branches-rect)
      
-     (define Γf
-       (cond [(rect-member? c-range #f)  (let-values ([(_ Γf)  (c-pre 'f)]) Γf)]
-             [else  empty-set]))
-       
+     (match-define (computation-meaning Kc Zc c-pre) (c-comp Ω Γ))
+     (define-values (_Ωct Γt)
+       (cond [(rect-member? Kc #t)  (c-pre 't Z)]
+             [else  (values empty-set empty-set)]))
+     
+     (define-values (_Ωcf Γf)
+       (cond [(rect-member? Kc #f)  (c-pre 'f Z)]
+             [else  (values empty-set empty-set)]))
+     
+     (define t? (not (empty-set? Γt)))
+     (define f? (not (empty-set? Γf)))
      (cond
-       [(and (not (empty-set? Γt)) (not (empty-set? Γf)))
-        (match-define (computation-meaning _Zt t-range t-pre) (t-comp omega-rect Γt branches-rect))
-        (match-define (computation-meaning _Zf f-range f-pre) (f-comp omega-rect Γf branches-rect))
-        (define range (rect-join t-range f-range))
+       [(and t? f?)
+        (match-define (computation-meaning Kt Zt t-pre) (t-comp Ω Γt))
+        (match-define (computation-meaning Kf Zf f-pre) (f-comp Ω Γf))
+        (define K (rect-join Kt Kf))
         
-        (: prim-if/pre Simple-Preimage-Fun)
-        (define (prim-if/pre B)
-          (let-values ([(_Ω1 A1)  (t-pre (rect-intersect t-range B))]
-                       [(_Ω2 A2)  (f-pre (rect-intersect f-range B))])
-            (values omega-rect (rect-join A1 A2))))
+        (: prim-if/pre Prim-Preimage-Fun)
+        (define (prim-if/pre K)
+          (let-values ([(_Ωt Γt)  (t-pre (rect-intersect Kt K) Z)]
+                       [(_Ωf Γf)  (f-pre (rect-intersect Kf K) Z)])
+            (rect-join Γt Γf)))
         
-        (let-values ([(_Ωt Γt)  (t-pre t-range)]
-                     [(_Ωf Γf)  (f-pre f-range)])
+        (let-values ([(_Ωt Γt)  (t-pre Kt branches-rect)]
+                     [(_Ωf Γf)  (f-pre Kf branches-rect)])
           (define Γ (rect-join Γt Γf))
-          (computation-meaning branches-rect range (simple-preimage omega-rect Γ range prim-if/pre)))]
-       [(not (empty-set? Γt))
-        (match-define (computation-meaning _Zt t-range t-pre) (t-comp omega-rect Γt branches-rect))
-        (computation-meaning branches-rect t-range (simple-preimage omega-rect Γt t-range t-pre))]
-       [(not (empty-set? Γf))
-        (match-define (computation-meaning _Zf f-range f-pre) (f-comp omega-rect Γf branches-rect))
-        (computation-meaning branches-rect f-range (simple-preimage omega-rect Γf f-range f-pre))]
+          (computation-meaning K Z (prim-preimage Γ K prim-if/pre)))]
+       [t?
+        (match-define (computation-meaning Kt Zt t-pre) (t-comp Ω Γt))
+        (define K Kt)
+        
+        (: prim-if/pre Prim-Preimage-Fun)
+        (define (prim-if/pre K)
+          (let-values ([(_Ωt Γt)  (t-pre (rect-intersect Kt K) Z)])
+            Γt))
+        
+        (let-values ([(_Ωt Γt)  (t-pre Kt branches-rect)])
+          (define Γ Γt)
+          (computation-meaning K Z (prim-preimage Γ K prim-if/pre)))]
+       [f?
+        (match-define (computation-meaning Kf Zf f-pre) (f-comp Ω Γf))
+        (define K Kf)
+        
+        (: prim-if/pre Prim-Preimage-Fun)
+        (define (prim-if/pre K)
+          (let-values ([(_Ωf Γf)  (f-pre (rect-intersect Kf K) Z)])
+            Γf))
+        
+        (let-values ([(_Ωf Γf)  (f-pre Kf branches-rect)])
+          (define Γ Γf)
+          (computation-meaning K Z (prim-preimage Γ K prim-if/pre)))]
        [else
-        (bottom/comp empty-set empty-set branches-rect)]))))
+        (bottom/comp empty-set empty-set)]))))
 
 (: prim-if/arr (expression expression expression -> expression))
 (define (prim-if/arr c-expr t-expr f-expr)
@@ -572,19 +591,19 @@
 ;; Ref
 
 (: ref/fwd (Idx -> Forward-Fun))
-(define ((ref/fwd j) ω γ z)
-  (value-ref γ j))
+(define ((ref/fwd j) ω γ)
+  (values (value-ref γ j) branches-rect))
 
-(: ref/pre (Nonempty-Rect Idx -> Simple-Preimage-Fun))
-(define ((ref/pre Γ j) B)
-  (values omega-rect (rect-set Γ j B)))
+(: ref/pre (Nonempty-Rect Idx -> Prim-Preimage-Fun))
+(define ((ref/pre Γ j) K) (rect-set Γ j K))
 
 (: ref/comp (Idx -> Computation))
 (define (ref/comp j)
-  (simple-computation
-   (λ (_Ω Γ _Z)
-     (define range (rect-ref Γ j))
-     (computation-meaning branches-rect range (simple-preimage omega-rect Γ range (ref/pre Γ j))))))
+  (cached-prim-computation
+   universal-pair
+   (λ (Γ)
+     (define K (rect-ref Γ j))
+     (computation-meaning K branches-rect (prim-preimage Γ K (ref/pre Γ j))))))
 
 (: ref/arr (Idx -> expression))
 (define (ref/arr j)
@@ -595,8 +614,9 @@
 ;; Monotone R -> R functions
 
 (: monotone/fwd (Symbol (Flonum -> Flonum) -> Forward-Fun))
-(define ((monotone/fwd name f) ω γ z)
-  (if (flonum? γ) (f γ) (raise-argument-error name "Flonum" γ)))
+(define ((monotone/fwd name f) ω γ)
+  (cond [(flonum? γ)  (values (f γ) branches-rect)]
+        [else  (raise-argument-error name "Flonum" γ)]))
 
 (: monotone-range (Nonempty-Rect Interval (Flonum -> Flonum) Boolean -> Rect))
 (define (monotone-range domain f-range f fx?)
@@ -604,23 +624,21 @@
   (cond [fx?   (rect-intersect f-range (interval (f a) (f b) a? b?))]
         [else  (rect-intersect f-range (interval (f b) (f a) b? a?))]))
 
-(: monotone/pre (Nonempty-Rect (Flonum -> Flonum) Boolean -> Simple-Preimage-Fun))
-(define ((monotone/pre Γ g fx?) B)
-  (match B
+(: monotone/pre (Nonempty-Rect (Flonum -> Flonum) Boolean -> Prim-Preimage-Fun))
+(define ((monotone/pre Γ g fx?) K)
+  (match K
     [(interval a b a? b?)
-     (values omega-rect
-             (cond [fx?   (rect-intersect Γ (interval (g a) (g b) a? b?))]
-                   [else  (rect-intersect Γ (interval (g b) (g a) b? a?))]))]
-    [_  (values empty-set empty-set)]))
+     (cond [fx?   (rect-intersect Γ (interval (g a) (g b) a? b?))]
+           [else  (rect-intersect Γ (interval (g b) (g a) b? a?))])]
+    [_  empty-set]))
 
 (: monotone/comp (Interval Interval (Flonum -> Flonum) (Flonum -> Flonum) Boolean -> Computation))
 (define (monotone/comp f-domain f-range f g fx?)
-  (simple-computation/domain
+  (cached-prim-computation
    f-domain
-   (λ (_Ω Γ _Z)
-     (define range (monotone-range Γ f-range f fx?))
-     (define pre (simple-preimage omega-rect Γ range (monotone/pre Γ g fx?)))
-     (computation-meaning branches-rect range pre))))
+   (λ (Γ)
+     (define K (monotone-range Γ f-range f fx?))
+     (computation-meaning K branches-rect (prim-preimage Γ K (monotone/pre Γ g fx?))))))
 
 (: monotone/arr (Symbol Interval Interval (Flonum -> Flonum) (Flonum -> Flonum) Boolean
                         -> expression))
@@ -635,9 +653,9 @@
 ;; Monotone R x R -> R functions
 
 (: monotone2d/fwd (Symbol (Flonum Flonum -> Flonum) -> Forward-Fun))
-(define ((monotone2d/fwd name f) ω γ z)
+(define ((monotone2d/fwd name f) ω γ)
   (match γ
-    [(cons (? flonum? x) (? flonum? y))  (f x y)]
+    [(cons (? flonum? x) (? flonum? y))  (values (f x y) branches-rect)]
     [_  (raise-argument-error name "(Pair Flonum Flonum)" γ)]))
 
 (: monotone2d-range (Nonempty-Rect Interval (Flonum Flonum -> Flonum) Boolean Boolean -> Rect))
@@ -650,11 +668,11 @@
 (: monotone2d/pre (Nonempty-Rect
                    (Flonum Flonum -> Flonum) Boolean Boolean
                    (Flonum Flonum -> Flonum) Boolean Boolean
-                   -> Simple-Preimage-Fun))
+                   -> Prim-Preimage-Fun))
 (define (monotone2d/pre Γ g gz? gy? h hz? hx?)
   (match-define (pair-rect (interval xa xb xa? xb?) (interval ya yb ya? yb?)) Γ)
-  (λ (B)
-    (match B
+  (λ (K)
+    (match K
       [(interval za zb za? zb?)
        (define X
          (let-values ([(za zb za? zb?)  (if gz? (values za zb za? zb?) (values zb za zb? za?))]
@@ -664,9 +682,9 @@
          (let-values ([(za zb za? zb?)  (if hz? (values za zb za? zb?) (values zb za zb? za?))]
                       [(xa xb xa? xb?)  (if hx? (values xa xb xa? xb?) (values xb xa xb? xa?))])
            (interval (h za xa) (h zb xb) (and za? xa?) (and zb? xb?))))
-       (values omega-rect (rect-intersect Γ (pair-rect X Y)))]
+       (rect-intersect Γ (pair-rect X Y))]
       [_
-       (values empty-set empty-set)])))
+       empty-set])))
 
 (: monotone2d/comp (Pair-Rect Interval
                               (Flonum Flonum -> Flonum) Boolean Boolean
@@ -674,12 +692,12 @@
                               (Flonum Flonum -> Flonum) Boolean Boolean
                               -> Computation))
 (define (monotone2d/comp f-domain f-range f fx? fy? g gz? gy? h hz? hx?)
-  (simple-computation/domain
+  (cached-prim-computation
    f-domain
-   (λ (_Ω Γ _Z)
-     (define range (monotone2d-range Γ f-range f fx? fy?))
-     (define pre (simple-preimage omega-rect Γ range (monotone2d/pre Γ g gz? gy? h hz? hx?)))
-     (computation-meaning branches-rect range pre))))
+   (λ (Γ)
+     (define K (monotone2d-range Γ f-range f fx? fy?))
+     (define pre (prim-preimage Γ K (monotone2d/pre Γ g gz? gy? h hz? hx?)))
+     (computation-meaning K branches-rect pre))))
 
 (: monotone2d/arr (Symbol Pair-Rect Interval
                                     (Flonum Flonum -> Flonum) Boolean Boolean
@@ -697,37 +715,41 @@
 ;; Predicates
 
 (: predicate/fwd ((Value -> Boolean) -> Forward-Fun))
-(define ((predicate/fwd pred?) ω γ z)
-  (pred? γ))
+(define ((predicate/fwd pred?) ω γ)
+  (values (pred? γ) branches-rect))
 
 (: predicate-range (Rect Rect -> (U Empty-Set Boolean-Set)))
 (define (predicate-range true-set false-set)
   (booleans->boolean-set (not (empty-set? true-set))
                          (not (empty-set? false-set))))
 
-(: predicate/pre (Rect Rect -> Simple-Preimage-Fun))
+(: predicate/pre (Rect Rect -> Prim-Preimage-Fun))
 (define ((predicate/pre true-set false-set) B)
-  (define A
-    (case B
-      [(tf)  (rect-join true-set false-set)]
-      [(t)   true-set]
-      [(f)   false-set]
-      [else  empty-set]))
-  (values omega-rect A))
+  (case B
+    [(tf)  (rect-join true-set false-set)]
+    [(t)   true-set]
+    [(f)   false-set]
+    [else  empty-set]))
 
 (: predicate/comp (Rect Rect -> Computation))
 (define (predicate/comp true-set false-set)
-  (simple-computation/domain
+  (cached-prim-computation
    (rect-join true-set false-set)
-   (λ (_Ω Γ _Z)
+   (λ (Γ)
      (let ([true-set   (rect-intersect Γ true-set)]
            [false-set  (rect-intersect Γ false-set)])
-       (define range (predicate-range true-set false-set))
-       (define pre (simple-preimage omega-rect Γ range (predicate/pre true-set false-set)))
-       (computation-meaning branches-rect range pre)))))
+       (define K (predicate-range true-set false-set))
+       (define pre (prim-preimage Γ K (predicate/pre true-set false-set)))
+       (computation-meaning K branches-rect pre)))))
 
 (: predicate/arr ((Value -> Boolean) Nonempty-Rect Nonempty-Rect -> expression))
 (define (predicate/arr pred? true-set false-set)
   (define fwd (predicate/fwd pred?))
   (define comp (predicate/comp true-set false-set))
   (expression (λ (r) (expression-meaning empty fwd comp))))
+
+#;
+(define f-expr
+    (lazy-if/arr (boolean/arr 0.5)
+                 (c/arr #t)
+                 (c/arr #f)))
