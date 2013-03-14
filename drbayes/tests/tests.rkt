@@ -22,26 +22,26 @@
 (begin
   (define f-expr (pair/arr random/arr random/arr))
   (define I (interval 0.25 0.5 #t #t))
-  (define B (pair-rect I I)))
+  (define B (set-pair I I)))
 
 #;
 (begin
   (define f-expr (pair/arr random/arr (pair/arr random/arr random/arr)))
   (define I (interval 0.25 0.5 #t #t))
-  (define B (pair-rect I (pair-rect I I))))
+  (define B (set-pair I (set-pair I I))))
 
 #;; Test: list/arr (really pair/arr and unit/arr) random/arr
 ;; Preimage is a rectangle [0.25,0.5] × [0.25,0.5] × [0.25,0.5]
 (begin
   (define f-expr (list/arr random/arr random/arr random/arr))
   (define I (interval 0.25 0.5 #t #t))
-  (define B (list-rect I I I)))
+  (define B (set-list I I I)))
 
 #;; Test: same as above, using expressions
 (begin
   (define f-expr (drbayes (list (uniform) (uniform) (uniform))))
   (define I (interval 0.25 0.5 #t #t))
-  (define B (list-rect I I I)))
+  (define B (set-list I I I)))
 
 #;
 (begin
@@ -56,13 +56,13 @@
               (rcompose/arr random/arr sqr/arr)
               (rcompose/arr random/arr sqr/arr)))
   (define I (interval 0.25 0.5 #t #t))
-  (define B (list-rect I I I)))
+  (define B (set-list I I I)))
 
 #;; Test: same as above, using expressions
 (begin
   (define f-expr (drbayes (list (uniform) (sqr (uniform)) (sqr (uniform)))))
   (define I (interval 0.25 0.5 #t #t))
-  (define B (list-rect I I I)))
+  (define B (set-list I I I)))
 
 #;; Test: list/arr random/arr ap/arr sqr/arr ref/arr
 ;; Preimage is the same as just above: [0.25,0.5] × [0.5,sqrt(1/2)] × [0.5,sqrt(1/2)]
@@ -75,7 +75,7 @@
                             (ref/arr 1)
                             (ref/arr 2))))
   (define I (interval 0.25 0.5 #t #t))
-  (define B (list-rect I I I)))
+  (define B (set-list I I I)))
 
 #;; Test: list/arr random/arr ap/arr ref/arr +/arr
 ;; Preimage is a 2D downard diagonal strip × [0,1]
@@ -86,7 +86,7 @@
                   (list/arr (ref/arr 0)
                             (ref/arr 1)
                             (rcompose/arr (pair/arr (ref/arr 0) (ref/arr 1)) +/arr))))
-  (define B (list-rect reals reals (interval 0.45 0.7 #t #t))))
+  (define B (set-list real-interval real-interval (interval 0.45 0.7 #t #t))))
 
 #;; Test: same as above, with expressions
 (begin
@@ -98,7 +98,7 @@
            [y  (uniform)])
        (list x y (+ x y)))))
   
-  (define B (list-rect reals reals (interval 0.45 0.7))))
+  (define B (set-list real-interval real-interval (interval 0.45 0.7))))
 
 #;; Test: arithmetic
 (begin
@@ -110,7 +110,7 @@
             [y  (uniform -1 1)])
        (list x y (* x y)))))
   
-  (define B (list-rect reals reals (interval -0.1 0.2))))
+  (define B (set-list real-interval real-interval (interval -0.1 0.2))))
 
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:
@@ -119,9 +119,9 @@
 ;;  both: [0,1]
 (begin
   (define f-expr (list/arr (rcompose/arr (rcompose/arr random/arr normal/arr) negative?/arr)))
-  ;(define B (list-rect 't))
-  (define B (list-rect 'f))
-  ;(define B (list-rect 'tf))
+  ;(define B (set-list 't))
+  (define B (set-list 'f))
+  ;(define B (set-list 'tf))
   )
 
 #;; Test: less than
@@ -131,10 +131,11 @@
 ;;  both: [0,1] × [0,1]
 (begin
   (define f-expr (list/arr (rcompose/arr (pair/arr random/arr random/arr) lt/arr)))
-  (define B (list-rect 't))
-  ;(define B (list-rect 'f))
-  ;(define B (list-rect 'tf))
+  (define B (set-list 't))
+  ;(define B (set-list 'f))
+  ;(define B (set-list 'tf))
   )
+
 #;
 (begin
   (define f-expr
@@ -145,8 +146,8 @@
                        1.0
                        (lazy-if (boolean (const 0.5))
                                 2.0
-                                3.0)))))
-  (define B reals))
+                                (fail))))))
+  (define B real-interval))
 
 #;; Test: strict-or
 ;; Preimage should be the union of a large upper triangle and a small lower triangle, and
@@ -156,11 +157,11 @@
     (drbayes
      (let ([x  (uniform)]
            [y  (uniform)])
-       ;(list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
+       (list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
        ;(list x y (lazy-if (< x y) #t (> x (scale y (const 8)))))
-       (list x y (strict-if (< x y) #t (> x (scale y (const 8)))))
+       ;(list x y (strict-if (< x y) #t (> x (scale y (const 8)))))
        )))
-  (define B (list-rect reals reals 't)))
+  (define B (set-list real-interval real-interval trues)))
 
 #;; Test: Normal-Normal model
 ;; Preimage should be a banana shape
@@ -171,7 +172,7 @@
      (let* ([X0  (rcompose/arr (ref/arr 0) normal/arr)]
             [X1  (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 1) normal/arr)) +/arr)])
        (list/arr X0 X1))))
-  (define B (list-rect reals (interval 0.9 1.1)))
+  (define B (set-list real-interval (interval 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
 #;; Test: Normal-Normal model, using expressions
@@ -182,7 +183,7 @@
      (let* ([x  (normal)]
             [y  (normal x)])
        (list x y))))
-  (define B (list-rect reals (interval 0.9 1.1)))
+  (define B (set-list real-interval (interval 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
 #;; Test: thermometer that goes to 100
@@ -195,7 +196,7 @@
             [y  (- x (normal))])
        (list x (strict-if (y . > . 100) 100 y)))))
   
-  (define B (list-rect reals (interval 99.0 100.0))))
+  (define B (set-list real-interval (interval 99.0 100.0))))
 
 #;; Test: Normal-Normal model with circular condition
 ;; Preimage should look like a football set up for a field goal
@@ -209,7 +210,7 @@
                                                              (rcompose/arr X1 sqr/arr))
                                                    +/arr)
                                      sqrt/arr)))))
-  (define B (list-rect reals reals (interval 0.95 1.05 #t #t))))
+  (define B (set-list real-interval real-interval (interval 0.95 1.05 #t #t))))
 
 #;; Test: Normal-Normal model with circular condition, using expressions
 ;; Preimage should be as above
@@ -219,7 +220,7 @@
      (let* ([x0  (normal)]
             [x1  (normal x0)])
        (list x0 x1 (sqrt (+ (sqr x0) (sqr x1)))))))
-  (define B (list-rect reals reals (interval 0.95 1.05))))
+  (define B (set-list real-interval real-interval (interval 0.95 1.05))))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
@@ -237,7 +238,7 @@
                   (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 2) normal/arr)) +/arr)
                   (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 2) cauchy/arr)) +/arr))])
        (list/arr X0 X1 B))))
-  (define B (list-rect reals (interval 0.9 1.1 #t #t) 'tf)))
+  (define B (set-list real-interval (interval 0.9 1.1 #t #t) 'tf)))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
@@ -248,7 +249,7 @@
                 (list x (normal x)))
               (let ([x  (cauchy)])
                 (list x (cauchy x))))))
-  (define B (list-rect reals (interval 0.9 1.1))))
+  (define B (set-list real-interval (interval 0.9 1.1))))
 
 #;; Test: Boolean(p) distribution
 ;; Preimage should be [0,p); sampler should restart only once
@@ -299,7 +300,7 @@
      (let ([x  (geometric-p)])
        (list x (normal x)))))
   
-  (define B (list-rect reals (interval 2.9 3.1 #t #t)))
+  (define B (set-list real-interval (interval 2.9 3.1 #t #t)))
   
   (let ()
     (define xs (sample (geometric-dist p) 10000))
@@ -311,7 +312,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 5)
@@ -333,13 +334,13 @@
              (normal x)
              (normal x)))))
   (define B
-    (list-rect reals
-               (interval 2.2 2.4 #t #t)
-               (interval 0.9 1.1 #t #t)
-               (interval -0.1 0.1 #t #t)
-               (interval -0.9 -0.7 #t #t)
-               (interval 0.4 0.6 #t #t)
-               (interval 1.3 1.5 #t #t)))
+    (set-list real-interval
+              (interval 2.2 2.4 #t #t)
+              (interval 0.9 1.1 #t #t)
+              (interval -0.1 0.1 #t #t)
+              (interval -0.9 -0.7 #t #t)
+              (interval 0.4 0.6 #t #t)
+              (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
 #;
@@ -363,7 +364,43 @@
   
   (define f-expr (drbayes (S)))
   
-  (define B (list*-rect 'tf 't 'f 't 'f 't 'f universal-set)))
+  (define B (set-list* 'tf 't 'f 't 'f 't 'f universe)))
+
+#;; Test: tagging
+(begin
+  (define t0 (make-set-tag 't0))
+  (define f-expr (drbayes (tag (uniform) t0)))
+  (define B (set-tag real-interval t0)))
+
+#;; Test: tagging and untagging
+(begin
+  (define t0 (make-set-tag 't0))
+  (define f-expr (drbayes (untag (tag (uniform) t0) t0)))
+  (define B real-interval))
+
+#;; Test: Normal-Normal with circular condition and first variable tagged
+(begin
+  (define t0 (make-set-tag 't0))
+  (define f-expr
+    (drbayes
+     (let* ([x0  (tag (normal) t0)]
+            [x1  (normal (untag x0 t0))])
+       (list (untag x0 t0) x1 (sqrt (+ (sqr (untag x0 t0)) (sqr x1)))))))
+  (define B (set-list real-interval real-interval (interval 0.95 1.05))))
+
+(begin
+  (define t0 (make-set-tag 't0))
+  (define f-expr
+    (drbayes
+     (let* ([x0  (lazy-if (boolean (const 0.5))
+                          (normal 0.0 2.0)
+                          (tag (normal) t0))]
+            [y0  (prim-if (tag? x0 t0) (* 0.5 (untag x0 t0)) x0)]
+            [x1  (normal y0)])
+       (list y0
+             x1
+             (sqrt (+ (sqr y0) (sqr x1)))))))
+  (define B (set-list real-interval real-interval (interval 0.95 1.05))))
 
 ;; ===================================================================================================
 
@@ -398,13 +435,13 @@
 (define (accept-sample? s)
   (define x (domain-sample-x s))
   (and (not (void? x))
-       (rect-member? B x)
+       (set-member? B x)
        (not (empty-set? (branches-rect-intersect (domain-sample-Z s) (domain-sample-z s))))))
 
 (: orig-samples (Listof Omega-Sample))
 (define orig-samples
-  (;time
-   profile-expr
+  (time
+   ;profile-expr
    (refinement-sample* Ω Z idxs refine n)))
 (newline)
 

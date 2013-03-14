@@ -3,8 +3,7 @@
 (require racket/match
          racket/list
          racket/promise
-         "omega.rkt"
-         "rect.rkt"
+         "../set.rkt"
          "arrow.rkt"
          "arrow-prims.rkt")
 
@@ -25,6 +24,11 @@
   (begin (: name (expression expression -> expression))
          (define (name x y) (rcompose/arr (pair/arr x y) f/arr))))
 
+(define-wrapped-unary/arr real?/exp real?/arr)
+(define-wrapped-unary/arr null?/exp null?/arr)
+(define-wrapped-unary/arr pair?/exp pair?/arr)
+(define-wrapped-unary/arr boolean?/exp boolean?/arr)
+
 (define-wrapped-unary/arr neg/exp neg/arr)
 (define-wrapped-unary/arr recip/exp recip/arr)
 (define-wrapped-unary/arr exp/exp exp/arr)
@@ -35,7 +39,7 @@
 (define-wrapped-unary/arr nonpositive?/exp nonpositive?/arr)
 (define-wrapped-unary/arr positive?/exp positive?/arr)
 (define-wrapped-unary/arr nonnegative?/exp nonnegative?/arr)
-(define-wrapped-unary/arr null?/exp null?/arr)
+
 (define-wrapped-binary/arr +/exp +/arr)
 (define-wrapped-binary/arr -/exp -/arr)
 (define-wrapped-binary/arr */exp */arr)
@@ -66,7 +70,7 @@
 (define (snd/exp p)
   (rcompose/arr p (ref/arr 'snd)))
 
-(: list-ref/exp (expression Idx -> expression))
+(: list-ref/exp (expression Pair-Index -> expression))
 (define (list-ref/exp lst j)
   (rcompose/arr lst (ref/arr j)))
 
@@ -127,3 +131,18 @@
 (: strict-if/exp (expression (-> expression) (-> expression) -> expression))
 (define (strict-if/exp c t f)
   (strict-if/arr c (delay/exp t) (delay/exp f)))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Tagged sets
+
+(: tag?/exp (expression Symbol -> expression))
+(define (tag?/exp e tag)
+  (rcompose/arr e (tag?/arr tag)))
+
+(: tag/exp (expression Symbol -> expression))
+(define (tag/exp e tag)
+  (rcompose/arr e (tag/arr tag)))
+
+(: untag/exp (expression Symbol -> expression))
+(define (untag/exp e tag)
+  (rcompose/arr e (untag/arr tag)))

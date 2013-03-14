@@ -5,12 +5,10 @@
          racket/promise
          math/flonum
          math/distributions
-         "omega.rkt"
-         "rect.rkt"
-         "indexes.rkt"
-         "arrow.rkt"
+         "../set.rkt"
+         "../arrow.rkt"
          "search.rkt"
-         "utils.rkt")
+         "../utils.rkt")
 
 (provide (all-defined-out))
 
@@ -27,7 +25,7 @@
 
 (define-type Refiner (Omega-Rect Branches-Rect -> (Values Maybe-Omega-Rect Maybe-Branches-Rect)))
 
-(: preimage-refiner (Computation Nonempty-Rect -> Refiner))
+(: preimage-refiner (Computation Nonempty-Set -> Refiner))
 (define ((preimage-refiner e-comp K) Ω Z)
   (match-let ([(computation-meaning _ Ze e-pre)  (e-comp Ω null-rect)])
     (let*-values ([(Z)  (branches-rect-intersect Z Ze)]
@@ -101,8 +99,8 @@
 ;; Front end to sampler
 
 (: drbayes-sample (case-> (expression Natural -> (Values (Listof Value) (Listof Flonum)))
-                          (expression Natural Rect -> (Values (Listof Value) (Listof Flonum)))))
-(define (drbayes-sample f n [K universal-set])
+                          (expression Natural Set -> (Values (Listof Value) (Listof Flonum)))))
+(define (drbayes-sample f n [K universe])
   (match-define (expression-meaning idxs f-fwd f-comp) (run-expression f))
   
   (define (empty-set-error)
@@ -127,7 +125,7 @@
              (match-define (weighted-sample (cons Ω Z) p) (first omega-samples))
              (define ω (omega-rect-sample-point Ω))
              (define-values (k z) (f-fwd ω null))
-             (cond [(and (rect-member? K k) (not (empty-set? (branches-rect-intersect Z z))))
+             (cond [(and (set-member? K k) (not (empty-set? (branches-rect-intersect Z z))))
                     (define m (omega-rect-measure Ω))
                     (cons (weighted-sample k (/ m p)) (loop (rest omega-samples)))]
                    [else

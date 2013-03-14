@@ -1,26 +1,16 @@
-#lang typed/racket
+#lang typed/racket/base
 
-(require "private/functions.rkt"
-         "private/omega.rkt"
-         "private/rect.rkt"
-         "private/indexes.rkt"
+(require "private/set.rkt"
          "private/arrow.rkt"
-         "private/arrow-prims.rkt"
-         "private/expression.rkt"
-         "private/language.rkt"
          "private/search.rkt"
-         "private/sample.rkt"
+         "private/language.rkt"
+         "private/functions.rkt"
          )
 
 (provide (all-from-out
-          "private/functions.rkt"
-          "private/omega.rkt"
-          "private/rect.rkt"
-          "private/indexes.rkt"
-          "private/arrow.rkt"
-          "private/arrow-prims.rkt"
-          "private/expression.rkt"
-          "private/language.rkt"
-          "private/search.rkt"
-          "private/sample.rkt"
-          ))
+         "private/set.rkt"
+         "private/arrow.rkt"
+         "private/search.rkt"
+         "private/language.rkt"
+         "private/functions.rkt"
+         ))

@@ -17,11 +17,8 @@
          (except-in typed/racket/base Refinement)
          racket/stxparam
          "functions.rkt"
-         "omega.rkt"
-         "rect.rkt"
-         "arrow.rkt"
-         "arrow-prims.rkt"
-         "expression.rkt")
+         "set.rkt"
+         "arrow.rkt")
 
 (provide define/drbayes drbayes racket)
 
@@ -76,9 +73,15 @@
   (define-syntax-class 1ary-primitive
     #:description "unary primitive operator"
     #:attributes (combinator)
-    #:literals (car cdr exp log sqr sqrt negative? positive? nonnegative? nonpositive? null?)
+    #:literals (car cdr real? null? pair? boolean?
+                    exp log sqr sqrt
+                    negative? positive? nonnegative? nonpositive?)
     (pattern car #:attr combinator #'fst/exp)
     (pattern cdr #:attr combinator #'snd/exp)
+    (pattern real? #:attr combinator #'real?/exp)
+    (pattern null? #:attr combinator #'null?/exp)
+    (pattern pair? #:attr combinator #'pair?/exp)
+    (pattern boolean? #:attr combinator #'boolean?/exp)
     (pattern exp #:attr combinator #'exp/exp)
     (pattern log #:attr combinator #'log/exp)
     (pattern sqr #:attr combinator #'sqr/exp)
@@ -87,7 +90,6 @@
     (pattern positive? #:attr combinator #'positive?/exp)
     (pattern nonnegative? #:attr combinator #'nonnegative?/exp)
     (pattern nonpositive? #:attr combinator #'nonpositive?/exp)
-    (pattern null? #:attr combinator #'null?/exp)
     )
   
   (define-syntax-class 2ary-primitive
@@ -259,7 +261,8 @@
                                   strict-if strict-cond
                                   lazy-if lazy-cond
                                   let let*
-                                  list-ref scale translate boolean)
+                                  list-ref scale translate boolean
+                                  tag? tag untag)
       [(_ e:constant)
        (syntax/loc stx e.expression)]
       
@@ -320,6 +323,15 @@
       
       [(_ (boolean ~! (const p:expr)))
        (syntax/loc stx (boolean/exp (cast (const p #'p) Flonum)))]
+      
+      [(_ (tag? ~! e:expr t:expr))
+       (syntax/loc stx (tag?/exp (parse e) t))]
+      
+      [(_ (tag ~! e:expr t:expr))
+       (syntax/loc stx (tag/exp (parse e) t))]
+      
+      [(_ (untag ~! e:expr t:expr))
+       (syntax/loc stx (untag/exp (parse e) t))]
       
       [(_ (let () body:expr))
        (syntax/loc stx (parse body))]

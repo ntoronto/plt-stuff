@@ -1,22 +1,25 @@
 #lang typed/racket
 
-(require "../private/omega.rkt")
+(require (except-in "../private/set/omega.rkt"
+                    Omega-Hash
+                    omega-hash-ref
+                    omega-hash-set))
 
 ;; ===================================================================================================
 ;; Randomized bisimulation tests for reffing and setting omega trees
 
 (define-predicate zero-or-one? (U 0 1))
 
-(define-type (Omega-Hash A) (HashTable Omega-Idx A))
+(define-type (Omega-Hash A) (HashTable Omega-Index A))
 
 (define: empty-omega-hash : (Omega-Hash Integer)  (make-immutable-hash empty))
 
 (: omega-tree->omega-hash ((Omega-Tree Integer) -> (Omega-Hash Integer)))
 (define (omega-tree->omega-hash t)
   (make-immutable-hash
-   (let: loop : (Listof (Pair Omega-Idx Integer)) ([t : (Omega-Tree Integer)  t]
-                                                   [idx : Omega-Idx  empty]
-                                                   [kvs : (Listof (Pair Omega-Idx Integer))  empty])
+   (let: loop : (Listof (Pair Omega-Index Integer)) ([t : (Omega-Tree Integer)  t]
+                                                   [idx : Omega-Index  empty]
+                                                   [kvs : (Listof (Pair Omega-Index Integer))  empty])
      (cond [(omega-leaf? t)  kvs]
            [else
             (define v (Omega-Node-value t))
@@ -26,16 +29,16 @@
                                  (cons 1 idx)
                                  (cons (cons (reverse idx) v) kvs))]))]))))
 
-(: omega-hash-ref ((Omega-Hash Integer) Omega-Idx -> Integer))
+(: omega-hash-ref ((Omega-Hash Integer) Omega-Index -> Integer))
 (define (omega-hash-ref h k)
   (hash-ref h k (λ () 0)))
 
-(: omega-hash-set ((Omega-Hash Integer) Omega-Idx Integer -> (Omega-Hash Integer)))
+(: omega-hash-set ((Omega-Hash Integer) Omega-Index Integer -> (Omega-Hash Integer)))
 (define (omega-hash-set h k i)
   (cond [(= i 0)  (hash-remove h k)]
         [else  (hash-set h k i)]))
 
-(: random-omega-idx (-> Omega-Idx))
+(: random-omega-idx (-> Omega-Index))
 (define (random-omega-idx)
   (build-list (random 3) (λ (_) (assert (random 2) zero-or-one?))))
 
@@ -78,4 +81,4 @@
                    (loop (- n 1) h t))])))
 
 ;; Test passes when no errors are raised
-(call-with-values (λ () (bisimulate 10000)) void)
+(time (call-with-values (λ () (bisimulate 100000)) void))

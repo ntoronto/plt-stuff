@@ -1,8 +1,10 @@
 Find out why eq?-ness is sometimes not preserved, fix (for faster in-cache test)
 Make sure DrBayes-level "let" is faster than manual substitution (when manual substitution retains meaning)
+Data structure declarations (that expand to use of `tag?', `tag' and `untag')
 Try ray tracing
-Custom data structures (for NLP tests)
+NLP tests
 Talk to Kevin about stocks test case
+Cache Ω measures
 Fail on measure-zero Ω, not just empty Ω
 Log probabilities
 Bootstrap sampling resamples point within Ω

@@ -44,4 +44,5 @@
         [(pair? v)  (append (value->listof-flonum (car v))
                             (value->listof-flonum (cdr v)))]
         [(null? v)  (list)]
+        [(tagged? v)  (value->listof-flonum (get-val v))]
         [else  (list -1.0)]))

@@ -31,7 +31,7 @@
    (define-values (ss ws)
      (drbayes-sample (drbayes (S))
                      200
-                     (list*-rect 'tf 't 'f 't 'f 't universal-set)))
+                     (set-list* 'tf 't 'f 't 'f 't universe)))
    (list ss ws)))
 
 (printf "search stats:~n")

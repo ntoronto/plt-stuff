@@ -1,6 +1,6 @@
 #lang typed/racket
 
-(require "rect.rkt")
+(require "set.rkt")
 
 (provide (all-defined-out))
 
@@ -52,3 +52,17 @@
 (define-syntax (normal stx) (undefined-outside-drbayes stx))
 (define-syntax (cauchy stx) (undefined-outside-drbayes stx))
 (define-syntax (boolean stx) (undefined-outside-drbayes stx))
+
+(define tag?
+  (λ: ([v : Value] [t : Set-Tag])
+    (and (tagged? v) (eq? t (get-tag v)))))
+
+(: tag (Value Set-Tag -> Value))
+(define (tag v t)
+  (tagged t v))
+
+(: untag (Value Set-Tag -> Value))
+(define (untag v t)
+  (if (tag? v t)
+      (get-val v)
+      (raise-argument-error 'untag (symbol->string t) v)))

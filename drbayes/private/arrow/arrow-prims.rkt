@@ -4,7 +4,7 @@
          racket/list
          racket/flonum
          math/distributions
-         "rect.rkt"
+         "../set.rkt"
          "arrow.rkt")
 
 (provide (all-defined-out))
@@ -13,10 +13,17 @@
 ;; Lists
 
 (define null/arr (c/arr null))
-(define null?/arr (predicate/arr null? null-rect (Join-Rect reals #f universal-pair 'tf)))
 
 (: list/arr (expression * -> expression))
 (define (list/arr . es) (foldr pair/arr null/arr es))
+
+;; ===================================================================================================
+;; Primitive data type predicates
+
+(define real?/arr (predicate/arr flonum? real-interval (top-rect real-tag empty-set)))
+(define null?/arr (predicate/arr null? null-rect (top-rect null-tag empty-set)))
+(define pair?/arr (predicate/arr cons? all-pairs (top-rect pair-tag empty-set)))
+(define boolean?/arr (predicate/arr boolean? booleans (top-rect boolean-tag empty-set)))
 
 ;; ===================================================================================================
 ;; Monotone R -> R functions
@@ -24,14 +31,14 @@
 (: scale/arr (Flonum -> expression))
 (define (scale/arr y)
   (cond [(fl= y 0.0)  (c/arr 0.0)]
-        [else  (monotone/arr 'scale/arr reals reals
+        [else  (monotone/arr 'scale/arr real-interval real-interval
                              (λ: ([x : Flonum]) (fl* x y))
                              (λ: ([z : Flonum]) (fl/ z y))
                              (y . fl> . 0.0))]))
 
 (: translate/arr (Flonum -> expression))
 (define (translate/arr y)
-  (monotone/arr 'translate/arr reals reals
+  (monotone/arr 'translate/arr real-interval real-interval
                 (λ: ([x : Flonum]) (fl+ x y))
                 (λ: ([z : Flonum]) (fl- z y))
                 #t))
@@ -48,14 +55,20 @@
 (: flneg-sqrt (Flonum -> Flonum))
 (define (flneg-sqrt x) (- (flsqrt x)))
 
-(define neg/arr (monotone/arr 'neg/arr reals reals flneg flneg #f))
-(define exp/arr (monotone/arr 'exp/arr reals nonnegative-reals flexp fllog #t))
-(define log/arr (monotone/arr 'log/arr nonnegative-reals reals fllog flexp #t))
-(define sqrt/arr (monotone/arr 'sqrt/arr nonnegative-reals nonnegative-reals flsqrt flsqr #t))
-(define pos-recip/arr (monotone/arr 'recip/arr positive-reals positive-reals flrecip flrecip #t))
-(define neg-recip/arr (monotone/arr 'recip/arr negative-reals negative-reals flrecip flrecip #f))
-(define pos-sqr/arr (monotone/arr 'sqr/arr nonnegative-reals nonnegative-reals flsqr flsqrt #t))
-(define neg-sqr/arr (monotone/arr 'sqr/arr negative-reals positive-reals flsqr flneg-sqrt #f))
+(define neg/arr (monotone/arr 'neg/arr real-interval real-interval flneg flneg #f))
+(define exp/arr (monotone/arr 'exp/arr real-interval nonnegative-interval flexp fllog #t))
+(define log/arr (monotone/arr 'log/arr nonnegative-interval real-interval fllog flexp #t))
+(define sqrt/arr (monotone/arr 'sqrt/arr nonnegative-interval nonnegative-interval flsqrt flsqr #t))
+
+(define pos-recip/arr
+  (monotone/arr 'recip/arr positive-interval positive-interval flrecip flrecip #t))
+(define neg-recip/arr
+  (monotone/arr 'recip/arr negative-interval negative-interval flrecip flrecip #f))
+
+(define pos-sqr/arr
+  (monotone/arr 'sqr/arr nonnegative-interval nonnegative-interval flsqr flsqrt #t))
+(define neg-sqr/arr
+  (monotone/arr 'sqr/arr negative-interval positive-interval flsqr flneg-sqrt #f))
 
 (: inverse-cdf/arr (Symbol Interval (Flonum -> Flonum) (Flonum -> Flonum) -> expression))
 (define (inverse-cdf/arr name range inv-cdf cdf)
@@ -77,14 +90,16 @@
 (define (normal-cdf x)
   (flnormal-cdf 0.0 1.0 x #f #f))
 
-(define cauchy/arr (inverse-cdf/arr 'cauchy/arr reals cauchy-inv-cdf cauchy-cdf))
-(define normal/arr (inverse-cdf/arr 'normal/arr reals normal-inv-cdf normal-cdf))
+(define cauchy/arr (inverse-cdf/arr 'cauchy/arr real-interval cauchy-inv-cdf cauchy-cdf))
+(define normal/arr (inverse-cdf/arr 'normal/arr real-interval normal-inv-cdf normal-cdf))
 
 ;; ===================================================================================================
 ;; Monotone R x R -> R functions
 
+(define real-pair (pair-rect real-interval real-interval))
+
 (define +/arr
-  (monotone2d/arr '+/arr (pair-rect reals reals) reals
+  (monotone2d/arr '+/arr real-pair real-interval
                   fl+ #t #t
                   fl- #t #f
                   fl- #t #f))
@@ -93,31 +108,31 @@
 (define (neg-fl- z x) (fl- x z))
 
 (define -/arr
-  (monotone2d/arr '-/arr (pair-rect reals reals) reals
+  (monotone2d/arr '-/arr real-pair real-interval
                   fl- #t #f
                   fl+ #t #t
                   neg-fl- #f #t))
 
 (define pos-pos-mul/arr
-  (monotone2d/arr '*/arr (pair-rect nonnegative-reals nonnegative-reals) nonnegative-reals
+  (monotone2d/arr '*/arr (pair-rect nonnegative-interval nonnegative-interval) nonnegative-interval
                   fl* #t #t
                   fl/ #t #f
                   fl/ #t #f))
 
 (define pos-neg-mul/arr
-  (monotone2d/arr '*/arr (pair-rect nonnegative-reals negative-reals) nonpositive-reals
+  (monotone2d/arr '*/arr (pair-rect nonnegative-interval negative-interval) nonpositive-interval
                   fl* #f #t
                   fl/ #f #t
                   fl/ #t #t))
 
 (define neg-pos-mul/arr
-  (monotone2d/arr '*/arr (pair-rect negative-reals nonnegative-reals) nonpositive-reals
+  (monotone2d/arr '*/arr (pair-rect negative-interval nonnegative-interval) nonpositive-interval
                   fl* #t #f
                   fl/ #t #t
                   fl/ #f #t))
 
 (define neg-neg-mul/arr
-  (monotone2d/arr '*/arr (pair-rect negative-reals negative-reals) positive-reals
+  (monotone2d/arr '*/arr (pair-rect negative-interval negative-interval) positive-interval
                   fl* #f #f
                   fl/ #f #f
                   fl/ #f #f))
@@ -126,25 +141,25 @@
 (define (recip-fl/ z x) (fl/ x z))
 
 (define pos-pos-div/arr
-  (monotone2d/arr '//arr (pair-rect positive-reals positive-reals) positive-reals
+  (monotone2d/arr '//arr (pair-rect positive-interval positive-interval) positive-interval
                   fl/ #t #f
                   fl* #t #t
                   recip-fl/ #f #t))
 
 (define pos-neg-div/arr
-  (monotone2d/arr '//arr (pair-rect positive-reals negative-reals) negative-reals
+  (monotone2d/arr '//arr (pair-rect positive-interval negative-interval) negative-interval
                   fl/ #f #f
                   fl* #f #f
                   recip-fl/ #f #f))
 
 (define neg-pos-div/arr
-  (monotone2d/arr '//arr (pair-rect negative-reals positive-reals) negative-reals
+  (monotone2d/arr '//arr (pair-rect negative-interval positive-interval) negative-interval
                   fl/ #t #t
                   fl* #t #f
                   recip-fl/ #t #f))
 
 (define neg-neg-div/arr
-  (monotone2d/arr '//arr (pair-rect negative-reals negative-reals) positive-reals
+  (monotone2d/arr '//arr (pair-rect negative-interval negative-interval) positive-interval
                   fl/ #f #t
                   fl* #f #t
                   recip-fl/ #t #t))
@@ -160,19 +175,19 @@
 
 (define negative?/arr
   (real-predicate/arr 'negative?/arr (λ: ([x : Flonum]) (x . fl< . 0.0))
-                      negative-reals nonnegative-reals))
+                      negative-interval nonnegative-interval))
 
 (define positive?/arr
   (real-predicate/arr 'positive?/arr (λ: ([x : Flonum]) (x . fl> . 0.0))
-                      positive-reals nonpositive-reals))
+                      positive-interval nonpositive-interval))
 
 (define nonpositive?/arr
   (real-predicate/arr 'nonpositive?/arr (λ: ([x : Flonum]) (x . fl<= . 0.0))
-                      nonpositive-reals positive-reals))
+                      nonpositive-interval positive-interval))
 
 (define nonnegative?/arr
   (real-predicate/arr 'nonnegative?/arr (λ: ([x : Flonum]) (x . fl>= . 0.0))
-                      nonnegative-reals negative-reals))
+                      nonnegative-interval negative-interval))
 
 (define lt/arr (rcompose/arr -/arr negative?/arr))
 (define gt/arr (rcompose/arr -/arr positive?/arr))
@@ -198,14 +213,14 @@
                             pos-pos-mul/arr
                             (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
                                          pos-neg-mul/arr
-                                         (c/arr 0.0 (pair-rect reals reals))))
+                                         (c/arr 0.0 real-pair)))
                (prim-if/arr (rcompose/arr (ref/arr 'fst) negative?/arr)
                             (prim-if/arr (rcompose/arr (ref/arr 'snd) positive?/arr)
                                          neg-pos-mul/arr
                                          (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
                                                       neg-neg-mul/arr
-                                                      (c/arr 0.0 (pair-rect reals reals))))
-                            (c/arr 0.0 (pair-rect reals reals))))
+                                                      (c/arr 0.0 real-pair)))
+                            (c/arr 0.0 real-pair)))
   #;
   (prim-if/arr (rcompose/arr (ref/arr 'fst) negative?/arr)
                (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)

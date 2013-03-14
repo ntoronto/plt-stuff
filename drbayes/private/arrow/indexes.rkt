@@ -3,8 +3,9 @@
 (require racket/flonum
          racket/match
          racket/list
-         "omega.rkt"
-         "rect.rkt")
+         "../set/omega.rkt"
+         "../set/extremal-set.rkt"
+         "../set/interval.rkt")
 
 (provide (all-defined-out))
 
@@ -19,15 +20,15 @@
 
 (define-type Indexes (Listof (U interval-index if-indexes)))
 
-(struct: interval-index ([index : Omega-Idx]
+(struct: interval-index ([index : Omega-Index]
                          [split : Interval-Splitter]
                          [count : Natural]
                          [min-length : Nonnegative-Flonum])
   #:transparent)
-(struct: if-indexes ([index : Omega-Idx] [true : (-> Indexes)] [false : (-> Indexes)])
+(struct: if-indexes ([index : Omega-Index] [true : (-> Indexes)] [false : (-> Indexes)])
   #:transparent)
 
-(: make-interval-index (Omega-Idx Interval-Splitter -> interval-index))
+(: make-interval-index (Omega-Index Interval-Splitter -> interval-index))
 (define (make-interval-index idx split)
   (interval-index idx split (interval-max-splits) (interval-min-length)))
 
@@ -59,7 +60,7 @@
 
 (: make-constant-splitter ((Listof Interval) -> Interval-Splitter))
 (define (make-constant-splitter Is)
-  (when (not (apply rect-disjoint? Is))
+  (when (not (apply interval-disjoint? Is))
     (raise-argument-error 'make-binary-split "disjoint (Listof Interval)" Is))
   (let-values ([(Is _)  (intersect-and-filter Is unit-interval)])
     (λ (A _) (intersect-and-filter Is A))))
