@@ -6,6 +6,8 @@
          math/flonum
          "../main.rkt")
 
+(printf "starting...~n")
+
 (define/drbayes (S)
   (lazy-if (boolean (const 0.5)) (T) (F)))
 
@@ -18,9 +20,9 @@
   (lazy-cond [(boolean (const 0.4))  (cons #f (F))]
              [(boolean (const 0.5))  #;(cons #f (T))
                                      (cons #f (let ([s  (T)])
-                                                (prim-if (list-ref s (const 1))
-                                                         (fail)
-                                                         s)))]
+                                                  (prim-if (list-ref s (const 1))
+                                                           (fail)
+                                                           s)))]
              [else  null]))
 
 #;
@@ -31,7 +33,7 @@
    (define-values (ss ws)
      (drbayes-sample (drbayes (S))
                      200
-                     (set-list* 'tf 't 'f 't 'f 't universe)))
+                     (set-list* booleans trues falses trues falses trues universe)))
    (list ss ws)))
 
 (printf "search stats:~n")
@@ -62,7 +64,7 @@
                                    (and s (cons #f s)))]
           [((random) . < . 0.5)  (let ([s  (racket-T)])
                                    (and s
-                                        #;(or (empty? s) (empty? (rest s)) (not (list-ref s 1)))
+                                        (or (empty? s) (empty? (rest s)) (not (list-ref s 1)))
                                         (cons #f s)))]
           [else  null]))
   
@@ -71,8 +73,8 @@
      (cond [(i . < . 200)
             (define s (racket-S))
             (match s
-              #;[(list _ #t #f #t #f #t _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
-              [_  (cons (cast s (Listof Boolean)) (loop (+ i 1)))]
+              [(list _ #t #f #t #f #t _ ...)  (cons (assert s pair?) (loop (+ i 1)))]
+              ;[_  (cons (cast s (Listof Boolean)) (loop (+ i 1)))]
               [_  (loop i)])]
            [else
             empty])))

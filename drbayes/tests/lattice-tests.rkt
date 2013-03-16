@@ -317,11 +317,10 @@
          (match-define (pair-rect A1 A2) A)
          (cons (random-set-member A1) (random-set-member A2))]
         [(boolean-rect? A)
-         (case A
-           [(tf)  (if ((random) . < . 0.5) #t #f)]
-           [(t)   #t]
-           [(f)   #f]
-           [else  (error 'random-rect-member "bad boolean set ~e" A)])]))
+         (cond [(eq? A booleans)  (if ((random) . < . 0.5) #t #f)]
+               [(eq? A trues)     #t]
+               [(eq? A falses)    #f]
+               [else  (error 'random-rect-member "bad boolean set ~e" A)])]))
 
 (: random-bot-set-member (Bot-Set -> Value))
 (define (random-bot-set-member A)

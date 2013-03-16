@@ -245,7 +245,7 @@
 (define ((rcompose/fwd f-fwd g-fwd) ω γ)
   (define-values (kf zf) (f-fwd ω γ))
   (define-values (kg zg) (g-fwd ω kf))
-  (values kg (branches-rect-node 'tf zf zg)))
+  (values kg (branches-rect-node booleans zf zg)))
 
 (: rcompose/pre (Preimage-Fun Preimage-Fun Omega-Rect -> Simple-Preimage-Fun))
 (define ((rcompose/pre f-pre g-pre Ω) Kg Z)
@@ -259,7 +259,7 @@
    (λ (Ω Γf)
      (match-define (computation-meaning Kf Zf f-pre) (f-comp (omega-rect-fst Ω) Γf))
      (match-define (computation-meaning Kg Zg g-pre) (g-comp (omega-rect-snd Ω) Kf))
-     (define Z (branches-rect-node 'tf Zf Zg))
+     (define Z (branches-rect-node booleans Zf Zg))
      (define pre (simple-preimage Ω Γf Kg Z (rcompose/pre f-pre g-pre Ω)))
      (computation-meaning Kg Z pre))))
 
@@ -280,7 +280,7 @@
 (define ((pair/fwd fst-fwd snd-fwd) ω γ)
   (define-values (k1 z1) (fst-fwd ω γ))
   (define-values (k2 z2) (snd-fwd ω γ))
-  (values (cons k1 k2) (branches-rect-node 'tf z1 z2)))
+  (values (cons k1 k2) (branches-rect-node booleans z1 z2)))
 
 (: pair/pre (Preimage-Fun Preimage-Fun
                           Omega-Rect Omega-Rect Omega-Rect Nonempty-Set
@@ -313,7 +313,7 @@
      (match-define (computation-meaning K1 Z1 pre1) (comp1 Ω1 Γ))
      (match-define (computation-meaning K2 Z2 pre2) (comp2 Ω2 Γ))
      (define K (set-pair K1 K2))
-     (define Z (branches-rect-node 'tf Z1 Z2))
+     (define Z (branches-rect-node booleans Z1 Z2))
      (define pre (simple-preimage Ω Γ K Z (pair/pre pre1 pre2 Ω Ω1 Ω2 Γ K1 K2 Z1 Z2)))
      (computation-meaning K Z pre))))
 
@@ -336,9 +336,9 @@
 (define ((switch/fwd idx t-fwd f-fwd) ω γ)
   (match γ
     [(cons #t γ)  (define-values (kt zt) ((t-fwd) ω γ))
-                  (values kt (branches-rect-node 't zt branches-rect))]
+                  (values kt (branches-rect-node trues zt branches-rect))]
     [(cons #f γ)  (define-values (kf zf) ((f-fwd) ω γ))
-                  (values kf (branches-rect-node 'f branches-rect zf))]
+                  (values kf (branches-rect-node falses branches-rect zf))]
     [_  (raise-argument-error 'switch/fwd "(Pair Boolean Value)" γ)]))
 
 (: switch/comp ((-> Computation) (-> Computation) -> Computation))
@@ -376,23 +376,23 @@
         (: switch/pre Simple-Preimage-Fun)
         (define (switch/pre K Z)
           (define b (branches-rect-value Z))
-          (cond [(eq? b 'tf)  (values Ω Γ)]
-                [(eq? b 't)   (t/pre K Z)]
-                [(eq? b 'f)   (f/pre K Z)]
+          (cond [(eq? b booleans)  (values Ω Γ)]
+                [(eq? b trues)     (t/pre K Z)]
+                [(eq? b falses)    (f/pre K Z)]
                 [else  (values empty-set empty-set)]))
         
         (cond
-          [(eq? Γb 'tf)
+          [(eq? Γb booleans)
            (define K universe)
            (define Z branches-rect)
            (computation-meaning K Z (simple-preimage Ω Γ K Z switch/pre))]
-          [(eq? Γb 't)
+          [(eq? Γb trues)
            (match-define (computation-meaning Kt Zt pre) (force t-meaning))
-           (define Z (branches-rect-node 't Zt branches-rect))
+           (define Z (branches-rect-node trues Zt branches-rect))
            (computation-meaning Kt Z (simple-preimage Ω Γ Kt Z t/pre))]
-          [(eq? Γb 'f)
+          [(eq? Γb falses)
            (match-define (computation-meaning Kf Zf pre) (force f-meaning))
-           (define Z (branches-rect-node 'f branches-rect Zf))
+           (define Z (branches-rect-node falses branches-rect Zf))
            (computation-meaning Kf Z (simple-preimage Ω Γ Kf Z f/pre))]
           [else
            (bottom/comp empty-set empty-set)])]))))
@@ -418,8 +418,6 @@
 (define (lazy-if/arr c-expr t-expr f-expr)
   (rcompose/arr (pair/arr c-expr id/arr)
                 (switch/arr t-expr f-expr)))
-
-(define strict-if/arr lazy-if/arr)
 
 ;; ===================================================================================================
 ;; Random
@@ -466,11 +464,10 @@
   (define Ω1 (omega-rect-fst Ω))
   (define Ω2 (omega-rect-snd Ω))
   (λ (K Z)
-    (define I (case K
-                [(tf)  (set-join It If)]
-                [(t)   It]
-                [(f)   If]
-                [else  empty-set]))
+    (define I (cond [(eq? K booleans)  (set-join It If)]
+                    [(eq? K trues)     It]
+                    [(eq? K falses)    If]
+                    [else              empty-set]))
     (cond [(interval? I)  (values (omega-rect-node I Ω1 Ω2) Γ)]
           [else           (values empty-set empty-set)])))
 
@@ -727,11 +724,10 @@
 
 (: predicate/pre (Set Set -> Prim-Preimage-Fun))
 (define ((predicate/pre true-set false-set) B)
-  (case B
-    [(tf)  (set-join true-set false-set)]
-    [(t)   true-set]
-    [(f)   false-set]
-    [else  empty-set]))
+  (cond [(eq? B booleans)  (set-join true-set false-set)]
+        [(eq? B trues)     true-set]
+        [(eq? B falses)    false-set]
+        [else              empty-set]))
 
 (: predicate/comp (Set Set -> Computation))
 (define (predicate/comp true-set false-set)

@@ -253,8 +253,8 @@
 (define-type Branches-Rect (Omega-Tree Boolean-Rect))
 (define-type Maybe-Branches-Rect (U Empty-Set Branches-Rect))
 
-(define branches-rect-ref ((inst omega-tree-ref Boolean-Rect) 'tf))
-(define branches-rect-set ((inst omega-tree-set Boolean-Rect) 'tf))
+(define branches-rect-ref ((inst omega-tree-ref Boolean-Rect) booleans))
+(define branches-rect-set ((inst omega-tree-set Boolean-Rect) booleans))
 
 (: branches-rect-fst (Branches-Rect -> Branches-Rect))
 (define branches-rect-fst omega-tree-fst)
@@ -263,15 +263,15 @@
 (define branches-rect-snd omega-tree-snd)
 
 (: branches-rect-value (Branches-Rect -> Boolean-Rect))
-(define branches-rect-value (omega-tree-value 'tf))
+(define branches-rect-value (omega-tree-value booleans))
 
 (: branches-rect Branches-Rect)
 (define branches-rect omega-leaf)
 
-(define just-branches-rect-node ((inst omega-node Boolean-Rect) 'tf))
-(define just-branches-rect-join ((inst omega-tree-join Boolean-Rect) 'tf boolean-rect-join))
+(define just-branches-rect-node ((inst omega-node Boolean-Rect) booleans))
+(define just-branches-rect-join ((inst omega-tree-join Boolean-Rect) booleans boolean-rect-join))
 (define just-branches-rect-intersect
-  ((inst omega-tree-intersect Boolean-Rect Empty-Set) 'tf boolean-rect-intersect empty-set?))
+  ((inst omega-tree-intersect Boolean-Rect Empty-Set) booleans boolean-rect-intersect empty-set?))
 
 (: branches-rect-node
    (Boolean-Rect Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect))

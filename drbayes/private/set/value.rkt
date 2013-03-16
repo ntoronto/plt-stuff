@@ -4,6 +4,7 @@
 
 (require racket/match
          "interval.rkt"
+         "boolean-rect.rkt"
          "union.rkt")
 
 (define-type Tagged-Value (Tagged Set-Tag Value))

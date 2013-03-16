@@ -11,7 +11,7 @@
 (printf "starting...~n~n")
 
 (interval-max-splits 5)
-(define n 1000)
+(define n 10000)
 
 #;
 (begin
@@ -119,9 +119,9 @@
 ;;  both: [0,1]
 (begin
   (define f-expr (list/arr (rcompose/arr (rcompose/arr random/arr normal/arr) negative?/arr)))
-  ;(define B (set-list 't))
-  (define B (set-list 'f))
-  ;(define B (set-list 'tf))
+  ;(define B (set-list trues))
+  (define B (set-list falses))
+  ;(define B (set-list booleans))
   )
 
 #;; Test: less than
@@ -131,9 +131,9 @@
 ;;  both: [0,1] × [0,1]
 (begin
   (define f-expr (list/arr (rcompose/arr (pair/arr random/arr random/arr) lt/arr)))
-  (define B (set-list 't))
-  ;(define B (set-list 'f))
-  ;(define B (set-list 'tf))
+  (define B (set-list trues))
+  ;(define B (set-list falses))
+  ;(define B (set-list booleans))
   )
 
 #;
@@ -238,7 +238,7 @@
                   (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 2) normal/arr)) +/arr)
                   (rcompose/arr (pair/arr X0 (rcompose/arr (ref/arr 2) cauchy/arr)) +/arr))])
        (list/arr X0 X1 B))))
-  (define B (set-list real-interval (interval 0.9 1.1 #t #t) 'tf)))
+  (define B (set-list real-interval (interval 0.9 1.1 #t #t) booleans)))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
@@ -256,7 +256,7 @@
 (begin
   (define p #i2/5)
   (define f-expr (lazy-if/arr (boolean/arr p) (c/arr #t) (c/arr #f)))
-  (define B 't))
+  (define B trues))
 
 #;; Test: Geometric(p) distribution
 (begin
@@ -312,7 +312,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 5)
@@ -364,7 +364,7 @@
   
   (define f-expr (drbayes (S)))
   
-  (define B (set-list* 'tf 't 'f 't 'f 't 'f universe)))
+  (define B (set-list* booleans trues falses trues falses trues falses universe)))
 
 #;; Test: tagging
 (begin
@@ -388,6 +388,7 @@
        (list (untag x0 t0) x1 (sqrt (+ (sqr (untag x0 t0)) (sqr x1)))))))
   (define B (set-list real-interval real-interval (interval 0.95 1.05))))
 
+#;
 (begin
   (define t0 (make-set-tag 't0))
   (define f-expr
@@ -438,20 +439,19 @@
        (set-member? B x)
        (not (empty-set? (branches-rect-intersect (domain-sample-Z s) (domain-sample-z s))))))
 
-(: orig-samples (Listof Omega-Sample))
+(: orig-samples (Listof omega-sample))
 (define orig-samples
-  (time
-   ;profile-expr
+  (;time
+   profile-expr
    (refinement-sample* Ω Z idxs refine n)))
 (newline)
 
 (: all-samples (Listof domain-sample))
 (define all-samples
   (for/list: : (Listof domain-sample) ([s  (in-list orig-samples)])
-    (match-define (weighted-sample (cons Ω Z) p) s)
+    (match-define (omega-sample Ω Z m p) s)
     (define ω (omega-rect-sample-point Ω))
     (define-values (x z) (f-fwd ω null))
-    (define m (omega-rect-measure Ω))
     (domain-sample Ω Z ω x z m p (/ m p))))
 
 (define samples (filter accept-sample? all-samples))

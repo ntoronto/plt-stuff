@@ -25,38 +25,46 @@
         [(universe? A)   B]
         [(universe? B)   A]
         [(eq? A B)  B]
-        [(bot-union? A)
-         (cond [(or (bot-entry? B) (bot-union? B))  (bot-bot-intersect A B)]
-               [(or (top-entry? B) (top-union? B))  (bot-top-intersect A B)])]
-        [(top-union? A)
-         (cond [(or (bot-entry? B) (bot-union? B))  (bot-top-intersect B A)]
-               [(or (top-entry? B) (top-union? B))  (top-top-intersect A B)])]
-        [(bot-union? B)
-         (cond [(bot-entry? A)  (bot-bot-intersect A B)]
-               [(top-entry? A)  (bot-top-intersect B A)])]
-        [(top-union? B)
-         (cond [(bot-entry? A)  (bot-top-intersect A B)]
-               [(top-entry? A)  (top-top-intersect A B)])]
-        [(rect? A)
-         (cond [(rect? B)      (bot-bot-rect-intersect A B)]
+        [(bot-union? A)  (if (set-nonfull-top? B) (bot-top-intersect A B) (bot-bot-intersect A B))]
+        [(top-union? A)  (if (set-nonfull-top? B) (top-top-intersect A B) (bot-top-intersect B A))]
+        [(bot-union? B)  (if (top-entry? A) (bot-top-intersect B A) (bot-bot-intersect A B))]
+        [(top-union? B)  (if (top-entry? A) (top-top-intersect A B) (bot-top-intersect A B))]
+        [(interval? A)
+         (cond [(interval? B)  (interval-intersect A B)]
                [(top-rect? B)  (bot-top-rect-intersect A B)]
-               [(bot-set? B)   empty-set]
-               [(top-set? B)   A])]
+               [(top-set? B)   A]
+               [else           empty-set])]
+        [(null-rect? A)
+         (cond [(null-rect? B)  A]
+               [(top-rect? B)   (bot-top-rect-intersect A B)]
+               [(top-set? B)    A]
+               [else            empty-set])]
+        [(pair-rect? A)
+         (cond [(pair-rect? B)  (pair-rect-intersect A B)]
+               [(top-rect? B)   (bot-top-rect-intersect A B)]
+               [(top-set? B)    A]
+               [else            empty-set])]
+        [(boolean-rect? A)
+         (cond [(boolean-rect? B)  (boolean-rect-intersect A B)]
+               [(top-rect? B)      (bot-top-rect-intersect A B)]
+               [(top-set? B)       A]
+               [else               empty-set])]
         [(top-rect? A)
-         (cond [(rect? B)      (bot-top-rect-intersect B A)]
-               [(top-rect? B)  (top-top-rect-intersect A B)]
+         (cond [(top-rect? B)  (top-top-rect-intersect A B)]
                [(bot-set? B)   B]
-               [(top-set? B)   (top-union A B)])]
+               [(top-set? B)   (top-union A B)]
+               [else           (bot-top-rect-intersect B A)])]
         [(bot-set? A)
-         (cond [(rect? B)      empty-set]
-               [(top-rect? B)  A]
+         (cond [(top-rect? B)  A]
                [(bot-set? B)   (bot-bot-set-intersect A B)]
-               [(top-set? B)   (bot-top-set-intersect A B)])]
+               [(top-set? B)   (bot-top-set-intersect A B)]
+               [else           empty-set])]
         [(top-set? A)
-         (cond [(rect? B)      B]
-               [(top-rect? B)  (top-union A B)]
+         (cond [(top-rect? B)  (top-union A B)]
                [(bot-set? B)   (bot-top-set-intersect B A)]
-               [(top-set? B)   (top-top-set-intersect A B)])]))
+               [(top-set? B)   (top-top-set-intersect A B)]
+               [else           B])]
+        ))
 
 (: bot-bot-intersect ((U Bot-Entry Bot-Union) (U Bot-Entry Bot-Union)
                                               -> (U Empty-Set Bot-Entry Bot-Union)))

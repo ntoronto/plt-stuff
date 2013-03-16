@@ -88,6 +88,7 @@
 ;; ===================================================================================================
 ;; Top rectangles
 
+(: rect? (Set -> Boolean : Rect))
 (define rect? (λ: ([A : Set]) (or (interval? A) (null-rect? A) (pair-rect? A) (boolean-rect? A))))
 
 (: rect-tag (Rect -> Rect-Tag))
@@ -163,9 +164,6 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; Tagged boolean rects
 
-(define booleans 'tf)
-(define trues 't)
-(define falses 'f)
 (define not-booleans (top-rect boolean-tag empty-set))
 
 (: boolean-rect (case-> (-> Empty-Set)
@@ -348,6 +346,12 @@
 ;; ===================================================================================================
 ;; Set operations
 
+(define set-nonempty-bot? (λ: ([A : Nonempty-Set]) (or (bot-union? A) (bot-set? A) (rect? A))))
+(define set-bot? (λ: ([A : Set]) (or (empty-set? A) (set-nonempty-bot? A))))
+
+(define set-nonfull-top? (λ: ([A : Nonfull-Set]) (or (top-union? A) (top-set? A) (top-rect? A))))
+(define set-top? (λ: ([A : Set]) (or (universe? A) (set-nonfull-top? A))))
+
 ;; ---------------------------------------------------------------------------------------------------
 ;; Tagging and untagging
 
@@ -377,7 +381,7 @@
         [(universe? A)   (cond [(eq? tag real-tag)  real-interval]
                                [(eq? tag null-tag)  null-rect]
                                [(eq? tag pair-tag)  all-pairs]
-                               [(eq? tag boolean-tag)  'tf]
+                               [(eq? tag boolean-tag)  booleans]
                                [else  empty-set])]
         [(interval? A)   (if (eq? tag real-tag) A empty-set)]
         [(null-rect? A)  (if (eq? tag null-tag) A empty-set)]

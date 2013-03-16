@@ -17,6 +17,11 @@
 (: list/arr (expression * -> expression))
 (define (list/arr . es) (foldr pair/arr null/arr es))
 
+(: strict-if/arr (expression expression expression -> expression))
+(define (strict-if/arr c-expr t-expr f-expr)
+  (rcompose/arr (list/arr c-expr t-expr f-expr)
+                (prim-if/arr (ref/arr 0) (ref/arr 1) (ref/arr 2))))
+
 ;; ===================================================================================================
 ;; Primitive data type predicates
 

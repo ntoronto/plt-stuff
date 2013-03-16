@@ -17,9 +17,8 @@
 (define-type Omega-Pair (Pair Omega-Rect Branches-Rect))
 (define-type Omega-Search-Tree (Search-Tree Omega-Pair))
 
-(struct: (T) weighted-sample ([value : T] [weight : Flonum]) #:transparent)
-
-(define-type Omega-Sample (weighted-sample Omega-Pair))
+(struct: omega-sample ([Ω : Omega-Rect] [Z : Branches-Rect] [measure : Flonum] [prob : Flonum])
+  #:transparent)
 
 ;; ===================================================================================================
 
@@ -35,12 +34,13 @@
             [else
              (values Ω Z)]))))
 
-(: refinement-sample* (Omega-Rect Branches-Rect Indexes Refiner Natural -> (Listof Omega-Sample)))
+(: refinement-sample* (Omega-Rect Branches-Rect Indexes Refiner Natural -> (Listof omega-sample)))
 (define (refinement-sample* Ω Z idxs refine n)
   (define t (build-search-tree Ω Z idxs refine))
   (define-values (ts ps) (sample-search-tree* t n))
   (map (λ: ([t : (success-leaf Omega-Pair)] [p : Flonum])
-         (weighted-sample (success-leaf-value t) p))
+         (match-define (success-leaf (cons Ω Z) m) t)
+         (omega-sample Ω Z m p))
        ts ps))
 
 (: build-search-tree (Maybe-Omega-Rect Maybe-Branches-Rect Indexes Refiner -> Omega-Search-Tree))
@@ -58,18 +58,18 @@
 (define (build-search-tree/if Ω Z idx idxs refine)
   (match-define (if-indexes i t-idxs f-idxs) idx)
   
-  (: make-node ((U 't 'f) (-> Indexes) -> Omega-Search-Tree))
+  (: make-node (Boolean-Rect (-> Indexes) -> Omega-Search-Tree))
   (define (make-node b b-idxs)
     (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z i b))])
       (build-search-tree Ω Z (append (b-idxs) idxs) refine)))
   
   (define b (branches-rect-ref Z i))
-  (case b
-    [(t)  (make-node 't t-idxs)]
-    [(f)  (make-node 'f f-idxs)]
-    [else  (search-node (list (delay (make-node 't t-idxs)) (delay (make-node 'f f-idxs)))
-                        (list 0.5 0.5)
-                        'branches)]))
+  (cond [(eq? b trues)   (make-node trues t-idxs)]
+        [(eq? b falses)  (make-node falses f-idxs)]
+        [else  (search-node (list (delay (make-node trues t-idxs))
+                                  (delay (make-node falses f-idxs)))
+                            (list 0.5 0.5)
+                            'branches)]))
 
 (: build-search-tree/ivl (Omega-Rect Branches-Rect interval-index Indexes Refiner
                                      -> Omega-Search-Tree))
@@ -114,22 +114,20 @@
     (let-values ([(Ω Z)  (refine omega-rect branches-rect)])
       (if (or (empty-set? Ω) (empty-set? Z)) (empty-set-error) (values Ω Z))))
   
-  (: omega-samples (Listof Omega-Sample))
+  (: omega-samples (Listof omega-sample))
   (define omega-samples (refinement-sample* Ω Z idxs refine n))
   
-  (: image-samples (Listof (weighted-sample Value)))
-  (define image-samples
-    (let: loop ([omega-samples  omega-samples])
-      (cond [(empty? omega-samples)  empty]
-            [else
-             (match-define (weighted-sample (cons Ω Z) p) (first omega-samples))
-             (define ω (omega-rect-sample-point Ω))
-             (define-values (k z) (f-fwd ω null))
-             (cond [(and (set-member? K k) (not (empty-set? (branches-rect-intersect Z z))))
-                    (define m (omega-rect-measure Ω))
-                    (cons (weighted-sample k (/ m p)) (loop (rest omega-samples)))]
-                   [else
-                    (loop (rest omega-samples))])])))
-  
-  (values (map (inst weighted-sample-value Value) image-samples)
-          (map (inst weighted-sample-weight Value) image-samples)))
+  (let: loop ([omega-samples  omega-samples]
+              [ks : (Listof Value)  empty]
+              [ws : (Listof Flonum)  empty])
+    (cond [(empty? omega-samples)  (values ks ws)]
+          [else
+           (match-define (omega-sample Ω Z m p) (first omega-samples))
+           (define ω (omega-rect-sample-point Ω))
+           (define-values (k z) (f-fwd ω null))
+           (cond [(and (set-member? K k) (not (empty-set? (branches-rect-intersect Z z))))
+                  (loop (rest omega-samples)
+                        (cons k ks)
+                        (cons (/ m p) ws))]
+                 [else
+                  (loop (rest omega-samples) ks ws)])])))

@@ -2,59 +2,61 @@
 
 (provide (all-defined-out))
 
-(require "extremal-set.rkt")
+(require (for-syntax racket/base)
+         "extremal-set.rkt"
+         "../untyped-utils.rkt")
 
-(define-type Boolean-Rect (U 'tf 't 'f))
+(: print-boolean-rect (Boolean-Rect Output-Port (U #t #f 0 1) -> Any))
+(define (print-boolean-rect A port mode)
+  (fprintf port "~a" (Boolean-Rect-name A)))
+
+(struct: Boolean-Rect ([name : Symbol])
+  #:transparent
+  #:property prop:custom-print-quotable 'never
+  #:property prop:custom-write print-boolean-rect)
+
+(define trues (Boolean-Rect 'trues))
+(define falses (Boolean-Rect 'falses))
+(define booleans (Boolean-Rect 'booleans))
+
+(define-syntax boolean-rect? (make-rename-transformer #'Boolean-Rect?))
+
 (define-type Maybe-Boolean-Rect (U Empty-Set Boolean-Rect))
-
-(define (boolean-rect? x)
-  (or (eq? x 'tf)
-      (eq? x 't)
-      (eq? x 'f)))
 
 (: boolean-rect-member? (Boolean-Rect Boolean -> Boolean))
 (define (boolean-rect-member? A x)
-  (or (eq? A 'tf)
-      (and (eq? A 't) (eq? x #t))
-      (and (eq? A 'f) (eq? x #f))))
+  (or (eq? A booleans)
+      (and (eq? A trues) (eq? x #t))
+      (and (eq? A falses) (eq? x #f))))
 
 (: boolean-rect-join (Boolean-Rect Boolean-Rect -> Boolean-Rect))
 (define (boolean-rect-join A B)
-  (cond [(eq? A 'tf)  A]
-        [(eq? B 'tf)  B]
+  (cond [(eq? A booleans)  A]
+        [(eq? B booleans)  B]
         [(eq? A B)  A]
-        [else  'tf]))
+        [else  booleans]))
 
 (: boolean-rect-intersect (Boolean-Rect Boolean-Rect -> Maybe-Boolean-Rect))
 (define (boolean-rect-intersect A B)
-  (cond [(eq? A 'tf)  B]
-        [(eq? B 'tf)  A]
+  (cond [(eq? A booleans)  B]
+        [(eq? B booleans)  A]
         [(eq? A B)  A]
         [else  empty-set]))
 
 (: boolean-rect-subseteq? (Boolean-Rect Boolean-Rect -> Boolean))
 (define (boolean-rect-subseteq? A B)
-  (cond [(eq? B 'tf)  #t]
+  (cond [(eq? B booleans)  #t]
         [(eq? A B)  #t]
         [else  #f]))
 
-(: booleans->boolean-rect (case-> (#t #t -> 'tf)
-                                 (#t #f -> 't)
-                                 (#f #t -> 'f)
-                                 (#f #f -> Empty-Set)
-                                 (Boolean Boolean -> Maybe-Boolean-Rect)))
+(: booleans->boolean-rect (Boolean Boolean -> Maybe-Boolean-Rect))
 (define (booleans->boolean-rect t? f?)
-  (cond [t?    (if f? 'tf 't)]
-        [else  (if f? 'f empty-set)]))
+  (cond [t?    (if f? booleans trues)]
+        [else  (if f? falses empty-set)]))
 
-(: boolean-rect->booleans (case-> ('tf -> (Values #t #t))
-                                 ('t -> (Values #t #f))
-                                 ('f -> (Values #f #t))
-                                 (Empty-Set -> (Values #f #f))
-                                 (Maybe-Boolean-Rect -> (Values Boolean Boolean))))
+(: boolean-rect->booleans (Maybe-Boolean-Rect -> (Values Boolean Boolean)))
 (define (boolean-rect->booleans A)
-  (case A
-    [(tf)  (values #t #t)]
-    [(t)   (values #t #f)]
-    [(f)   (values #f #t)]
-    [else  (values #f #f)]))
+  (cond [(eq? A booleans)  (values #t #t)]
+        [(eq? A trues)     (values #t #f)]
+        [(eq? A falses)    (values #f #t)]
+        [else              (values #f #f)]))
