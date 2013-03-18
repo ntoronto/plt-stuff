@@ -149,7 +149,7 @@
                                 (fail))))))
   (define B real-interval))
 
-;; Test: strict-or
+#;; Test: strict-or
 ;; Preimage should be the union of a large upper triangle and a small lower triangle, and
 ;; samples should be uniformly distributed
 (begin
@@ -312,7 +312,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 5)
@@ -425,8 +425,8 @@
 (struct: domain-sample ([Ω : Omega-Rect]
                         [Z : Branches-Rect]
                         [ω : Omega]
-                        [x : (U Void Value)]
-                        [z : Maybe-Branches-Rect]
+                        [x : (U 'if-bad-branch Value)]
+                        [z : Branches]
                         [measure : Flonum]
                         [prob : Flonum]
                         [weight : Flonum])
@@ -435,9 +435,7 @@
 (: accept-sample? (domain-sample -> Boolean))
 (define (accept-sample? s)
   (define x (domain-sample-x s))
-  (and (not (void? x))
-       (set-member? B x)
-       (not (empty-set? (branches-rect-intersect (domain-sample-Z s) (domain-sample-z s))))))
+  (and (not (if-bad-branch? x)) (set-member? B x)))
 
 (: orig-samples (Listof omega-sample))
 (define orig-samples
@@ -451,8 +449,9 @@
   (for/list: : (Listof domain-sample) ([s  (in-list orig-samples)])
     (match-define (omega-sample Ω Z m p) s)
     (define ω (omega-rect-sample-point Ω))
-    (define-values (z x) (with-handlers ([if-bad-branch?  (λ (_) (values Z (void)))])
-                           (f-fwd ω Z null)))
+    (define z (branches-rect-sample-point Z))
+    (define x (with-handlers ([if-bad-branch?  (λ (exn) (assert exn if-bad-branch?))])
+                (f-fwd ω z null)))
     (domain-sample Ω Z ω x z m p (/ m p))))
 
 (define samples (filter accept-sample? all-samples))

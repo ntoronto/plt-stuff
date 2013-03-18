@@ -53,7 +53,7 @@
                              [computation : Computation])
   #:transparent)
 
-(define-type Forward-Fun (Omega Branches-Rect Value -> (Values Maybe-Branches-Rect Value)))
+(define-type Forward-Fun (Omega Branches Value -> Value))
 
 (: run-expression (case-> (expression -> expression-meaning)
                           (expression Omega-Index -> expression-meaning)))
@@ -213,7 +213,7 @@
 ;; Identity function
 
 (: id/fwd Forward-Fun)
-(define (id/fwd ω z γ) (values z γ))
+(define (id/fwd ω z γ) γ)
 
 (: id/comp (-> Computation))
 (define (id/comp)
@@ -227,7 +227,7 @@
 ;; Constant functions
 
 (: c/fwd (Value -> Forward-Fun))
-(define ((c/fwd x) ω z γ) (values z x))
+(define ((c/fwd x) ω z γ) x)
 
 (: c/comp (Nonempty-Set Nonempty-Set -> Computation))
 (define (c/comp domain X)
@@ -249,12 +249,9 @@
 
 (: rcompose/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
 (define ((rcompose/fwd f-fwd g-fwd) ω z γ)
-  (define z1 (branches-rect-fst z))
-  (define z2 (branches-rect-snd z))
-  (let*-values ([(zf kf)  (f-fwd ω z1 γ)]
-                [(zg kg)  (g-fwd ω z2 kf)]
-                [(z)  (branches-rect-node/last z booleans zf zg)])
-    (values z kg)))
+  (let* ([kf  (f-fwd ω z γ)]
+         [kg  (g-fwd ω z kf)])
+    kg))
 
 (: rcompose/pre (Preimage-Fun Preimage-Fun Omega-Rect -> Simple-Preimage-Fun))
 (define ((rcompose/pre f-pre g-pre Ω) Z Kg)
@@ -295,13 +292,9 @@
 
 (: pair/fwd (Forward-Fun Forward-Fun -> Forward-Fun))
 (define ((pair/fwd fst-fwd snd-fwd) ω z γ)
-  (define z1 (branches-rect-fst z))
-  (define z2 (branches-rect-snd z))
-  (let*-values ([(z1 k1)  (fst-fwd ω z1 γ)]
-                [(z2 k2)  (snd-fwd ω z2 γ)]
-                [(z)  (branches-rect-node/last z booleans z1 z2)]
-                [(k)  (cons k1 k2)])
-    (values z k)))
+  (let ([k1  (fst-fwd ω z γ)]
+        [k2  (snd-fwd ω z γ)])
+    (cons k1 k2)))
 
 (: pair/pre (Preimage-Fun Preimage-Fun
                           Omega-Rect Omega-Rect Omega-Rect Nonempty-Set
@@ -360,17 +353,11 @@
 (: switch/fwd (Omega-Index (-> Forward-Fun) (-> Forward-Fun) -> Forward-Fun))
 (define ((switch/fwd idx t-fwd f-fwd) ω z γ)
   (match-let ([(cons b γ)  γ])
-    (define zb (branches-rect-value z))
-    (define zt (branches-rect-fst z))
-    (define zf (branches-rect-snd z))
+    (define zb (branches-ref z idx))
     (cond [(not (boolean? b))  (raise-argument-error 'switch/fwd "Boolean" b)]
-          [(not (boolean-rect-member? zb b))  (raise 'if-bad-branch)]
-          [b     (let*-values ([(zt kt)  ((t-fwd) ω zt γ)]
-                               [(z)  (branches-rect-node/last z trues zt zf)])
-                   (values z kt))]
-          [else  (let*-values ([(zf kf)  ((f-fwd) ω zf γ)]
-                               [(z)  (branches-rect-node/last z falses zt zf)])
-                   (values z kf))])))
+          [(and (eq? b #t) (or (eq? zb #t) (eq? zb 'either)))  ((t-fwd) ω z γ)]
+          [(and (eq? b #f) (or (eq? zb #f) (eq? zb 'either)))  ((f-fwd) ω z γ)]
+          [else  (raise 'if-bad-branch)])))
 
 (: switch-true/pre ((-> Computation) Omega-Rect Omega-Rect Omega-Rect Nonempty-Set
                                      -> Simple-Preimage-Fun))
@@ -466,7 +453,7 @@
 
 (: random/fwd (Omega-Index -> Forward-Fun))
 (define ((random/fwd idx) ω z γ)
-  (values z (omega-ref ω idx)))
+  (omega-ref ω idx))
 
 (: random/pre (Omega-Rect Nonempty-Set -> Simple-Preimage-Fun))
 (define (random/pre Ω Γ)
@@ -497,7 +484,7 @@
 
 (: boolean/fwd (Omega-Index Flonum -> Forward-Fun))
 (define ((boolean/fwd r p) ω z γ)
-  (values z ((omega-ref ω r) . < . p)))
+  ((omega-ref ω r) . < . p))
 
 (: boolean/pre (Omega-Rect Nonempty-Set (U Empty-Set Interval) (U Empty-Set Interval)
                            -> Simple-Preimage-Fun))
@@ -545,11 +532,9 @@
 
 (: prim-if/fwd (Forward-Fun Forward-Fun Forward-Fun -> Forward-Fun))
 (define ((prim-if/fwd c-fwd t-fwd f-fwd) ω z γ)
-  (define-values (_zc kc) (c-fwd ω branches-rect γ))
-  (cond [(eq? kc #t)  (define-values (_zt kt) (t-fwd ω branches-rect γ))
-                      (values branches-rect kt)]
-        [(eq? kc #f)  (define-values (_zf kf) (f-fwd ω branches-rect γ))
-                      (values branches-rect kf)]
+  (define kc (c-fwd ω z γ))
+  (cond [(eq? kc #t)  (t-fwd ω z γ)]
+        [(eq? kc #f)  (f-fwd ω z γ)]
         [else  (raise-argument-error 'prim-if/fwd "Boolean" kc)]))
 
 (: prim-if/comp (Computation Computation Computation -> Computation))
@@ -629,7 +614,7 @@
 
 (: ref/fwd (Pair-Index -> Forward-Fun))
 (define ((ref/fwd j) ω z γ)
-  (values z (value-pair-ref γ j)))
+  (value-pair-ref γ j))
 
 (: ref/pre (Nonempty-Set Pair-Index -> Prim-Preimage-Fun))
 (define ((ref/pre Γ j) K) (set-pair-set Γ j K))
@@ -652,7 +637,7 @@
 
 (: monotone/fwd (Symbol (Flonum -> Flonum) -> Forward-Fun))
 (define ((monotone/fwd name f) ω z γ)
-  (cond [(flonum? γ)  (values z (f γ))]
+  (cond [(flonum? γ)  (f γ)]
         [else  (raise-argument-error name "Flonum" γ)]))
 
 (: monotone-range (Interval Interval (Flonum -> Flonum) Boolean -> Set))
@@ -692,7 +677,7 @@
 (: monotone2d/fwd (Symbol (Flonum Flonum -> Flonum) -> Forward-Fun))
 (define ((monotone2d/fwd name f) ω z γ)
   (match γ
-    [(cons (? flonum? x) (? flonum? y))  (values z (f x y))]
+    [(cons (? flonum? x) (? flonum? y))  (f x y)]
     [_  (raise-argument-error name "(Pair Flonum Flonum)" γ)]))
 
 (: monotone2d-range (Nonempty-Set Interval (Flonum Flonum -> Flonum) Boolean Boolean -> Set))
@@ -753,7 +738,7 @@
 
 (: predicate/fwd ((Value -> Boolean) -> Forward-Fun))
 (define ((predicate/fwd pred?) ω z γ)
-  (values z (pred? γ)))
+  (pred? γ))
 
 (: predicate-range (Set Set -> (U Empty-Set Boolean-Rect)))
 (define (predicate-range true-set false-set)
@@ -797,7 +782,7 @@
 
 (: tag/fwd (Set-Tag -> Forward-Fun))
 (define ((tag/fwd tag) ω z γ)
-  (values z (tagged tag γ)))
+  (tagged tag γ))
 
 (: tag/comp (Set-Tag -> Computation))
 (define (tag/comp tag)
@@ -819,7 +804,7 @@
 (: untag/fwd (Set-Tag -> Forward-Fun))
 (define ((untag/fwd tag) ω z γ)
   (if (and (tagged? γ) (eq? tag (get-tag γ)))
-      (values z (get-val γ))
+      (get-val γ)
       (raise-argument-error 'untag/fwd (symbol->string tag) γ)))
 
 (: untag/comp (Set-Tag -> Computation))

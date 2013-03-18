@@ -148,7 +148,6 @@
 (struct: Omega ([hash : (Boxof Omega-Hash)])
   #:transparent)
 
-(define-syntax omega? (make-rename-transformer #'Omega?))
 (define-syntax omega-hash (make-rename-transformer #'Omega-hash))
 
 (define omega-hash-default +nan.0)
@@ -310,3 +309,17 @@
   (cond [(empty-set? Z1)  Z1]
         [(empty-set? Z2)  Z2]
         [else  (just-branches-rect-intersect Z1 Z2)]))
+
+;; ===================================================================================================
+
+(define-type Branches Branches-Rect)
+
+(: branches-ref (Branches Omega-Index -> (U #t #f 'either)))
+(define (branches-ref z r)
+  (define b (branches-rect-ref z r))
+  (cond [(eq? b booleans)  'either]
+        [(eq? b trues)     #t]
+        [else              #f]))
+
+(: branches-rect-sample-point (Branches-Rect -> Branches))
+(define (branches-rect-sample-point Z) Z)
