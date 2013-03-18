@@ -26,9 +26,9 @@
 
 (: preimage-refiner (Computation Nonempty-Set -> Refiner))
 (define ((preimage-refiner e-comp K) Ω Z)
-  (match-let ([(computation-meaning _ Ze e-pre)  (e-comp Ω null-rect)])
-    (let*-values ([(Z)  (branches-rect-intersect Z Ze)]
-                  [(Ω Γ)  (e-pre K Z)])
+  (match-let ([(computation-meaning Ze Ke e-pre)  (e-comp Ω Z null-rect)])
+    (let-values ([(Ω Z Γ)  (e-pre (branches-rect-intersect Z Ze)
+                                  (set-intersect K Ke))])
       (cond [(not (or (empty-set? Γ) (null-rect? Γ)))
              (raise-result-error 'preimage-refiner "(U Empty-Set Null-Rect)" Γ)]
             [else
@@ -124,7 +124,7 @@
           [else
            (match-define (omega-sample Ω Z m p) (first omega-samples))
            (define ω (omega-rect-sample-point Ω))
-           (define-values (k z) (f-fwd ω null))
+           (define-values (z k) (f-fwd ω Z null))
            (cond [(and (set-member? K k) (not (empty-set? (branches-rect-intersect Z z))))
                   (loop (rest omega-samples)
                         (cons k ks)

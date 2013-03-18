@@ -11,7 +11,7 @@
 (printf "starting...~n~n")
 
 (interval-max-splits 5)
-(define n 10000)
+(define n 1000)
 
 #;
 (begin
@@ -149,7 +149,7 @@
                                 (fail))))))
   (define B real-interval))
 
-#;; Test: strict-or
+;; Test: strict-or
 ;; Preimage should be the union of a large upper triangle and a small lower triangle, and
 ;; samples should be uniformly distributed
 (begin
@@ -194,7 +194,7 @@
     (drbayes
      (let* ([x  (normal 90 10)]
             [y  (- x (normal))])
-       (list x (strict-if (y . > . 100) 100 y)))))
+       (list x (lazy-if (y . > . 100) 100 y)))))
   
   (define B (set-list real-interval (interval 99.0 100.0))))
 
@@ -312,7 +312,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 5)
@@ -388,14 +388,14 @@
        (list (untag x0 t0) x1 (sqrt (+ (sqr (untag x0 t0)) (sqr x1)))))))
   (define B (set-list real-interval real-interval (interval 0.95 1.05))))
 
-#;
+#;; Test: Normal-Normal with circular condition and first variable tagged with probability 0.5
 (begin
   (define t0 (make-set-tag 't0))
   (define f-expr
     (drbayes
      (let* ([x0  (lazy-if (boolean (const 0.5))
-                          (normal 0.0 2.0)
-                          (tag (normal) t0))]
+                          (tag (normal 0.0 2.0) t0)
+                          (normal))]
             [y0  (prim-if (tag? x0 t0) (* 0.5 (untag x0 t0)) x0)]
             [x1  (normal y0)])
        (list y0
@@ -441,8 +441,8 @@
 
 (: orig-samples (Listof omega-sample))
 (define orig-samples
-  (;time
-   profile-expr
+  (time
+   ;profile-expr
    (refinement-sample* Ω Z idxs refine n)))
 (newline)
 
@@ -451,7 +451,8 @@
   (for/list: : (Listof domain-sample) ([s  (in-list orig-samples)])
     (match-define (omega-sample Ω Z m p) s)
     (define ω (omega-rect-sample-point Ω))
-    (define-values (x z) (f-fwd ω null))
+    (define-values (z x) (with-handlers ([if-bad-branch?  (λ (_) (values Z (void)))])
+                           (f-fwd ω Z null)))
     (domain-sample Ω Z ω x z m p (/ m p))))
 
 (define samples (filter accept-sample? all-samples))
