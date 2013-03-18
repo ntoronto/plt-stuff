@@ -4,7 +4,6 @@
          "private/arrow.rkt"
          "private/search.rkt"
          "private/language.rkt"
-         "private/functions.rkt"
          )
 
 (provide (all-from-out
@@ -12,5 +11,4 @@
          "private/arrow.rkt"
          "private/search.rkt"
          "private/language.rkt"
-         "private/functions.rkt"
          ))
