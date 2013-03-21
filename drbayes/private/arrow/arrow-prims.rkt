@@ -227,9 +227,11 @@
 ;; ===================================================================================================
 ;; Non-monotone functions
 
+;; Square
 (define sqr/arr
   (prim-if/arr negative?/arr neg-sqr/arr pos-sqr/arr))
 
+;; Reciprocal
 (define recip/arr
   (prim-if/arr positive?/arr
                pos-recip/arr
@@ -237,37 +239,36 @@
                             neg-recip/arr
                             bottom/arr)))
 
-(define -pi/arr (c/arr (- pi)))
-(define -pi/2/arr (c/arr (* -0.5 pi)))
-(define pi/2/arr (c/arr (* 0.5 pi)))
-(define pi/arr (c/arr pi))
+#|
+Sine and cosine arrow functions are direct translations of the following Racket functions:
 
-#;
 (define (partial-cos x)
-  (if (x . < . 0.0)
+  (if (negative? x)
       (mono-cos (- x))
       (mono-cos x)))
 
+(define (partial-pos-sin x)
+  (if (nonpositive? (+ x (* -0.5 pi)))
+      (mono-sin x)
+      (let ([x  (+ x (- pi))])
+        (if (nonpositive? x)
+            (mono-sin (- x))
+            (error 'bottom)))))
+
+(define (partial-sin x)
+  (if (negative? x)
+      (- (partial-pos-sin (- x)))
+      (partial-pos-sin x)))
+
+|#
+
+;; Cosine restricted to [-π,π]
 (define partial-cos/arr
   (prim-if/arr negative?/arr
                (rcompose/arr neg/arr mono-cos/arr)
                mono-cos/arr))
 
-#;
-(define (partial-pos-sin x)
-  (if ((+ x (* -0.5 pi)) . <= . 0.0)
-      (mono-sin x)
-      (let ([x  (+ x (- pi))])
-        (if (x . <= . 0.0)
-            (mono-sin (- x))
-            (error 'bad)))))
-
-#;
-(define (partial-sin x)
-  (if (x . < . 0.0)
-      (- (partial-pos-sin (- x)))
-      (partial-pos-sin x)))
-
+;; Sine restricted to [-π/2,π]
 (define partial-pos-sin/arr
   (prim-if/arr (rcompose/arr (translate/arr (* -0.5 pi)) nonpositive?/arr)
                mono-sin/arr
@@ -277,11 +278,13 @@
                              (rcompose/arr neg/arr mono-sin/arr)
                              bottom/arr))))
 
+;; Sine restricted to [-π,π]
 (define partial-sin/arr
   (prim-if/arr negative?/arr
                (rcompose/arr (rcompose/arr neg/arr partial-pos-sin/arr) neg/arr)
                partial-pos-sin/arr))
 
+;; Multiplication
 (define */arr
   (prim-if/arr (rcompose/arr (ref/arr 'fst) positive?/arr)
                (prim-if/arr (rcompose/arr (ref/arr 'snd) positive?/arr)
@@ -295,16 +298,9 @@
                                          (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
                                                       neg-neg-mul/arr
                                                       (c/arr 0.0 real-pair)))
-                            (c/arr 0.0 real-pair)))
-  #;
-  (prim-if/arr (rcompose/arr (ref/arr 'fst) negative?/arr)
-               (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
-                            neg-neg-mul/arr
-                            neg-pos-mul/arr)
-               (prim-if/arr (rcompose/arr (ref/arr 'snd) negative?/arr)
-                            pos-neg-mul/arr
-                            pos-pos-mul/arr)))
+                            (c/arr 0.0 real-pair))))
 
+;; Division
 (define //arr
   (prim-if/arr (rcompose/arr (ref/arr 'snd) positive?/arr)
                (prim-if/arr (rcompose/arr (ref/arr 'fst) positive?/arr)
