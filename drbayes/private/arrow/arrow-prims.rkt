@@ -3,6 +3,7 @@
 (require racket/match
          racket/list
          racket/flonum
+         racket/math
          math/distributions
          "../set.rkt"
          "arrow.rkt")
@@ -18,8 +19,8 @@
 (define (list/arr . es) (foldr pair/arr null/arr es))
 
 (: strict-if/arr (expression expression expression -> expression))
-(define (strict-if/arr c-expr t-expr f-expr)
-  (rcompose/arr (list/arr c-expr t-expr f-expr)
+(define (strict-if/arr c t f)
+  (rcompose/arr (list/arr c t f)
                 (prim-if/arr (ref/arr 0) (ref/arr 1) (ref/arr 2))))
 
 ;; ===================================================================================================
@@ -64,6 +65,30 @@
 (define exp/arr (monotone/arr 'exp/arr real-interval nonnegative-interval flexp fllog #t))
 (define log/arr (monotone/arr 'log/arr nonnegative-interval real-interval fllog flexp #t))
 (define sqrt/arr (monotone/arr 'sqrt/arr nonnegative-interval nonnegative-interval flsqrt flsqr #t))
+
+(define asin/arr
+  (monotone/arr 'asin/arr
+                (Interval -1.0 1.0 #t #t)
+                (Interval (/ pi -2.0) (/ pi 2.0) #t #t)
+                flasin flsin #t))
+
+(define acos/arr
+  (monotone/arr 'acos/arr
+                (Interval -1.0 1.0 #t #t)
+                (Interval 0.0 pi #t #t)
+                flacos flcos #f))
+
+(define mono-sin/arr
+  (monotone/arr 'mono-sin/arr
+                (Interval (/ pi -2.0) (/ pi 2.0) #t #t)
+                (Interval -1.0 1.0 #t #t)
+                flsin flasin #t))
+
+(define mono-cos/arr
+  (monotone/arr 'mono-cos/arr
+                (Interval 0.0 pi #t #t)
+                (Interval -1.0 1.0 #t #t)
+                flcos flacos #f))
 
 (define pos-recip/arr
   (monotone/arr 'recip/arr positive-interval positive-interval flrecip flrecip #t))
@@ -211,6 +236,51 @@
                (prim-if/arr negative?/arr
                             neg-recip/arr
                             bottom/arr)))
+
+(define -pi/arr (c/arr (- pi)))
+(define -pi/2/arr (c/arr (* -0.5 pi)))
+(define pi/2/arr (c/arr (* 0.5 pi)))
+(define pi/arr (c/arr pi))
+
+#;
+(define (partial-cos x)
+  (if (x . < . 0.0)
+      (mono-cos (- x))
+      (mono-cos x)))
+
+(define partial-cos/arr
+  (prim-if/arr negative?/arr
+               (rcompose/arr neg/arr mono-cos/arr)
+               mono-cos/arr))
+
+#;
+(define (partial-pos-sin x)
+  (if ((+ x (* -0.5 pi)) . <= . 0.0)
+      (mono-sin x)
+      (let ([x  (+ x (- pi))])
+        (if (x . <= . 0.0)
+            (mono-sin (- x))
+            (error 'bad)))))
+
+#;
+(define (partial-sin x)
+  (if (x . < . 0.0)
+      (- (partial-pos-sin (- x)))
+      (partial-pos-sin x)))
+
+(define partial-pos-sin/arr
+  (prim-if/arr (rcompose/arr (translate/arr (* -0.5 pi)) nonpositive?/arr)
+               mono-sin/arr
+               (rcompose/arr
+                (translate/arr (- pi))
+                (prim-if/arr nonpositive?/arr
+                             (rcompose/arr neg/arr mono-sin/arr)
+                             bottom/arr))))
+
+(define partial-sin/arr
+  (prim-if/arr negative?/arr
+               (rcompose/arr (rcompose/arr neg/arr partial-pos-sin/arr) neg/arr)
+               partial-pos-sin/arr))
 
 (define */arr
   (prim-if/arr (rcompose/arr (ref/arr 'fst) positive?/arr)

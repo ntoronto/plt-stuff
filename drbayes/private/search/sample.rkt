@@ -125,9 +125,10 @@
            (match-define (omega-sample Ω Z m p) (first omega-samples))
            (define ω (omega-rect-sample-point Ω))
            (define z (branches-rect-sample-point Z))
-           (define k (with-handlers ([if-bad-branch?  (λ (exn) (assert exn if-bad-branch?))])
+           (define k (with-handlers ([forward-fail?  (λ: ([e : forward-fail]) e)])
                        (f-fwd ω z null)))
-           (cond [(and (not (if-bad-branch? k)) (set-member? K k))
+           (cond [(and (not (forward-fail? k))
+                       (set-member? K k))
                   (loop (rest omega-samples)
                         (cons k ks)
                         (cons (/ m p) ws))]

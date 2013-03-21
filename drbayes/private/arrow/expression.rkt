@@ -39,6 +39,10 @@
 (define-wrapped-unary/arr nonpositive?/exp nonpositive?/arr)
 (define-wrapped-unary/arr positive?/exp positive?/arr)
 (define-wrapped-unary/arr nonnegative?/exp nonnegative?/arr)
+(define-wrapped-unary/arr acos/exp acos/arr)
+(define-wrapped-unary/arr asin/exp asin/arr)
+(define-wrapped-unary/arr partial-cos/exp partial-cos/arr)
+(define-wrapped-unary/arr partial-sin/exp partial-sin/arr)
 
 (define-wrapped-binary/arr +/exp +/arr)
 (define-wrapped-binary/arr -/exp -/arr)

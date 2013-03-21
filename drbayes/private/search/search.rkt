@@ -11,7 +11,7 @@
 ;; ===================================================================================================
 ;; Statistics
 
-(define search-stats? #f)
+(define search-stats? #t)
 
 (define: search-stats : (HashTable Symbol Natural)  (make-hasheq empty))
 

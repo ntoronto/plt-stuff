@@ -80,6 +80,20 @@
 (define (boolean p)
   ((random) . < . (fl p)))
 
+(: partial-sin (Real -> Flonum))
+(define (partial-sin orig-x)
+  (define x (fl orig-x))
+  (if (and (x . >= . (- pi)) (x . <= . pi))
+      (sin x)
+      (raise-argument-error 'partial-sin "Real in [-π,π]" orig-x)))
+
+(: partial-cos (Real -> Flonum))
+(define (partial-cos orig-x)
+  (define x (fl orig-x))
+  (if (and (x . >= . (- pi)) (x . <= . pi))
+      (cos x)
+      (raise-argument-error 'partial-cos "Real in [-π,π]" orig-x)))
+
 (define tag?
   (λ: ([v : Value] [t : Set-Tag])
     (and (tagged? v) (eq? t (get-tag v)))))

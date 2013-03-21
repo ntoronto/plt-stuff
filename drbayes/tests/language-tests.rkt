@@ -4,7 +4,8 @@
          math/distributions
          math/statistics
          math/flonum
-         "../main.rkt")
+         "../main.rkt"
+         "test-utils.rkt")
 
 (printf "starting...~n")
 

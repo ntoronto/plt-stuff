@@ -100,18 +100,6 @@
   
   (define B (set-list real-interval real-interval (interval 0.45 0.7))))
 
-#;; Test: arithmetic
-(begin
-  (interval-max-splits 4)
-  
-  (define f-expr
-    (drbayes
-     (let* ([x  (uniform -1 1)]
-            [y  (uniform -1 1)])
-       (list x y (* x y)))))
-  
-  (define B (set-list real-interval real-interval (interval -0.1 0.2))))
-
 #;; Test: boolean #t, #f or both
 ;; Preimage should be:
 ;;    #t: [0,0.5)
@@ -136,6 +124,64 @@
   ;(define B (set-list booleans))
   )
 
+
+#;; Test: primitive if
+;; Preimage should be the union of a large upper triangle and a small lower triangle, and
+;; samples should be uniformly distributed
+(begin
+  (define f-expr
+    (drbayes
+     (let ([x  (uniform)]
+           [y  (uniform)])
+       (list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
+       )))
+  (define B (set-list real-interval real-interval trues)))
+
+#;; Test: arithmetic
+(begin
+  (interval-max-splits 4)
+  
+  (define f-expr
+    (drbayes
+     (let* ([x  (cauchy)]
+            [y  (cauchy)])
+       (list x y (* x y)))))
+  
+  (define B (set-list real-interval real-interval (interval -0.1 0.0))))
+
+#;; Test: sine and cosine restricted to [-π,π]
+;; Looked at top-down, the plots should look like the graphs of the functions
+(begin
+  (interval-max-splits 3)
+  (define f-expr
+    (drbayes
+     (let ([x  (uniform (const (- pi)) (const pi))]
+           [y  (uniform -1.1 1.1)])
+       (list x y (- y
+                    ;(partial-cos x)
+                    (partial-sin x)
+                    )))))
+  
+  (define B (set-list real-interval real-interval (interval -0.1 0.1))))
+
+#;; Test: asin and acos
+;; Looked at top-down, the plots should look like the graphs of the functions
+(begin
+  (interval-max-splits 3)
+  
+  (define f-expr
+    (drbayes
+     (let ([x  (uniform -1 1)]
+           [y  (uniform 0 (const pi))
+               ;(uniform (const (* -0.5 pi)) (const (* 0.5 pi)))
+               ])
+       (list x y (- y
+                    (acos x)
+                    ;(asin x)
+                    )))))
+  
+  (define B (set-list real-interval real-interval (interval -0.1 0.1))))
+
 #;
 (begin
   (define f-expr
@@ -148,20 +194,6 @@
                                 2.0
                                 (fail))))))
   (define B real-interval))
-
-#;; Test: strict-or
-;; Preimage should be the union of a large upper triangle and a small lower triangle, and
-;; samples should be uniformly distributed
-(begin
-  (define f-expr
-    (drbayes
-     (let ([x  (uniform)]
-           [y  (uniform)])
-       (list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
-       ;(list x y (lazy-if (< x y) #t (> x (scale y (const 8)))))
-       ;(list x y (strict-if (< x y) #t (> x (scale y (const 8)))))
-       )))
-  (define B (set-list real-interval real-interval trues)))
 
 #;; Test: Normal-Normal model
 ;; Preimage should be a banana shape
@@ -312,7 +344,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 5)
@@ -342,6 +374,17 @@
               (interval 0.4 0.6 #t #t)
               (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
+
+
+(begin
+  (interval-max-splits 2)
+  (define f-expr
+    (drbayes
+     (let ([x  (uniform)]
+           [y  (uniform)]
+           [z  (uniform)])
+       (prim-if (x . < . y) (fail) z))))
+  (define B universe))
 
 #;
 (begin
@@ -425,7 +468,7 @@
 (struct: domain-sample ([Ω : Omega-Rect]
                         [Z : Branches-Rect]
                         [ω : Omega]
-                        [x : (U 'if-bad-branch Value)]
+                        [x : (U forward-fail Value)]
                         [z : Branches]
                         [measure : Flonum]
                         [prob : Flonum]
@@ -435,7 +478,8 @@
 (: accept-sample? (domain-sample -> Boolean))
 (define (accept-sample? s)
   (define x (domain-sample-x s))
-  (and (not (if-bad-branch? x)) (set-member? B x)))
+  (and (not (forward-fail? x))
+       (set-member? B x)))
 
 (: orig-samples (Listof omega-sample))
 (define orig-samples
@@ -450,7 +494,7 @@
     (match-define (omega-sample Ω Z m p) s)
     (define ω (omega-rect-sample-point Ω))
     (define z (branches-rect-sample-point Z))
-    (define x (with-handlers ([if-bad-branch?  (λ (exn) (assert exn if-bad-branch?))])
+    (define x (with-handlers ([forward-fail?  (λ: ([e : forward-fail]) e)])
                 (f-fwd ω z null)))
     (domain-sample Ω Z ω x z m p (/ m p))))
 

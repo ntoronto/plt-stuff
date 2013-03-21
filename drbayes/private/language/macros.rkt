@@ -21,7 +21,25 @@
          "../set.rkt"
          "../arrow.rkt")
 
-(provide define/drbayes struct/drbayes drbayes racket)
+(provide define/drbayes struct/drbayes drbayes racket
+         quote null empty
+         and or not
+         car cdr real? null? pair? boolean?
+         exp log sqr sqrt
+         negative? positive? nonnegative? nonpositive?
+         acos asin partial-cos partial-sin
+         cons + * - / < <= > >=
+         list uniform normal cauchy
+         else
+         const
+         racket
+         lazy
+         prim-if prim-cond
+         strict-if strict-cond
+         lazy-if lazy-cond
+         let let*
+         list-ref scale translate boolean
+         tag? tag untag)
 
 (module typed-defs typed/racket/base
   (provide (all-defined-out))
@@ -81,7 +99,8 @@
     #:attributes (combinator)
     #:literals (car cdr real? null? pair? boolean?
                     exp log sqr sqrt
-                    negative? positive? nonnegative? nonpositive?)
+                    negative? positive? nonnegative? nonpositive?
+                    acos asin partial-cos partial-sin)
     (pattern car #:attr combinator #'fst/exp)
     (pattern cdr #:attr combinator #'snd/exp)
     (pattern real? #:attr combinator #'real?/exp)
@@ -96,6 +115,10 @@
     (pattern positive? #:attr combinator #'positive?/exp)
     (pattern nonnegative? #:attr combinator #'nonnegative?/exp)
     (pattern nonpositive? #:attr combinator #'nonpositive?/exp)
+    (pattern acos #:attr combinator #'acos/exp)
+    (pattern asin #:attr combinator #'asin/exp)
+    (pattern partial-cos #:attr combinator #'partial-cos/exp)
+    (pattern partial-sin #:attr combinator #'partial-sin/exp)
     )
   
   (define-syntax-class 2ary-primitive
