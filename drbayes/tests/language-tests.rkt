@@ -21,9 +21,9 @@
   (lazy-cond [(boolean (const 0.4))  (cons #f (F))]
              [(boolean (const 0.5))  #;(cons #f (T))
                                      (cons #f (let ([s  (T)])
-                                                  (prim-if (list-ref s (const 1))
-                                                           (fail)
-                                                           s)))]
+                                                (prim-if (list-ref s (const 1))
+                                                         (fail)
+                                                         s)))]
              [else  null]))
 
 #;

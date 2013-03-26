@@ -44,11 +44,54 @@
 (define-type (Search-Tree T) (U (Search-Leaf T) (search-node T)))
 
 ;; ===================================================================================================
-;; Search
+;; Nonadaptive, independent search
 
-(: sample-search-tree (All (T) ((Search-Tree T) Flonum -> (Values (Search-Tree T) Flonum))))
+(: sample-search-tree-once (All (T) ((Search-Tree T) Flonum -> (Values (Search-Tree T) Flonum))))
 ;; Straightforward sampler, useful only for rejection sampling
 ;; Returns a leaf in the search tree, and the probability of finding that leaf
+(define (sample-search-tree-once t p)
+  (cond [(search-node? t)
+         (match-define (search-node cs qs name) t)
+         (when search-stats? (increment-search-stat name))
+         (define i (sample-index qs))
+         (define c (list-ref cs i))
+         (define q (list-ref qs i))
+         (sample-search-tree-once (maybe-force c) (* p q))]
+        [else
+         (values t p)]))
+
+(: sample-search-tree-once* (All (T) ((Search-Tree T) Integer -> (Values (Listof (success-leaf T))
+                                                                         (Listof Flonum)))))
+(define (sample-search-tree-once* t n)
+  (cond
+    [(not (index? n))   (raise-argument-error 'sample-search-tree-once* "Index" 1 t n)]
+    [(failure-leaf? n)  (values empty empty)]
+    [else
+     (let: loop ([i : Nonnegative-Fixnum  0]
+                 [ss : (Listof (success-leaf T))  empty]
+                 [ps : (Listof Flonum)  empty])
+       (cond [(i . < . n)
+              (let ([i  (+ i 1)])
+                (when (= 0 (remainder i 100))
+                  (printf "i = ~v~n" i)
+                  (flush-output))
+                (let-values ([(s p)  (sample-search-tree-once t 1.0)])
+                  (cond [(success-leaf? s)
+                         (loop i (cons s ss) (cons p ps))]
+                        [else
+                         (when search-stats? (increment-search-stat 'restarts))
+                         (loop i ss ps)])))]
+             [else
+              (values ss ps)]))]))
+
+;; ===================================================================================================
+;; Adaptive search
+
+(: sample-search-tree
+   (All (T) ((Search-Tree T) Flonum -> (Values (Search-Leaf T) Flonum (Search-Tree T) Flonum))))
+;; Like `sample-search-tree', but when it returns failure, it also returns a tree without that failure
+;; The returned tree is equivalent in the sense that successes are returned with the same
+;; probabilities in future searches (up to floating-point error)
 (define (sample-search-tree t p)
   (cond [(search-node? t)
          (match-define (search-node cs qs name) t)
@@ -56,24 +99,8 @@
          (define i (sample-index qs))
          (define c (list-ref cs i))
          (define q (list-ref qs i))
-         (sample-search-tree (maybe-force c) (* p q))]
-        [else
-         (values t p)]))
-
-(: sample-search-tree/remove-failure
-   (All (T) ((Search-Tree T) Flonum -> (Values (Search-Leaf T) Flonum (Search-Tree T) Flonum))))
-;; Like `sample-search-tree', but when it returns failure, it also returns a tree without that failure
-;; The returned tree is equivalent in the sense that successes are returned with the same
-;; probabilities in future searches (up to floating-point error)
-(define (sample-search-tree/remove-failure t p)
-  (cond [(search-node? t)
-         (match-define (search-node cs qs name) t)
-         (when search-stats? (increment-search-stat name))
-         (define i (sample-index qs))
-         (define c (list-ref cs i))
-         (define q (list-ref qs i))
          (define pq (* p q))
-         (let-values ([(s u c new-pq)  (sample-search-tree/remove-failure (maybe-force c) pq)])
+         (let-values ([(s u c new-pq)  (sample-search-tree (maybe-force c) pq)])
            (define new-t
              (cond [(new-pq . > . 0.0)
                     (let* ([cs  (list-set/+2 cs i c)]
@@ -95,7 +122,7 @@
 
 (: sample-search-tree* (All (T) ((Search-Tree T) Integer -> (Values (Listof (success-leaf T))
                                                                     (Listof Flonum)))))
-;; Samples multiple success leaves using `sample-search-tree/remove-failure'
+;; Samples multiple success leaves using `sample-search-tree'
 (define (sample-search-tree* t n)
   (cond
     [(index? n)
@@ -103,7 +130,7 @@
      (define: ps : (Listof Flonum)  empty)
      (let: loop ([i : Nonnegative-Fixnum  0] [ss ss] [ps ps] [t t] [q 1.0])
        (cond [(and (i . < . n) (q . > . 0.0) (not (failure-leaf? t)))
-              (let-values ([(s p t q)  (sample-search-tree/remove-failure t q)])
+              (let-values ([(s p t q)  (sample-search-tree t q)])
                 (cond [(success-leaf? s)
                        (let ([i  (+ i 1)])
                          (when (= 0 (remainder i 100))
@@ -116,5 +143,3 @@
              [else  (values ss ps)]))]
     [else
      (raise-argument-error 'sample-search-tree* "Index" 1 t n)]))
-
-(define t (search-node (list (failure-leaf) (success-leaf 0 0.5)) (list 0.5 0.5) 'bob))

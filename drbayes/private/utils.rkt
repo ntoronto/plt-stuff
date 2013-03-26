@@ -18,6 +18,11 @@
          (f (second xs))
          (map f (rest (rest xs)))))
 
+(: normalize-probs ((Listof Flonum) -> (Listof Flonum)))
+(define (normalize-probs qs)
+  (define p (flsum qs))
+  (map (λ: ([q : Flonum]) (/ q p)) qs))
+
 (: normalize-probs/+2 ((Listof+2 Flonum) -> (Listof+2 Flonum)))
 (define (normalize-probs/+2 qs)
   (define p (flsum qs))

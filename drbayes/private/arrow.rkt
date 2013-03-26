@@ -1,12 +1,16 @@
 #lang typed/racket/base
 
-(require "arrow/arrow.rkt"
-         "arrow/arrow-prims.rkt"
+(require "arrow/arrow-common.rkt"
+         "arrow/prim-arrow.rkt"
+         "arrow/rand-arrow.rkt"
+         "arrow/arrow.rkt"
          "arrow/expression.rkt"
          "arrow/indexes.rkt")
 
 (provide (all-from-out
+          "arrow/arrow-common.rkt"
+          "arrow/prim-arrow.rkt"
+          "arrow/rand-arrow.rkt"
           "arrow/arrow.rkt"
-          "arrow/arrow-prims.rkt"
           "arrow/expression.rkt"
           "arrow/indexes.rkt"))

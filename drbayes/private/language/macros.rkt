@@ -14,7 +14,7 @@
                        racket/base
                        racket/list
                        racket/math)
-         (only-in typed/racket/base : assert -> Any)
+         (only-in typed/racket/base : assert -> case-> Any)
          racket/stxparam
          (for-syntax (only-in "functions.rkt" syntax-const))
          "functions.rkt"
@@ -47,12 +47,15 @@
   (require "../arrow.rkt"
            "../set.rkt")
   
-  (: run-forward (expression -> Value))
+  (: run-forward (Expression -> Value))
   (define (run-forward e)
-    ((expression-meaning-forward (run-expression e))
-     (omega-rect-sample-point omega-rect)
-     (branches-rect-sample-point branches-rect)
-     null))
+    (cond [(prim-expression? e)
+           ((prim-expression-meaning-forward (run-prim-expression e)) null)]
+          [else
+           ((rand-expression-meaning-forward (run-rand-expression e))
+            (omega-rect-sample-point omega-rect)
+            (branches-rect-sample-point branches-rect)
+            null)]))
   )
 
 (require 'typed-defs)
@@ -250,29 +253,25 @@
     [(_ name:id body:expr)
      (syntax/loc stx
        (define name (drbayes body)))]
-    [(_ (name:id arg:id ...) body:expr)
+    [(_ (name:id arg:id ...) (~optional (~and #:primitive primitive))
+        body:expr)
      (define arity (length (syntax->list #'(arg ...))))
      (define/with-syntax (value ...) (build-list arity (λ (i) (make-binding-transformer stx 1 i))))
      (define/with-syntax name-body (generate-temporary (format-id #'name "~a-body" #'name)))
-     (define/with-syntax name-apply (generate-temporary (format-id #'name "~a-apply" #'name)))
      (define/with-syntax name-racket (generate-temporary (format-id #'name "~a-racket" #'name)))
-     (define/with-syntax (expressions ...) (build-list arity (λ (_) #'expression)))
-     (define/with-syntax (Anys ...) (build-list arity (λ (_) #'Any)))
+     (define/with-syntax (Values ...) (build-list arity (λ (_) #'Value)))
+     (define/with-syntax Body-Type (if (attribute primitive) #'prim-expression #'Expression))
      (quasisyntax/loc stx
        (begin
-         (: name-body expression)
-         (define name-body
+         (: name-body (-> Body-Type))
+         (define (name-body)
            (let-syntax ([arg  value] ...)
              (syntax-parameterize ([in-drbayes?  #t] [let-depth  1])
                (parse body))))
          
-         (: name-apply (expressions ... -> expression))
-         (define (name-apply arg ...)
-           (apply/exp name-body (list arg ...)))
-         
-         (: name-racket (Anys ... -> Value))
+         (: name-racket (Values ... -> Value))
          (define (name-racket arg ...)
-           (run-forward (name-apply (parse (const arg)) ...)))
+           (run-forward (apply/exp (name-body) (list (parse (const arg)) ...))))
          
          (define-syntax name
            (first-order-function
@@ -281,7 +280,7 @@
                      (syntax-case inner-stx ()
                        [(_ arg ...)
                         (syntax/loc inner-stx
-                          (name-apply (parse arg) ...))]
+                          (apply/exp (name-body) (list (parse arg) ...)))]
                        [(_ . _)
                         (raise-syntax-arity-error 'drbayes #,arity inner-stx)]
                        [_
@@ -305,11 +304,11 @@
                    [(index ...)       (build-list (length (syntax->list #'(fields ...))) values)])
        (syntax/loc stx
          (begin (define name-tag (make-set-tag 'name))
-                (define/drbayes (name fields ...)
+                (define/drbayes (name fields ...) #:primitive
                   (tag (list fields ...) name-tag))
-                (define/drbayes (name? x)
+                (define/drbayes (name? x) #:primitive
                   (tag? x name-tag))
-                (define/drbayes (name-field x)
+                (define/drbayes (name-field x) #:primitive
                   (list-ref (untag x name-tag) (const index)))
                 ...)))]))
 
@@ -466,5 +465,3 @@
      (syntax/loc stx
        (syntax-parameterize ([in-drbayes? #f])
          e))]))
-
-(define/drbayes (bob x y) (+ x y))

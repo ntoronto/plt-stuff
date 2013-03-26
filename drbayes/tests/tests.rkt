@@ -11,7 +11,7 @@
 (printf "starting...~n~n")
 
 (interval-max-splits 5)
-(define n 1000)
+(define n 10000)
 
 #;
 (begin
@@ -80,6 +80,8 @@
 #;; Test: list/arr random/arr ap/arr ref/arr +/arr
 ;; Preimage is a 2D downard diagonal strip × [0,1]
 (begin
+  (interval-max-splits 2)
+  
   (define f-expr
     (rcompose/arr (list/arr random/arr
                             random/arr)
@@ -125,15 +127,18 @@
   )
 
 
-#;; Test: primitive if
+#;; Test: if
 ;; Preimage should be the union of a large upper triangle and a small lower triangle, and
 ;; samples should be uniformly distributed
 (begin
+  (interval-max-splits 1)
+  
   (define f-expr
     (drbayes
      (let ([x  (uniform)]
            [y  (uniform)])
        (list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
+       ;(list x y (lazy-if (< x y) #t (> x (scale y (const 8)))))
        )))
   (define B (set-list real-interval real-interval trues)))
 
@@ -182,19 +187,6 @@
   
   (define B (set-list real-interval real-interval (interval -0.1 0.1))))
 
-#;
-(begin
-  (define f-expr
-    (drbayes
-     (lazy-if (boolean (const 0.5))
-              0.0
-              (lazy-if (boolean (const 0.5))
-                       1.0
-                       (lazy-if (boolean (const 0.5))
-                                2.0
-                                (fail))))))
-  (define B real-interval))
-
 #;; Test: Normal-Normal model
 ;; Preimage should be a banana shape
 (begin
@@ -210,12 +202,15 @@
 #;; Test: Normal-Normal model, using expressions
 ;; Preimage should be as above
 (begin
+  (interval-max-splits 1)
+  (interval-min-length (expt 0.5 1.0))
+  
   (define f-expr
     (drbayes
      (let* ([x  (normal)]
             [y  (normal x)])
        (list x y))))
-  (define B (set-list real-interval (interval 0.9 1.1)))
+  (define B (set-list real-interval (interval 0.999 1.001)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
 #;; Test: thermometer that goes to 100
@@ -247,12 +242,14 @@
 #;; Test: Normal-Normal model with circular condition, using expressions
 ;; Preimage should be as above
 (begin
+  (interval-max-splits 5)
+  
   (define f-expr
     (drbayes
      (let* ([x0  (normal)]
             [x1  (normal x0)])
        (list x0 x1 (sqrt (+ (sqr x0) (sqr x1)))))))
-  (define B (set-list real-interval real-interval (interval 0.95 1.05))))
+  (define B (set-list real-interval real-interval (interval 0.99 1.01))))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
@@ -319,9 +316,11 @@
     (printf "E[x] = ~v~n" (mean xs))
     (printf "sd[x] = ~v~n" (stddev xs))))
 
-#;; Test: Conditioning on Geometric(0.5) distribution defined via recursion
+;; Test: Conditioning on Geometric(0.5) distribution defined via recursion
 ;; Image points should lie on integer x coordinates and be clustered around 3
 (begin
+  (interval-max-splits 1)
+  
   (define p #i499/1000)
   
   (define/drbayes (geometric-p)
@@ -347,13 +346,8 @@
 #;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
-  (interval-max-splits 5)
-  ;(interval-min-length (flexpt 0.5 14.0))
-  
-  (define/drbayes (list-append lst1 lst2)
-    (lazy-if (null? lst1)
-             lst2
-             (cons (car lst1) (list-append (cdr lst1) lst2))))
+  (interval-max-splits 4)
+  (interval-min-length (flexpt 0.5 4.0))
   
   (define f-expr
     (drbayes
@@ -375,7 +369,7 @@
               (interval 1.3 1.5 #t #t)))
   (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
-
+#;
 (begin
   (interval-max-splits 2)
   (define f-expr
@@ -448,7 +442,7 @@
 
 ;; ===================================================================================================
 
-(match-define (expression-meaning idxs f-fwd f-comp) (run-expression f-expr))
+(match-define (rand-expression-meaning idxs f-fwd f-comp) (run-rand-expression (->rand f-expr)))
 
 (define (empty-set-error)
   (error 'drbayes-sample "cannot sample from the empty set"))
@@ -472,6 +466,7 @@
                         [z : Branches]
                         [measure : Flonum]
                         [prob : Flonum]
+                        [point-prob : Flonum]
                         [weight : Flonum])
   #:transparent)
 
@@ -481,22 +476,35 @@
   (and (not (forward-fail? x))
        (set-member? B x)))
 
-(: orig-samples (Listof omega-sample))
+(: orig-samples (Listof omega-rect-sample))
 (define orig-samples
   (time
    ;profile-expr
    (refinement-sample* Ω Z idxs refine n)))
-(newline)
 
 (: all-samples (Listof domain-sample))
 (define all-samples
-  (for/list: : (Listof domain-sample) ([s  (in-list orig-samples)])
-    (match-define (omega-sample Ω Z m p) s)
-    (define ω (omega-rect-sample-point Ω))
-    (define z (branches-rect-sample-point Z))
-    (define x (with-handlers ([forward-fail?  (λ: ([e : forward-fail]) e)])
-                (f-fwd ω z null)))
-    (domain-sample Ω Z ω x z m p (/ m p))))
+  (time
+   ;profile-expr
+   (let: loop : (Listof domain-sample) ([orig-samples : (Listof omega-rect-sample)  orig-samples])
+     (cond
+       [(empty? orig-samples)  empty]
+       [else
+        (define s (first orig-samples))
+        (match-define (omega-rect-sample Ω Z m p) s)
+        (define t (refinement-sample-point Ω Z 1.0 idxs refine))
+        (cond [t
+               (match-define (omega-sample ω z q) t)
+               (define x (with-handlers ([forward-fail?  (λ: ([e : forward-fail]) e)])
+                           (f-fwd ω z null)))
+               (cons (domain-sample Ω Z ω x z m p q (/ q p)) (loop (rest orig-samples)))]
+              [else
+               (define ω (omega-rect-sample-point Ω))
+               (define z (branches-rect-sample-point Z))
+               (define x (forward-fail "refinement-sample-point failed"))
+               (cons (domain-sample Ω Z ω x z m p m (/ m p)) (loop (rest orig-samples)))])]))))
+
+(newline)
 
 (define samples (filter accept-sample? all-samples))
 (define ws (map domain-sample-weight samples))
@@ -560,33 +568,6 @@
          (define lst (value->listof-flonum (cast (domain-sample-x s) Value)))
          (maybe-pad-list lst 3 random))
        samples))
-
-#|
-(define all-Ωs (map domain-sample-Ω all-samples))
-(define all-Zs (map domain-sample-Z all-samples))
-
-(define resamples
-  (sample (discrete-dist (map (λ: ([s : (weighted-sample (Pair Omega-Rect Branches-Rect))])
-                                (weighted-sample-value s))
-                              orig-samples)
-                         (map domain-sample-weight all-samples))
-          n))
-
-(: resampled-xss (Listof (Listof Flonum)))
-(define resampled-xss
-  (let loop ([ss  resamples])
-    (cond [(empty? ss)  empty]
-          [else
-           (match-define (cons Ω Z) (first ss))
-           (define ω (omega-rect-sample-point Ω))
-           (define x (with-handlers ([if-bad-branch?  (λ (_) (void))])
-                       (f-fwd ω null Z)))
-           (cond [(and (not (void? x)) (rect-member? B x))
-                  (define lst (value->listof-flonum x))
-                  (cons (maybe-pad-list lst 3 random) (loop (rest ss)))]
-                 [else
-                  (loop (rest ss))])])))
-|#
 
 (with-handlers ([exn?  (λ (_) (printf "image points scatter plot failed~n"))])
   (plot3d (points3d xss #:sym 'dot #:size 12 #:alpha alpha)

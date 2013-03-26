@@ -1,6 +1,8 @@
 #lang typed/racket
 
 (require plot/typed
+         images/flomap
+         racket/flonum
          "../main.rkt")
 
 (printf "starting...~n")
@@ -144,7 +146,8 @@
 (define p0 (list 0.9 0.25 0.9))
 
 
-(interval-max-splits 8)
+(interval-max-splits 2)
+;(interval-min-length (expt 0.5 1.0))
 
 (define-values (traces ws)
   (let ()
@@ -153,7 +156,7 @@
        (let ()
          (define-values (ps ws)
            (drbayes-sample (drbayes (trace-light (list (const p0)) (sphere-surface)))
-                           4000
+                           1000000
                            (set-list* (set-list (interval 0.48 0.52)
                                                 (interval -0.001 0.001)
                                                 (interval 0.48 0.52))
@@ -168,8 +171,36 @@
 (get-cache-stats)
 (get-search-stats)
 
+(printf "(length traces) = ~v~n" (length traces))
+
 (plot-background '(0.1 0.1 0.1))
 (plot-foreground 'white)
+
+(define xys
+  (map (λ: ([ps : (Listof (Listof Flonum))])
+         (define p0 (second ps))
+         (define p1 (first ps))
+         (define d (vec- p1 p0))
+         (define c (ray-plane-intersect p1 d plane2-n plane2-d 0.0))
+         (define p (cast (collision-point c) (Listof Flonum)))
+         (list (- 1.0 (first p)) (- 1.0 (third p))))
+       traces))
+
+(define width 256)
+(define height 256)
+(define fm (make-flomap 1 width height))
+(define vs (flomap-values fm))
+(for: ([xy  (in-list xys)]
+       [w  (in-list ws)])
+  (match-define (list orig-x orig-y) xy)
+  (define x (exact-round (* width orig-x)))
+  (define y (exact-round (* height (- 1.0 orig-y))))
+  (when (and (<= 0 x) (< x width)
+             (<= 0 y) (< y height))
+    (define i (coords->index 1 width 0 x y))
+    (flvector-set! vs i (+ w (flvector-ref vs i)))))
+
+(flomap->bitmap (flomap-normalize (flomap-blur fm 2.0)))
 
 (plot3d (ann (map (λ: ([ps : (Listof (Listof Flonum))])
                     (lines3d ps))
@@ -178,21 +209,6 @@
         #:x-min 0.0 #:x-max 1.0
         #:y-min 0.0 #:y-max 1.0
         #:z-min 0.0 #:z-max 1.0)
-
-(plot
- (points (map (λ: ([ps : (Listof (Listof Flonum))])
-                (define p0 (second ps))
-                (define p1 (first ps))
-                (define d (vec- p1 p0))
-                (define c (ray-plane-intersect p1 d plane2-n plane2-d 0.0))
-                (define p (cast (collision-point c) (Listof Flonum)))
-                (list (- 1.0 (first p)) (- 1.0 (third p))))
-              traces)
-         #:sym 'dot #:size 12 #:alpha 1.0 #:color 'white)
- ;#:x-min 0.4 #:x-max 0.6
- ;#:y-min 0.4 #:y-max 0.6
- )
-
 
 #|
 (begin

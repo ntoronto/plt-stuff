@@ -167,6 +167,10 @@
 (define (omega-map ω f)
   (((inst omega-tree-map Flonum B) omega-hash-default) (unbox (Omega-hash ω)) f))
 
+(: omega (-> Omega))
+(define (omega)
+  (Omega (box (Omega-Leaf))))
+
 ;; ===================================================================================================
 ;; Infinite product space rectangles
 
@@ -283,14 +287,18 @@
   ((inst omega-tree-intersect Boolean-Rect Empty-Set) booleans boolean-rect-intersect empty-set?))
 
 (: branches-rect-node
-   (Boolean-Rect Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect))
+   (case->
+    (Boolean-Rect Branches-Rect Branches-Rect -> Branches-Rect)
+    (Boolean-Rect Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect)))
 (define (branches-rect-node b Z1 Z2)
   (cond [(empty-set? Z1)  Z1]
         [(empty-set? Z2)  Z2]
         [else  (just-branches-rect-node b Z1 Z2)]))
 
 (: branches-rect-node/last
-   (Branches-Rect Boolean-Rect Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect))
+   (case->
+    (Branches-Rect Boolean-Rect Branches-Rect Branches-Rect -> Branches-Rect)
+    (Branches-Rect Boolean-Rect Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect)))
 (define (branches-rect-node/last Z b Z1 Z2)
   (cond [(and (eq? b (branches-rect-value Z))
               (eq? Z1 (branches-rect-fst Z))
