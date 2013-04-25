@@ -3,7 +3,8 @@
 (require plot/typed
          images/flomap
          racket/flonum
-         "../main.rkt")
+         "../main.rkt"
+         "test-utils.rkt")
 
 (printf "starting...~n")
 
@@ -45,86 +46,121 @@
 
 #;; This implementation results in awful image approximations when the denominator in the
 ;; normalization may be zero
-(define/drbayes (sphere-surface)
+(define/drbayes (uniform-vec)
   (vec-norm (list (normal) (normal) (normal))))
 
-(define/drbayes (sphere-surface)
+(define/drbayes (kinda-normal)
+  (let ([x  (normal)])
+    (prim-if (and (x . > . -3) (x . < . 3)) x (fail))))
+
+(define/drbayes (uniform-vec)
+  (list (kinda-normal) (kinda-normal) (kinda-normal))
+  #;
+  (list (normal) (normal) (normal)))
+
+#;; Polar coordinate sampling uses fewer random variables than above, and doesn't do division
+(define/drbayes (uniform-vec)
   (let ([θ  (uniform (const (- pi)) (const pi))]
         [φ  (* 2 (asin (sqrt (uniform))))])
-    (list (* (partial-sin φ) (partial-cos θ))
-          (* (partial-sin φ) (partial-sin θ))
-          (partial-cos φ))))
+    (let ([sin-φ  (partial-sin φ)])
+      (list (* sin-φ (partial-cos θ))
+            (* sin-φ (partial-sin θ))
+            (partial-cos φ)))))
 
-(define/drbayes (sphere-half-surface n)
-  (let ([v  (sphere-surface)])
+(define/drbayes (uniform-vec/dir n)
+  (let ([v  (uniform-vec)])
     (lazy-if ((vec-dot n v) . > . 0) v (vec-neg v))))
 
-(struct/drbayes collision (time point data))
+(struct/drbayes collision (time point normal))
 
 (define/drbayes (closer-collision c1 c2)
-  (prim-if (collision? c1)
-           (prim-if (collision? c2)
-                    (prim-if ((collision-time c2) . < . (collision-time c1)) c2 c1)
-                    c1)
-           c2))
+  (lazy-if (and (collision? c1) (collision? c2))
+           (lazy-if ((collision-time c2) . < . (collision-time c1)) c2 c1)
+           (lazy-if (collision? c1) c1 c2)))
 
 (define/drbayes (ray-reflect d n)
   (vec- d (vec-scale n (* 2.0 (vec-dot d n)))))
 
-(define/drbayes (ray-sphere-intersect p0 d pc r)
-  (let* ([dp  (vec- pc p0)]
-         [-b/2  (vec-dot dp d)]
-         [disc  (+ (sqr -b/2) (- (sqr r) (vec-mag^2 dp)))])
-    (lazy-if (disc . > . 0.01)
-               (let ([t  (- -b/2 (sqrt disc))])
-                 (lazy-if (t . > . 0.01)
-                            (let* ([dt  (vec-scale d t)]
-                                   [p1  (vec+ p0 dt)]
-                                   [n   (vec-scale (vec- p1 pc) (/ r))])
-                              (collision t p1 (sphere-half-surface n)))
-                            #f))
-               #f)))
+(define/drbayes (ray-sphere-intersect p v c r)
+  (let* ([dp  (vec- c p)]
+         [-b/2  (vec-dot dp v)]
+         [disc  (- (sqr -b/2) (- (vec-mag^2 dp) (sqr r)))])
+    (lazy-if (positive? disc)
+             (let ([t  (- -b/2 (sqrt disc))])
+               (lazy-if (positive? t)
+                        (let* ([p1  (vec+ p (vec-scale v t))]
+                               [n   (vec-scale (vec- p1 c) (/ r))])
+                          (collision t p1 n))
+                        #f))
+             #f)))
 
-(define/drbayes (ray-plane-intersect p0 v n d prob)
-  (let ([denom  (vec-dot v n)])
-    (lazy-if (denom . < . -0.01)
-               (let ([t  (- (/ (+ d (vec-dot p0 n)) denom))])
-                 (lazy-if (t . > . 0.01)
-                            (let ([p1  (vec+ p0 (vec-scale v t))])
-                              (collision t p1 null)
-                              #;
-                              (prim-if ((uniform) . < . prob)
-                                       (collision t p1 (sphere-half-surface n))
-                                       (collision t p1 null)))
-                            #f))
-               #f)))
+(define/drbayes (ray-plane-intersect p0 v n d)
+  (let ([denom  (- (vec-dot v n))])
+    (lazy-if (positive? denom)
+             (let ([t  (/ (+ d (vec-dot p0 n)) denom)])
+               (lazy-if (positive? t)
+                        (collision t (vec+ p0 (vec-scale v t)) n)
+                        #f))
+             #f)))
 
 (define plane1-n (list 0.0 1.0 0.0))
 (define plane1-d 0.0)
-(define plane2-n (list 0.0 1.0 0.0))
-(define plane2-d 0.5)
+(define plane2-n (list 0.0 -1.0 0.0))
+(define plane2-d 1.0)
+(define plane3-n (list 1.0 0.0 0.0))
+(define plane3-d 0.0)
+(define plane4-n (list -1.0 0.0 0.0))
+(define plane4-d 1.0)
+(define plane5-n (list 0.0 0.0 1.0))
+(define plane5-d 0.0)
+(define plane6-n (list 0.0 0.0 -1.0))
+(define plane6-d 1.0)
 
 (define sphere0-pc (list 0.4 0.6 0.4))
 (define sphere0-r 0.25)
 
+#;; Cast one unit in direction d
+(define/drbayes (trace-light ps d)
+  (cons (vec+ d (car ps)) ps))
 
-#;
+#;; Intersection test against plane
+(define/drbayes (trace-light ps d)
+  (let* ([p0  (car ps)]
+         [c   (ray-plane-intersect p0 d (const plane1-n) (const plane1-d))])
+    (lazy-if (collision? c)
+             (cons (collision-point c) ps)
+             ps)))
+
+#;; Intersection test against sphere
 (define/drbayes (trace-light ps d)
   (let* ([p0  (car ps)]
          [c   (ray-sphere-intersect p0 d (const sphere0-pc) (const sphere0-r))])
     (lazy-if (collision? c)
-               (cons (collision-point c) ps)
-               ps)))
+             (cons (collision-point c) ps)
+             ps)))
 
 
 (define/drbayes (trace-light ps d)
   (let* ([p0  (car ps)]
-         [c   (ray-sphere-intersect p0 d (const sphere0-pc) (const sphere0-r))])
+         [c   (closer-collision
+               (closer-collision 
+                (ray-plane-intersect p0 d (const plane1-n) (const plane1-d))
+                (ray-plane-intersect p0 d (const plane2-n) (const plane2-d)))
+               (closer-collision
+                (closer-collision
+                 (ray-plane-intersect p0 d (const plane3-n) (const plane3-d))
+                 (ray-plane-intersect p0 d (const plane4-n) (const plane4-d)))
+                (closer-collision
+                 (ray-plane-intersect p0 d (const plane5-n) (const plane5-d))
+                 (ray-plane-intersect p0 d (const plane6-n) (const plane6-d)))))])
     (lazy-if (collision? c)
+             #;(cons (collision-point c) ps)
+             
              (let* ([p0  (collision-point c)]
-                    [d  (collision-data c)]
+                    [n  (collision-normal c)]
+                    [d  (uniform-vec/dir n)]
                     [ps  (cons p0 ps)]
-                    [c   (ray-plane-intersect p0 d (const plane1-n) (const plane1-d) 0.0)])
+                    [c   (ray-plane-intersect p0 d (const plane1-n) (const plane1-d))])
                (lazy-if (collision? c)
                         (cons (collision-point c) ps)
                         ps))
@@ -135,7 +171,7 @@
   (let* ([p0  (car ps)]
          [c   (closer-collision
                (ray-sphere-intersect p0 d (const sphere0-pc) (const sphere0-r))
-               (ray-plane-intersect p0 d (const plane1-n) (const plane1-d) 0.0))])
+               (ray-plane-intersect p0 d (const plane1-n) (const plane1-d)))])
     (strict-if (collision? c)
                (let ([d  (collision-data c)])
                  (lazy-if (null? d)
@@ -145,24 +181,47 @@
 
 (define p0 (list 0.9 0.25 0.9))
 
+(define/drbayes (start-p)
+  (const p0))
 
-(interval-max-splits 2)
-;(interval-min-length (expt 0.5 1.0))
+(interval-max-splits 0)
+;(interval-min-length (expt 0.5 5.0))
+
+(define n 2000)
+
+(define f-expr
+  (drbayes (trace-light (list (start-p)) (uniform-vec))))
+
+(define H
+  #;
+  (set-list real-interval real-interval real-interval)
+  
+  (set-list (interval 0.49 0.51)
+            (interval -0.001 0.001)
+            (interval 0.49 0.51)))
+
+(define K
+  ;universe
+  ;(set-list* H universe universe)
+  
+  (set-list* H
+             universe
+             universe
+             universe))
+
+(match-define (rand-expression-meaning idxs f-fwd f-comp) (run-rand-expression (->rand f-expr)))
+
+(define refine
+  (cond [(empty-set? K)  (error 'refine "K is empty-set")]
+        [else  (preimage-refiner f-comp K)]))
 
 (define-values (traces ws)
   (let ()
     (define pws
       (time
+       ;profile-expr
        (let ()
-         (define-values (ps ws)
-           (drbayes-sample (drbayes (trace-light (list (const p0)) (sphere-surface)))
-                           1000000
-                           (set-list* (set-list (interval 0.48 0.52)
-                                                (interval -0.001 0.001)
-                                                (interval 0.48 0.52))
-                                      universe
-                                      universe
-                                      universe)))
+         (define-values (ps ws) (drbayes-sample f-expr n K))
          (map (inst cons Value Flonum) ps ws))))
     (values (cast (map (inst car Value Flonum) pws)
                   (Listof (Listof (List Flonum Flonum Flonum))))
@@ -176,12 +235,22 @@
 (plot-background '(0.1 0.1 0.1))
 (plot-foreground 'white)
 
+(plot3d (ann (map (λ: ([ps : (Listof (Listof Flonum))])
+                    (lines3d ps))
+                  (if ((length traces) . > . 2000) (take traces 2000) traces))
+             (Listof renderer3d))
+        #:x-min -0.1 #:x-max 1.1
+        #:y-min -0.1 #:y-max 1.1
+        #:z-min -0.1 #:z-max 1.1)
+
+(define plane1-ccd-d 0.5)
+
 (define xys
   (map (λ: ([ps : (Listof (Listof Flonum))])
          (define p0 (second ps))
          (define p1 (first ps))
          (define d (vec- p1 p0))
-         (define c (ray-plane-intersect p1 d plane2-n plane2-d 0.0))
+         (define c (ray-plane-intersect p1 d plane1-n plane1-ccd-d))
          (define p (cast (collision-point c) (Listof Flonum)))
          (list (- 1.0 (first p)) (- 1.0 (third p))))
        traces))
@@ -200,22 +269,14 @@
     (define i (coords->index 1 width 0 x y))
     (flvector-set! vs i (+ w (flvector-ref vs i)))))
 
-(flomap->bitmap (flomap-normalize (flomap-blur fm 2.0)))
-
-(plot3d (ann (map (λ: ([ps : (Listof (Listof Flonum))])
-                    (lines3d ps))
-                  traces)
-             (Listof renderer3d))
-        #:x-min 0.0 #:x-max 1.0
-        #:y-min 0.0 #:y-max 1.0
-        #:z-min 0.0 #:z-max 1.0)
+(flomap->bitmap (flomap-normalize (flomap-blur fm 1.0)))
 
 #|
 (begin
   (interval-max-splits 5)
   
   (define f-expr
-    (drbayes (trace-light (list (const p0)) (sphere-surface))))
+    (drbayes (trace-light (list (const p0)) (uniform-vec))))
   
   (define B
     (set-list* #;(set-list (interval 0.0 1.0)
@@ -235,8 +296,8 @@
   (define f-expr
     (drbayes
      (let* ([p0  (const sphere0-pc)]
-            [p1  (vec+ (vec-scale (sphere-surface) 0.25) p0)]
-            [p2  (vec+ (vec-scale (sphere-surface) 0.25) p1)])
+            [p1  (vec+ (vec-scale (uniform-vec) 0.25) p0)]
+            [p2  (vec+ (vec-scale (uniform-vec) 0.25) p1)])
        (list p2 p1 p0))))
   
   (define B

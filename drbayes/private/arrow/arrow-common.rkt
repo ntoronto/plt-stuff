@@ -5,20 +5,16 @@
 (require racket/list
          "../untyped-utils.rkt")
 
-(struct: forward-fail ([reason : String]) #:transparent)
-
 (define-singleton-type Empty-Meaning empty-meaning)
 
 (define rand-cache-preimages? #t)
+(define rand-cache-computations? #f)
 (define prim-cache-preimages? #t)
-(define pair-cache-preimages? #t)
-(define rand-cache-computations? #t)
 (define prim-cache-computations? #t)
 
 (define rand-preimage-stats? #f)
-(define prim-preimage-stats? #f)
-(define pair-preimage-stats? #f)
 (define rand-computation-stats? #f)
+(define prim-preimage-stats? #f)
 (define prim-computation-stats? #f)
 
 (define: cache-stats : (HashTable Symbol Natural)  (make-hasheq empty))

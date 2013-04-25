@@ -103,7 +103,7 @@
 (define (rect-join A B)
   (cond [(empty-set? A)  B]
         [(empty-set? B)  A]
-        [(and (interval? A) (interval? B))  (interval-join A B)]
+        [(and (interval*? A) (interval*? B))  (interval*-union A B)]
         [(and (null-rect? A) (null-rect? B))  A]
         [(and (pair-rect? A) (pair-rect? B))  (pair-rect-join A B)]
         [(and (boolean-rect? A) (boolean-rect? B))  (boolean-rect-join A B)]

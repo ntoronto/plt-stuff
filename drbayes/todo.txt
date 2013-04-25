@@ -9,3 +9,8 @@ Fail on measure-zero Ω, not just empty Ω
 Log probabilities
 Bootstrap sampling resamples point within Ω
 Gamma distribution
+
+
+
+Make forward functions return a Branches
+Use point sample ω to determine when to branch

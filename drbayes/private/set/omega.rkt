@@ -174,15 +174,15 @@
 ;; ===================================================================================================
 ;; Infinite product space rectangles
 
-(define-type Omega-Rect (Omega-Tree Interval))
+(define-type Omega-Rect (Omega-Tree Interval*))
 (define-type Maybe-Omega-Rect (U Empty-Set Omega-Rect))
 
 (define omega-nonempty?
   (λ: ([Ω : Maybe-Omega-Rect]) (not (empty-set? Ω))))
 
 (define omega-rect-default unit-interval)
-(define omega-rect-ref ((inst omega-tree-ref Interval) omega-rect-default))
-(define omega-rect-set ((inst omega-tree-set Interval) omega-rect-default))
+(define omega-rect-ref ((inst omega-tree-ref Interval*) omega-rect-default))
+(define omega-rect-set ((inst omega-tree-set Interval*) omega-rect-default))
 
 (: omega-rect-fst (Omega-Rect -> Omega-Rect))
 (define omega-rect-fst omega-tree-fst)
@@ -190,24 +190,24 @@
 (: omega-rect-snd (Omega-Rect -> Omega-Rect))
 (define omega-rect-snd omega-tree-snd)
 
-(: omega-rect-value (Omega-Rect -> Interval))
+(: omega-rect-value (Omega-Rect -> Interval*))
 (define omega-rect-value (omega-tree-value omega-rect-default))
 
 (: omega-rect Omega-Rect)
 (define omega-rect omega-leaf)
 
-(: omega-rect-map (All (B) (Omega-Rect (Interval -> B) -> (Listof B))))
+(: omega-rect-map (All (B) (Omega-Rect (Interval* -> B) -> (Listof B))))
 (define (omega-rect-map Ω f)
-  (((inst omega-tree-map Interval B) omega-rect-default) Ω f))
+  (((inst omega-tree-map Interval* B) omega-rect-default) Ω f))
 
-(define just-omega-rect-node ((inst omega-node Interval) omega-rect-default))
-(define just-omega-rect-join ((inst omega-tree-join Interval) omega-rect-default interval-join))
+(define just-omega-rect-node ((inst omega-node Interval*) omega-rect-default))
+(define just-omega-rect-join ((inst omega-tree-join Interval*) omega-rect-default interval*-union))
 (define just-omega-rect-intersect
-  ((inst omega-tree-intersect Interval Empty-Set) omega-rect-default interval-intersect empty-set?))
+  ((inst omega-tree-intersect Interval* Empty-Set) omega-rect-default interval*-intersect empty-set?))
 
 (: omega-rect-node
-   (case-> (Interval Omega-Rect Omega-Rect -> Omega-Rect)
-           (Maybe-Interval Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
+   (case-> (Interval* Omega-Rect Omega-Rect -> Omega-Rect)
+           (Maybe-Interval* Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
 (define (omega-rect-node I Ω1 Ω2)
   (cond [(empty-set? I)   I]
         [(empty-set? Ω1)  Ω1]
@@ -215,8 +215,8 @@
         [else  (just-omega-rect-node I Ω1 Ω2)]))
 
 (: omega-rect-node/last
-   (case-> (Omega-Rect Interval Omega-Rect Omega-Rect -> Omega-Rect)
-           (Omega-Rect Maybe-Interval Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
+   (case-> (Omega-Rect Interval* Omega-Rect Omega-Rect -> Omega-Rect)
+           (Omega-Rect Maybe-Interval* Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
 (define (omega-rect-node/last Ω I Ω1 Ω2)
   (cond [(and (equal? I (omega-rect-value Ω))
               (eq? Ω1 (omega-rect-fst Ω))
@@ -250,15 +250,15 @@
         [else  (just-omega-rect-intersect Ω1 Ω2)]))
 
 (define omega-rect->omega-hash
-  ((inst omega-tree->omega-tree Interval Flonum) omega-rect-default omega-hash-default))
+  ((inst omega-tree->omega-tree Interval* Flonum) omega-rect-default omega-hash-default))
 
 (: omega-rect-sample-point (Omega-Rect -> Omega))
 (define (omega-rect-sample-point Ω)
-  (Omega (box (omega-rect->omega-hash Ω interval-sample-point))))
+  (Omega (box (omega-rect->omega-hash Ω interval*-sample-point))))
 
 (: omega-rect-measure (Omega-Rect -> Flonum))
 (define (omega-rect-measure Ω)
-  (real->double-flonum (apply * (omega-rect-map Ω interval-measure))))
+  (real->double-flonum (apply * (omega-rect-map Ω interval*-measure))))
 
 ;; ===================================================================================================
 ;; Conditional bisection rectangles

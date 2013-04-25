@@ -1,19 +1,23 @@
 #lang typed/racket/base
 
 (require racket/match
-         racket/flonum
+         racket/list
+         racket/promise
          (only-in racket/math pi)
+         math/flonum
          math/distributions
          "../set.rkt"
-         "arrow-common.rkt")
+         "arrow-common.rkt"
+         "directed-rounding-flops.rkt")
 
 (provide (all-defined-out))
 
 ;; ===================================================================================================
 ;; Primitive expressions
 
-(define-type Prim-Forward-Fun (Value -> Value))
+(define-type Prim-Forward-Fun (Value -> Maybe-Value))
 (define-type Prim-Preimage-Fun (Nonempty-Set -> Set))
+(define-type Prim-Image-Fun (Nonempty-Set -> Set))
 
 (define-type Prim-Computation-Meaning (U Empty-Meaning prim-computation-meaning))
 (define-type Prim-Computation (Nonempty-Set -> Prim-Computation-Meaning))
@@ -35,6 +39,11 @@
 (: run-prim-expression (prim-expression -> prim-expression-meaning))
 (define (run-prim-expression e)
   ((prim-expression-fun e)))
+
+(: run-prim-forward (Prim-Forward-Fun Maybe-Value -> Maybe-Value))
+(define (run-prim-forward f γ)
+  (cond [(bottom? γ)  γ]
+        [else  (f γ)]))
 
 (: run-prim-preimage (Prim-Preimage-Fun Set -> Set))
 (define (run-prim-preimage pre K)
@@ -92,7 +101,7 @@
 ;; Bottom function: has empty range
 
 (: bottom/fwd Prim-Forward-Fun)
-(define (bottom/fwd γ) (raise (forward-fail "bottom")))
+(define (bottom/fwd γ) (bottom (delay "fail")))
 
 (: bottom/comp Prim-Computation)
 (define (bottom/comp Γ) empty-meaning)
@@ -123,13 +132,13 @@
 (define ((c/fwd x) γ) x)
 
 (: c/pre (Nonempty-Set -> Prim-Preimage-Fun))
-(define ((c/pre X) K) X)
+(define ((c/pre Γ) K) Γ)
 
 (: c/comp (Nonempty-Set Nonempty-Set -> Prim-Computation))
 (define (c/comp domain X)
   (cached-prim-computation
    domain
-   (λ (Γ) (prim-computation-meaning X (prim-preimage Γ X (c/pre X))))))
+   (λ (Γ) (prim-computation-meaning X (prim-preimage Γ X (c/pre Γ))))))
 
 (: c/arr (case-> (Value -> prim-expression)
                  (Value Nonempty-Set -> prim-expression)))
@@ -138,13 +147,33 @@
   (define X (value->singleton x))
   (prim-expression (λ () (prim-expression-meaning fwd (c/comp domain X)))))
 
+
+;; Late booleans, used only for testing
+;; Used as an if condition, they forcing refinement sampling to always choose a branch
+
+(: late-boolean/fwd (Flonum -> Prim-Forward-Fun))
+(define ((late-boolean/fwd p) γ) (if ((random) . < . p) #t #f))
+
+(: late-boolean/pre (Nonempty-Set -> Prim-Preimage-Fun))
+(define ((late-boolean/pre Γ) K) Γ)
+
+(: late-boolean/comp Prim-Computation)
+(define late-boolean/comp
+  (cached-prim-computation
+   universe
+   (λ (Γ) (prim-computation-meaning booleans (prim-preimage Γ booleans (late-boolean/pre Γ))))))
+
+(: late-boolean/arr (Flonum -> prim-expression))
+(define (late-boolean/arr p)
+  (prim-expression (λ () (prim-expression-meaning (late-boolean/fwd p) late-boolean/comp))))
+
 ;; ===================================================================================================
 ;; Arrow composition (reverse composition)
 
 (: prim-rcompose/fwd (Prim-Forward-Fun Prim-Forward-Fun -> Prim-Forward-Fun))
 (define ((prim-rcompose/fwd f-fwd g-fwd) γ)
   (let* ([kf  (f-fwd γ)]
-         [kg  (g-fwd kf)])
+         [kg  (run-prim-forward g-fwd kf)])
     kg))
 
 (: prim-rcompose/pre (Prim-Preimage-Fun Prim-Preimage-Fun -> Prim-Preimage-Fun))
@@ -185,9 +214,11 @@
 
 (: prim-pair/fwd (Prim-Forward-Fun Prim-Forward-Fun -> Prim-Forward-Fun))
 (define ((prim-pair/fwd fst-fwd snd-fwd) γ)
-  (let ([k1  (fst-fwd γ)]
-        [k2  (snd-fwd γ)])
-    (cons k1 k2)))
+  (define k1 (fst-fwd γ))
+  (cond [(bottom? k1)  k1]
+        [else  (define k2 (snd-fwd γ))
+               (cond [(bottom? k2)  k2]
+                     [else  (cons k1 k2)])]))
 
 (: prim-pair/pre (Prim-Preimage-Fun Prim-Preimage-Fun -> Prim-Preimage-Fun))
 (define ((prim-pair/pre pre1 pre2) K)
@@ -249,9 +280,10 @@
 (: prim-if/fwd (Prim-Forward-Fun Prim-Forward-Fun Prim-Forward-Fun -> Prim-Forward-Fun))
 (define ((prim-if/fwd c-fwd t-fwd f-fwd) γ)
   (define kc (c-fwd γ))
-  (cond [(eq? kc #t)  (t-fwd γ)]
+  (cond [(bottom? kc)  kc]
+        [(eq? kc #t)  (t-fwd γ)]
         [(eq? kc #f)  (f-fwd γ)]
-        [else  (raise-argument-error 'prim-if/fwd "Boolean" kc)]))
+        [else  (bottom (delay (format "prim-if: expected Boolean condition; given ~e" kc)))]))
 
 (: prim-if-one/pre (Nonempty-Set Prim-Preimage-Fun -> Prim-Preimage-Fun))
 (define ((prim-if-one/pre orig-K pre) K)
@@ -322,103 +354,161 @@
 ;; ===================================================================================================
 ;; Monotone R -> R functions
 
-(: monotone/fwd (Symbol (Flonum -> Flonum) -> Prim-Forward-Fun))
-(define ((monotone/fwd name f) γ)
-  (cond [(flonum? γ)  (f γ)]
-        [else  (raise-argument-error name "Flonum" γ)]))
+(: monotone/fwd (Symbol Interval* Interval* (Flonum -> Flonum) -> Prim-Forward-Fun))
+(define ((monotone/fwd name f-domain f-range f) γ)
+  (cond [(or (not (flonum? γ)) (not (interval*-member? f-domain γ)))
+         (bottom (delay (format "~a: expected argument in ~a; given ~e" name f-domain γ)))]
+        [else
+         (define k (f γ))
+         (cond [(not (interval*-member? f-range k))
+                (bottom (delay (format "~a: expected result in ~a; produced ~e" name f-range k)))]
+               [else  k])]))
 
-(: monotone-range (Interval Interval (Flonum -> Flonum) Boolean -> Set))
-(define (monotone-range domain f-range f fx?)
-  (match-define (interval a b a? b?) domain)
-  (cond [fx?   (set-intersect f-range (interval (f a) (f b) a? b?))]
-        [else  (set-intersect f-range (interval (f b) (f a) b? a?))]))
+(: monotone-apply (Boolean (Flonum -> Flonum) (Flonum -> Flonum) Interval -> Maybe-Interval))
+(define (monotone-apply inc? f/rndd f/rndu X)
+  (match-define (interval a b a? b?) X)
+  (cond [inc?  (interval (f/rndd a) (f/rndu b) a? b?)]
+        [else  (interval (f/rndd b) (f/rndu a) b? a?)]))
 
-(: monotone/pre (Nonempty-Set (Flonum -> Flonum) Boolean -> Prim-Preimage-Fun))
-(define ((monotone/pre Γ g fx?) K)
-  (match K
-    [(interval a b a? b?)
-     (cond [fx?   (set-intersect Γ (interval (g a) (g b) a? b?))]
-           [else  (set-intersect Γ (interval (g b) (g a) b? a?))])]
-    [_  empty-set]))
+(: monotone/img (Nonempty-Set Boolean (Flonum -> Flonum) (Flonum -> Flonum) -> Prim-Image-Fun))
+(define ((monotone/img K inc? f/rndd f/rndu) Γ)
+  (set-intersect
+    K (interval*-map (λ (Γ) (monotone-apply inc? f/rndd f/rndu Γ))
+                     (assert Γ interval*?))))
 
-(: monotone/comp (Interval Interval (Flonum -> Flonum) (Flonum -> Flonum) Boolean
-                           -> Prim-Computation))
-(define (monotone/comp f-domain f-range f g fx?)
+(: monotone/pre (Nonempty-Set Boolean (Flonum -> Flonum) (Flonum -> Flonum) -> Prim-Preimage-Fun))
+(define ((monotone/pre Γ inc? g/rndd g/rndu) K)
+  (set-intersect
+   Γ (interval*-map (λ (K) (monotone-apply inc? g/rndd g/rndu K))
+                    (assert K interval*?))))
+
+(: monotone/comp (Interval* Interval* Boolean
+                            (Flonum -> Flonum)
+                            (Flonum -> Flonum) (Flonum -> Flonum)
+                            (Flonum -> Flonum) (Flonum -> Flonum)
+                            -> Prim-Computation))
+(define (monotone/comp f-domain f-range inc? f f/rndd f/rndu g/rndd g/rndu)
+  (define img (monotone/img f-range inc? f/rndd f/rndu))
   (cached-prim-computation
    f-domain
    (λ (Γ)
-     (define K (monotone-range (assert Γ interval?) f-range f fx?))
+     (define K (img Γ))
      (cond [(empty-set? K)  empty-meaning]
-           [else  (define pre (prim-preimage Γ K (monotone/pre Γ g fx?)))
+           [else  (define pre (prim-preimage Γ K (monotone/pre Γ inc? g/rndd g/rndu)))
                   (prim-computation-meaning K pre)]))))
 
-(: monotone/arr (Symbol Interval Interval (Flonum -> Flonum) (Flonum -> Flonum) Boolean
+(: monotone/arr (Symbol Interval* Interval* Boolean
+                        (Flonum -> Flonum)
+                        (Flonum -> Flonum) (Flonum -> Flonum)
+                        (Flonum -> Flonum) (Flonum -> Flonum)
                         -> prim-expression))
-(define (monotone/arr name f-domain f-range f g fx?)
+(define (monotone/arr name f-domain f-range inc? f f/rndd f/rndu g/rndd g/rndu)
   (prim-expression
-   (λ () (prim-expression-meaning (monotone/fwd name f)
-                                  (monotone/comp f-domain f-range f g fx?)))))
+   (λ () (prim-expression-meaning
+          (monotone/fwd name f-domain f-range f)
+          (monotone/comp f-domain f-range inc? f f/rndd f/rndu g/rndd g/rndu)))))
 
 ;; ===================================================================================================
 ;; Monotone R x R -> R functions
 
-(: monotone2d/fwd (Symbol (Flonum Flonum -> Flonum) -> Prim-Forward-Fun))
-(define ((monotone2d/fwd name f) γ)
-  (match γ
-    [(cons (? flonum? x) (? flonum? y))  (f x y)]
-    [_  (raise-argument-error name "(Pair Flonum Flonum)" γ)]))
+(: monotone2d/fwd (Symbol Pair-Rect Interval* (Flonum Flonum -> Flonum) -> Prim-Forward-Fun))
+(define ((monotone2d/fwd name f-domain f-range f) γ)
+  (cond [(not (set-member? f-domain γ))
+         (bottom (delay (format "~a: expected argument in ~a; given ~e" name f-domain γ)))]
+        [else
+         (match-define (cons (? flonum? x) (? flonum? y)) γ)
+         (define k (f x y))
+         (cond [(not (interval*-member? f-range k))
+                (bottom (delay (format "~a: expected result in ~a; produced ~e" name f-range k)))]
+               [else  k])]))
 
-(: monotone2d-range (Nonempty-Set Interval (Flonum Flonum -> Flonum) Boolean Boolean -> Set))
-(define (monotone2d-range domain f-range f fx? fy?)
-  (match-define (pair-rect (interval xa xb xa? xb?) (interval ya yb ya? yb?)) domain)
-  (let-values ([(xa xb xa? xb?)  (if fx? (values xa xb xa? xb?) (values xb xa xb? xa?))]
-               [(ya yb ya? yb?)  (if fy? (values ya yb ya? yb?) (values yb ya yb? ya?))])
-    (set-intersect f-range (interval (f xa ya) (f xb yb) (and xa? ya?) (and xb? yb?)))))
+(: monotone2d-apply (Boolean Boolean
+                             (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                             Interval Interval -> Maybe-Interval))
+(define (monotone2d-apply xinc? yinc? f/rndd f/rndu X Y)
+  (let-values ([(xa xb xa? xb?)  (match-let ([(interval xa xb xa? xb?)  X])
+                                   (cond [xinc?  (values xa xb xa? xb?)]
+                                         [else   (values xb xa xb? xa?)]))]
+               [(ya yb ya? yb?)  (match-let ([(interval ya yb ya? yb?)  Y])
+                                   (cond [yinc?  (values ya yb ya? yb?)]
+                                         [else   (values yb ya yb? ya?)]))])
+    (interval (f/rndd xa ya) (f/rndu xb yb) (and xa? ya?) (and xb? yb?))))
+
+(: monotone2d/img (Nonempty-Set Boolean Boolean
+                                (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                                -> Prim-Image-Fun))
+(define ((monotone2d/img K xinc? yinc? f/rndd f/rndu) Γ)
+  (match-define (pair-rect Γx Γy) Γ)
+  (let ([Γx  (assert Γx interval*?)]
+        [Γy  (assert Γy interval*?)])
+    (set-intersect
+     K (interval*-map
+        (λ (Γx) (interval*-map
+                 (λ (Γy) (monotone2d-apply xinc? yinc? f/rndd f/rndu Γx Γy))
+                 Γy))
+        Γx))))
 
 (: monotone2d/pre (Nonempty-Set
-                   (Flonum Flonum -> Flonum) Boolean Boolean
-                   (Flonum Flonum -> Flonum) Boolean Boolean
+                   Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                   Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                    -> Prim-Preimage-Fun))
-(define (monotone2d/pre Γ g gz? gy? h hz? hx?)
-  (match-define (pair-rect (interval xa xb xa? xb?) (interval ya yb ya? yb?)) Γ)
-  (λ (K)
-    (match K
-      [(interval za zb za? zb?)
-       (define X
-         (let-values ([(za zb za? zb?)  (if gz? (values za zb za? zb?) (values zb za zb? za?))]
-                      [(ya yb ya? yb?)  (if gy? (values ya yb ya? yb?) (values yb ya yb? ya?))])
-           (interval (g za ya) (g zb yb) (and za? ya?) (and zb? yb?))))
-       (define Y
-         (let-values ([(za zb za? zb?)  (if hz? (values za zb za? zb?) (values zb za zb? za?))]
-                      [(xa xb xa? xb?)  (if hx? (values xa xb xa? xb?) (values xb xa xb? xa?))])
-           (interval (h za xa) (h zb xb) (and za? xa?) (and zb? xb?))))
-       (set-intersect Γ (set-pair X Y))]
-      [_
-       empty-set])))
+(define (monotone2d/pre Γ gz? gy? g/rndd g/rndu hz? hx? h/rndd h/rndu)
+  (match-define (pair-rect orig-Γx orig-Γy) Γ)
+  (define Γx (assert orig-Γx interval*?))
+  (define Γy (assert orig-Γy interval*?))
+  (λ (orig-K)
+    (define K (assert orig-K interval*?))
+    (define X
+      (interval*-map
+       (λ (K) (interval*-map
+               (λ (Γy) (monotone2d-apply gz? gy? g/rndd g/rndu K Γy))
+               Γy))
+       K))
+    (define Y
+      (interval*-map
+       (λ (K) (interval*-map
+               (λ (Γx) (monotone2d-apply hz? hx? h/rndd h/rndu K Γx))
+               Γx))
+       K))
+    (set-intersect Γ (set-pair X Y))))
 
-(: monotone2d/comp (Pair-Rect Interval
-                              (Flonum Flonum -> Flonum) Boolean Boolean
-                              (Flonum Flonum -> Flonum) Boolean Boolean
-                              (Flonum Flonum -> Flonum) Boolean Boolean
+(: monotone2d/comp (Pair-Rect Interval*
+                              Boolean Boolean (Flonum Flonum -> Flonum)
+                              (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                              Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                              Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                               -> Prim-Computation))
-(define (monotone2d/comp f-domain f-range f fx? fy? g gz? gy? h hz? hx?)
+(define (monotone2d/comp f-domain f-range
+                         fx? fy? f f/rndd f/rndu
+                         gz? gy? g/rndd g/rndu
+                         hz? hx? h/rndd h/rndu)
+  (define img (monotone2d/img f-range fx? fy? f/rndd f/rndu))
   (cached-prim-computation
    f-domain
    (λ (Γ)
-     (define K (monotone2d-range Γ f-range f fx? fy?))
+     (define K (img Γ))
      (cond [(empty-set? K)  empty-meaning]
-           [else  (define pre (prim-preimage Γ K (monotone2d/pre Γ g gz? gy? h hz? hx?)))
+           [else  (define pre (prim-preimage Γ K (monotone2d/pre Γ
+                                                                 gz? gy? g/rndd g/rndu
+                                                                 hz? hx? h/rndd h/rndu)))
                   (prim-computation-meaning K pre)]))))
 
-(: monotone2d/arr (Symbol Pair-Rect Interval
-                          (Flonum Flonum -> Flonum) Boolean Boolean
-                          (Flonum Flonum -> Flonum) Boolean Boolean
-                          (Flonum Flonum -> Flonum) Boolean Boolean
+(: monotone2d/arr (Symbol Pair-Rect Interval*
+                          Boolean Boolean (Flonum Flonum -> Flonum)
+                          (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                          Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                          Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                           -> prim-expression))
-(define (monotone2d/arr name f-domain f-range f fx? fy? g gz? gy? h hz? hx?)
+(define (monotone2d/arr name f-domain f-range
+                        fx? fy? f f/rndd f/rndu
+                        gz? gy? g/rndd g/rndu
+                        hz? hx? h/rndd h/rndu)
   (prim-expression
-   (λ () (prim-expression-meaning (monotone2d/fwd name f)
-                                  (monotone2d/comp f-domain f-range f fx? fy? g gz? gy? h hz? hx?)))))
+   (λ () (prim-expression-meaning (monotone2d/fwd name f-domain f-range f)
+                                  (monotone2d/comp f-domain f-range
+                                                   fx? fy? f f/rndd f/rndu
+                                                   gz? gy? g/rndd g/rndu
+                                                   hz? hx? h/rndd h/rndu)))))
 
 ;; ===================================================================================================
 ;; Predicates
@@ -427,34 +517,33 @@
 (define ((predicate/fwd pred?) γ) (pred? γ))
 
 (: predicate-range (Set Set -> (U Empty-Set Boolean-Rect)))
-(define (predicate-range true-set false-set)
-  (booleans->boolean-rect (not (empty-set? true-set))
-                          (not (empty-set? false-set))))
+(define (predicate-range Γt Γf)
+  (booleans->boolean-rect (not (empty-set? Γt)) (not (empty-set? Γf))))
 
 (: predicate/pre (Set Set -> Prim-Preimage-Fun))
-(define ((predicate/pre true-set false-set) B)
-  (cond [(eq? B booleans)  (set-join true-set false-set)]
-        [(eq? B trues)     true-set]
-        [(eq? B falses)    false-set]
+(define ((predicate/pre Γt Γf) B)
+  (cond [(eq? B booleans)  (set-join Γt Γf)]
+        [(eq? B trues)     Γt]
+        [(eq? B falses)    Γf]
         [else              empty-set]))
 
 (: predicate/comp (Nonempty-Set Nonempty-Set -> Prim-Computation))
-(define (predicate/comp true-set false-set)
+(define (predicate/comp Γt Γf)
   (cached-prim-computation
-   (set-join true-set false-set)
+   (set-join Γt Γf)
    (λ (Γ)
-     (let ([true-set   (set-intersect Γ true-set)]
-           [false-set  (set-intersect Γ false-set)])
-       (define K (predicate-range true-set false-set))
+     (let ([Γt  (set-intersect Γ Γt)]
+           [Γf  (set-intersect Γ Γf)])
+       (define K (predicate-range Γt Γf))
        (cond [(empty-set? K)  empty-meaning]
-             [else  (define pre (prim-preimage Γ K (predicate/pre true-set false-set)))
+             [else  (define pre (prim-preimage Γ K (predicate/pre Γt Γf)))
                     (prim-computation-meaning K pre)])))))
 
 (: predicate/arr ((Value -> Boolean) Nonempty-Set Nonempty-Set -> prim-expression))
-(define (predicate/arr pred? true-set false-set)
+(define (predicate/arr pred? Γt Γf)
   (prim-expression
    (λ () (prim-expression-meaning (predicate/fwd pred?)
-                                  (predicate/comp true-set false-set)))))
+                                  (predicate/comp Γt Γf)))))
 
 ;; ===================================================================================================
 ;; Tagged values
@@ -492,7 +581,7 @@
 (define ((untag/fwd tag) γ)
   (if (and (tagged? γ) (eq? tag (get-tag γ)))
       (get-val γ)
-      (raise (forward-fail (format "expected ~e; given ~e" tag γ)))))
+      (bottom (delay (format "expected ~e; given ~e" tag γ)))))
 
 (: untag/comp (Set-Tag -> Prim-Computation))
 (define (untag/comp tag)
@@ -511,10 +600,10 @@
 ;; ===================================================================================================
 ;; Data type predicates
 
-(define real?/arr (predicate/arr flonum? real-interval (top-rect real-tag empty-set)))
-(define null?/arr (predicate/arr null? null-rect (top-rect null-tag empty-set)))
-(define pair?/arr (predicate/arr pair? all-pairs (top-rect pair-tag empty-set)))
-(define boolean?/arr (predicate/arr boolean? booleans (top-rect boolean-tag empty-set)))
+(define real?/arr (predicate/arr flonum? real-interval not-reals))
+(define null?/arr (predicate/arr null? null-rect not-null-set))
+(define pair?/arr (predicate/arr pair? all-pairs not-pairs))
+(define boolean?/arr (predicate/arr boolean? booleans not-booleans))
 
 ;; ===================================================================================================
 ;; Monotone R -> R functions
@@ -522,17 +611,21 @@
 (: scale/arr (Flonum -> prim-expression))
 (define (scale/arr y)
   (cond [(fl= y 0.0)  (c/arr 0.0)]
-        [else  (monotone/arr 'scale/arr real-interval real-interval
+        [else  (monotone/arr 'scale/arr real-interval real-interval (y . fl> . 0.0)
                              (λ: ([x : Flonum]) (fl* x y))
-                             (λ: ([z : Flonum]) (fl/ z y))
-                             (y . fl> . 0.0))]))
+                             (λ: ([x : Flonum]) (fl*/rndd x y))
+                             (λ: ([x : Flonum]) (fl*/rndu x y))
+                             (λ: ([z : Flonum]) (fl//rndd z y))
+                             (λ: ([z : Flonum]) (fl//rndu z y)))]))
 
 (: translate/arr (Flonum -> prim-expression))
 (define (translate/arr y)
-  (monotone/arr 'translate/arr real-interval real-interval
+  (monotone/arr 'translate/arr real-interval real-interval #t
                 (λ: ([x : Flonum]) (fl+ x y))
-                (λ: ([z : Flonum]) (fl- z y))
-                #t))
+                (λ: ([x : Flonum]) (fl+/rndd x y))
+                (λ: ([x : Flonum]) (fl+/rndu x y))
+                (λ: ([z : Flonum]) (fl-/rndd z y))
+                (λ: ([z : Flonum]) (fl-/rndu z y))))
 
 (: flneg (Flonum -> Flonum))
 (define (flneg x) (fl* -1.0 x))
@@ -543,51 +636,118 @@
 (: flrecip (Flonum -> Flonum))
 (define (flrecip x) (fl/ 1.0 x))
 
-(: flneg-sqrt (Flonum -> Flonum))
-(define (flneg-sqrt x) (- (flsqrt x)))
+(: flneg-sqrt/rndd (Flonum -> Flonum))
+(define (flneg-sqrt/rndd x) (flneg (flsqrt/rndu x)))
 
-(define neg/arr (monotone/arr 'neg/arr real-interval real-interval flneg flneg #f))
-(define exp/arr (monotone/arr 'exp/arr real-interval nonnegative-interval flexp fllog #t))
-(define log/arr (monotone/arr 'log/arr nonnegative-interval real-interval fllog flexp #t))
-(define sqrt/arr (monotone/arr 'sqrt/arr nonnegative-interval nonnegative-interval flsqrt flsqr #t))
+(: flneg-sqrt/rndu (Flonum -> Flonum))
+(define (flneg-sqrt/rndu x) (flneg (flsqrt/rndd x)))
+
+(define neg/arr (monotone/arr 'neg/arr
+                              real-interval real-interval #f
+                              flneg flneg flneg flneg flneg))
+
+(define exp/arr (monotone/arr 'exp/arr
+                              real-interval nonnegative-interval #t
+                              flexp
+                              flexp/rndd
+                              flexp/rndu
+                              fllog/rndd
+                              fllog/rndu))
+
+(define log/arr (monotone/arr 'log/arr
+                              nonnegative-interval real-interval #t
+                              fllog
+                              fllog/rndd
+                              fllog/rndu
+                              flexp/rndd
+                              flexp/rndu))
+
+(define sqrt/arr (monotone/arr 'sqrt/arr
+                               nonnegative-interval nonnegative-interval #t
+                               flsqrt
+                               flsqrt/rndd
+                               flsqrt/rndu
+                               flsqr/rndd
+                               flsqr/rndu))
 
 (define asin/arr
   (monotone/arr 'asin/arr
-                (Interval -1.0 1.0 #t #t)
-                (Interval (/ pi -2.0) (/ pi 2.0) #t #t)
-                flasin flsin #t))
+                (Interval -1.0 1.0 #t #t) (Interval -pi/2/rndd pi/2/rndu #t #t) #t
+                flasin
+                flasin/rndd
+                flasin/rndu
+                flsin/rndd
+                flsin/rndu))
 
 (define acos/arr
   (monotone/arr 'acos/arr
-                (Interval -1.0 1.0 #t #t)
-                (Interval 0.0 pi #t #t)
-                flacos flcos #f))
+                (Interval -1.0 1.0 #t #t) (Interval 0.0 pi/rndu #t #t) #f
+                flacos
+                flacos/rndd
+                flacos/rndu
+                flcos/rndd
+                flcos/rndu))
 
 (define mono-sin/arr
   (monotone/arr 'mono-sin/arr
-                (Interval (/ pi -2.0) (/ pi 2.0) #t #t)
-                (Interval -1.0 1.0 #t #t)
-                flsin flasin #t))
+                (Interval -pi/2/rndd pi/2/rndu #t #t) (Interval -1.0 1.0 #t #t) #t
+                flsin
+                flsin/rndd
+                flsin/rndu
+                flasin/rndd
+                flasin/rndu))
 
 (define mono-cos/arr
   (monotone/arr 'mono-cos/arr
-                (Interval 0.0 pi #t #t)
-                (Interval -1.0 1.0 #t #t)
-                flcos flacos #f))
+                (Interval 0.0 pi/rndu #t #t) (Interval -1.0 1.0 #t #t) #f
+                flcos
+                flcos/rndd
+                flcos/rndu
+                flacos/rndd
+                flacos/rndu))
 
 (define pos-recip/arr
-  (monotone/arr 'recip/arr positive-interval positive-interval flrecip flrecip #t))
+  (monotone/arr 'recip/arr positive-interval positive-interval #f
+                flrecip
+                flrecip/rndd
+                flrecip/rndu
+                flrecip/rndd
+                flrecip/rndu))
+
 (define neg-recip/arr
-  (monotone/arr 'recip/arr negative-interval negative-interval flrecip flrecip #f))
+  (monotone/arr 'recip/arr negative-interval negative-interval #f
+                flrecip
+                flrecip/rndd
+                flrecip/rndu
+                flrecip/rndd
+                flrecip/rndu))
 
 (define pos-sqr/arr
-  (monotone/arr 'sqr/arr nonnegative-interval nonnegative-interval flsqr flsqrt #t))
-(define neg-sqr/arr
-  (monotone/arr 'sqr/arr negative-interval positive-interval flsqr flneg-sqrt #f))
+  (monotone/arr 'sqr/arr nonnegative-interval nonnegative-interval #t
+                flsqr
+                flsqr/rndd
+                flsqr/rndu
+                flsqrt/rndd
+                flsqrt/rndu))
 
-(: inverse-cdf/arr (Symbol Interval (Flonum -> Flonum) (Flonum -> Flonum) -> prim-expression))
-(define (inverse-cdf/arr name range inv-cdf cdf)
-  (monotone/arr name unit-interval range inv-cdf cdf #t))
+(define neg-sqr/arr
+  (monotone/arr 'sqr/arr negative-interval positive-interval #f
+                flsqr
+                flsqr/rndd
+                flsqr/rndu
+                flneg-sqrt/rndd
+                flneg-sqrt/rndu))
+
+(: inverse-cdf/arr (Symbol Interval (Flonum -> Flonum) Index (Flonum -> Flonum) Index
+                           -> prim-expression))
+(define (inverse-cdf/arr name range inv-cdf inv-ulp-error cdf ulp-error)
+  (match-define (interval a b _a? _b?) range)
+  (define-values (inv-cdf/rndd inv-cdf/rndu)
+    (make-unary-flops/fake-rnd inv-cdf inv-ulp-error inv-ulp-error a b))
+  (define-values (cdf/rndd cdf/rndu)
+    (make-unary-flops/fake-rnd cdf ulp-error ulp-error 0.0 1.0))
+  (monotone/arr name unit-interval range #t inv-cdf inv-cdf/rndd inv-cdf/rndu cdf/rndd cdf/rndu))
+
 
 (: cauchy-inv-cdf (Flonum -> Flonum))
 (define (cauchy-inv-cdf p)
@@ -597,6 +757,9 @@
 (define (cauchy-cdf x)
   (flcauchy-cdf 0.0 1.0 x #f #f))
 
+(define cauchy/arr (inverse-cdf/arr 'cauchy/arr real-interval cauchy-inv-cdf 2 cauchy-cdf 2))
+
+
 (: normal-inv-cdf (Flonum -> Flonum))
 (define (normal-inv-cdf p)
   (flnormal-inv-cdf 0.0 1.0 p #f #f))
@@ -605,8 +768,7 @@
 (define (normal-cdf x)
   (flnormal-cdf 0.0 1.0 x #f #f))
 
-(define cauchy/arr (inverse-cdf/arr 'cauchy/arr real-interval cauchy-inv-cdf cauchy-cdf))
-(define normal/arr (inverse-cdf/arr 'normal/arr real-interval normal-inv-cdf normal-cdf))
+(define normal/arr (inverse-cdf/arr 'normal/arr real-interval normal-inv-cdf 4 normal-cdf 4))
 
 ;; ===================================================================================================
 ;; Monotone R x R -> R functions
@@ -614,79 +776,95 @@
 (define real-pair (pair-rect real-interval real-interval))
 
 (define +/arr
-  (monotone2d/arr '+/arr real-pair real-interval
-                  fl+ #t #t
-                  fl- #t #f
-                  fl- #t #f))
+  (monotone2d/arr '+/arr
+                  real-pair real-interval
+                  #t #t fl+ fl+/rndd fl+/rndu
+                  #t #f fl-/rndd fl-/rndu
+                  #t #f fl-/rndd fl-/rndu))
 
-(: neg-fl- (Flonum Flonum -> Flonum))
-(define (neg-fl- z x) (fl- x z))
+(: neg-fl-/rndd (Flonum Flonum -> Flonum))
+(define (neg-fl-/rndd z x) (fl-/rndd x z))
+
+(: neg-fl-/rndu (Flonum Flonum -> Flonum))
+(define (neg-fl-/rndu z x) (fl-/rndu x z))
 
 (define -/arr
-  (monotone2d/arr '-/arr real-pair real-interval
-                  fl- #t #f
-                  fl+ #t #t
-                  neg-fl- #f #t))
+  (monotone2d/arr '-/arr
+                  real-pair real-interval
+                  #t #f fl- fl-/rndd fl-/rndu
+                  #t #t fl+/rndd fl+/rndu
+                  #f #t neg-fl-/rndd neg-fl-/rndu))
 
 (define pos-pos-mul/arr
-  (monotone2d/arr '*/arr (pair-rect nonnegative-interval nonnegative-interval) nonnegative-interval
-                  fl* #t #t
-                  fl/ #t #f
-                  fl/ #t #f))
+  (monotone2d/arr '*/arr
+                  (pair-rect nonnegative-interval nonnegative-interval) nonnegative-interval
+                  #t #t fl* fl*/rndd fl*/rndu
+                  #t #f fl//rndd fl//rndu
+                  #t #f fl//rndd fl//rndu))
 
 (define pos-neg-mul/arr
-  (monotone2d/arr '*/arr (pair-rect nonnegative-interval negative-interval) nonpositive-interval
-                  fl* #f #t
-                  fl/ #f #t
-                  fl/ #t #t))
+  (monotone2d/arr '*/arr
+                  (pair-rect nonnegative-interval negative-interval) nonpositive-interval
+                  #f #t fl* fl*/rndd fl*/rndu
+                  #f #t fl//rndd fl//rndu
+                  #t #t fl//rndd fl//rndu))
 
 (define neg-pos-mul/arr
-  (monotone2d/arr '*/arr (pair-rect negative-interval nonnegative-interval) nonpositive-interval
-                  fl* #t #f
-                  fl/ #t #t
-                  fl/ #f #t))
+  (monotone2d/arr '*/arr
+                  (pair-rect negative-interval nonnegative-interval) nonpositive-interval
+                  #t #f fl* fl*/rndd fl*/rndu
+                  #t #t fl//rndd fl//rndu
+                  #f #t fl//rndd fl//rndu))
 
 (define neg-neg-mul/arr
-  (monotone2d/arr '*/arr (pair-rect negative-interval negative-interval) positive-interval
-                  fl* #f #f
-                  fl/ #f #f
-                  fl/ #f #f))
+  (monotone2d/arr '*/arr
+                  (pair-rect negative-interval negative-interval) positive-interval
+                  #f #f fl* fl*/rndd fl*/rndu
+                  #f #f fl//rndd fl//rndu
+                  #f #f fl//rndd fl//rndu))
 
-(: recip-fl/ (Flonum Flonum -> Flonum))
-(define (recip-fl/ z x) (fl/ x z))
+(: recip-fl//rndd (Flonum Flonum -> Flonum))
+(define (recip-fl//rndd z x) (fl//rndd x z))
+
+(: recip-fl//rndu (Flonum Flonum -> Flonum))
+(define (recip-fl//rndu z x) (fl//rndu x z))
 
 (define pos-pos-div/arr
-  (monotone2d/arr '//arr (pair-rect positive-interval positive-interval) positive-interval
-                  fl/ #t #f
-                  fl* #t #t
-                  recip-fl/ #f #t))
+  (monotone2d/arr '//arr
+                  (pair-rect positive-interval positive-interval) positive-interval
+                  #t #f fl/ fl//rndd fl//rndu
+                  #t #t fl*/rndd fl*/rndu
+                  #f #t recip-fl//rndd recip-fl//rndu))
 
 (define pos-neg-div/arr
-  (monotone2d/arr '//arr (pair-rect positive-interval negative-interval) negative-interval
-                  fl/ #f #f
-                  fl* #f #f
-                  recip-fl/ #f #f))
+  (monotone2d/arr '//arr
+                  (pair-rect positive-interval negative-interval) negative-interval
+                  #f #f fl/ fl//rndd fl//rndu
+                  #f #f fl*/rndd fl*/rndu
+                  #f #f recip-fl//rndd recip-fl//rndu))
 
 (define neg-pos-div/arr
-  (monotone2d/arr '//arr (pair-rect negative-interval positive-interval) negative-interval
-                  fl/ #t #t
-                  fl* #t #f
-                  recip-fl/ #t #f))
+  (monotone2d/arr '//arr
+                  (pair-rect negative-interval positive-interval) negative-interval
+                  #t #t fl/ fl//rndd fl//rndu
+                  #t #f fl*/rndd fl*/rndu
+                  #t #f recip-fl//rndd recip-fl//rndu))
 
 (define neg-neg-div/arr
-  (monotone2d/arr '//arr (pair-rect negative-interval negative-interval) positive-interval
-                  fl/ #f #t
-                  fl* #f #t
-                  recip-fl/ #t #t))
+  (monotone2d/arr '//arr
+                  (pair-rect negative-interval negative-interval) positive-interval
+                  #f #t fl/ fl//rndd fl//rndu
+                  #f #t fl*/rndd fl*/rndu
+                  #t #t recip-fl//rndd recip-fl//rndu))
 
 ;; ===================================================================================================
 ;; Real predicates
 
-(: real-predicate/arr (Symbol (Flonum -> Boolean) Interval Interval -> prim-expression))
-(define (real-predicate/arr name p? true-ivl false-ivl)
+(: real-predicate/arr (Symbol (Flonum -> Boolean) Interval* Interval* -> prim-expression))
+(define (real-predicate/arr name p? Γt Γf)
   (predicate/arr (λ: ([γ : Value])
                    (if (flonum? γ) (p? γ) (raise-argument-error name "Flonum" γ)))
-                 true-ivl false-ivl))
+                 Γt Γf))
 
 (define negative?/arr
   (real-predicate/arr 'negative?/arr (λ: ([x : Flonum]) (x . fl< . 0.0))
@@ -712,6 +890,10 @@
 ;; ===================================================================================================
 ;; Non-monotone functions
 
+;; Absolute value
+(define abs/arr
+  (prim-if/arr negative?/arr neg/arr id/arr))
+
 ;; Square
 (define sqr/arr
   (prim-if/arr negative?/arr neg-sqr/arr pos-sqr/arr))
@@ -725,7 +907,7 @@
                             bottom/arr)))
 
 #|
-Sine and cosine arrow functions are direct translations of the following Racket functions:
+Sine and cosine arrows are direct translations of the following Racket functions:
 
 (define (partial-cos x)
   (if (negative? x)

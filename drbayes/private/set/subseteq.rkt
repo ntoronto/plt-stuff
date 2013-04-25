@@ -79,7 +79,7 @@
 (define (rect-subseteq? A B)
   (cond [(empty-set? A)  #t]
         [(empty-set? B)  #f]
-        [(and (interval? A) (interval? B))  (interval-subseteq? A B)]
+        [(and (interval*? A) (interval*? B))  (interval*-subseteq? A B)]
         [(and (null-rect? A) (null-rect? B))  #t]
         [(and (pair-rect? A) (pair-rect? B))  (pair-rect-subseteq? A B)]
         [(and (boolean-rect? A) (boolean-rect? B))  (boolean-rect-subseteq? A B)]

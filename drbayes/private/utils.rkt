@@ -10,6 +10,8 @@
 
 (provide (all-defined-out))
 
+(define-type (Maybe-Promise T) (U T (Promise T)))
+
 (define-type (Listof+2 A) (Pair A (Pair A (Listof A))))
 
 (: map/+2 (All (A B) ((A -> B) (Listof+2 A) -> (Listof+2 B))))
@@ -17,6 +19,10 @@
   (list* (f (first xs))
          (f (second xs))
          (map f (rest (rest xs)))))
+
+(: append/+2 (All (A) ((Listof+2 A) (Listof+2 A) -> (Listof+2 A))))
+(define (append/+2 xs ys)
+  (list* (first xs) (second xs) (append (rest (rest xs)) ys)))
 
 (: normalize-probs ((Listof Flonum) -> (Listof Flonum)))
 (define (normalize-probs qs)

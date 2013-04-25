@@ -11,7 +11,7 @@
 (printf "starting...~n~n")
 
 (interval-max-splits 5)
-(define n 10000)
+(define n 1000)
 
 #;
 (begin
@@ -20,12 +20,25 @@
 
 #;
 (begin
+  (interval-max-splits 2)
+  (define f-expr
+    (drbayes (let* ([x  (uniform)]
+                    [y  (* x x)])
+               y
+               #;
+               (lazy-if (negative? x) y y))))
+  (define B (interval 0.0 0.36)))
+
+#;
+(begin
+  (interval-max-splits 1)
   (define f-expr (pair/arr random/arr random/arr))
   (define I (interval 0.25 0.5 #t #t))
   (define B (set-pair I I)))
 
 #;
 (begin
+  (interval-max-splits 1)
   (define f-expr (pair/arr random/arr (pair/arr random/arr random/arr)))
   (define I (interval 0.25 0.5 #t #t))
   (define B (set-pair I (set-pair I I))))
@@ -60,8 +73,9 @@
 
 #;; Test: same as above, using expressions
 (begin
+  (interval-max-splits 1)
   (define f-expr (drbayes (list (uniform) (sqr (uniform)) (sqr (uniform)))))
-  (define I (interval 0.25 0.5 #t #t))
+  (define I (interval 0.25 0.5))
   (define B (set-list I I I)))
 
 #;; Test: list/arr random/arr ap/arr sqr/arr ref/arr
@@ -77,10 +91,16 @@
   (define I (interval 0.25 0.5 #t #t))
   (define B (set-list I I I)))
 
+#;
+(begin
+  (define f-expr (drbayes (list (uniform) (/ (uniform)) (/ (uniform)))))
+  (define I (interval 2.0 4.0))
+  (define B (set-list (interval 0.25 0.5) I I)))
+
 #;; Test: list/arr random/arr ap/arr ref/arr +/arr
 ;; Preimage is a 2D downard diagonal strip × [0,1]
 (begin
-  (interval-max-splits 2)
+  (interval-max-splits 1)
   
   (define f-expr
     (rcompose/arr (list/arr random/arr
@@ -88,7 +108,7 @@
                   (list/arr (ref/arr 0)
                             (ref/arr 1)
                             (rcompose/arr (pair/arr (ref/arr 0) (ref/arr 1)) +/arr))))
-  (define B (set-list real-interval real-interval (interval 0.45 0.7 #t #t))))
+  (define B (set-list real-interval real-interval (interval 0.45 0.7))))
 
 #;; Test: same as above, with expressions
 (begin
@@ -120,25 +140,34 @@
 ;;    #f: lower triangle (points below y = x)
 ;;  both: [0,1] × [0,1]
 (begin
+  (interval-max-splits 1)
   (define f-expr (list/arr (rcompose/arr (pair/arr random/arr random/arr) lt/arr)))
   (define B (set-list trues))
   ;(define B (set-list falses))
   ;(define B (set-list booleans))
   )
-
+#;
+(begin
+  (interval-max-splits 2)
+  
+  (define/drbayes (S)
+    (lazy-if ((uniform) . < . 0.5) (cons #t (S)) null))
+  
+  (define f-expr (drbayes (S)))
+  (define B universe))
 
 #;; Test: if
 ;; Preimage should be the union of a large upper triangle and a small lower triangle, and
 ;; samples should be uniformly distributed
 (begin
-  (interval-max-splits 1)
+  (interval-max-splits 4)
   
   (define f-expr
     (drbayes
      (let ([x  (uniform)]
            [y  (uniform)])
-       (list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
-       ;(list x y (lazy-if (< x y) #t (> x (scale y (const 8)))))
+       ;(list x y (prim-if (< x y) #t (> x (scale y (const 8)))))
+       (list x y (lazy-if (< x y) #t (> x (scale y (const 8)))))
        )))
   (define B (set-list real-interval real-interval trues)))
 
@@ -150,14 +179,26 @@
     (drbayes
      (let* ([x  (cauchy)]
             [y  (cauchy)])
-       (list x y (* x y)))))
+       (list x y (/ x y)))))
   
-  (define B (set-list real-interval real-interval (interval -0.1 0.0))))
+  (define B (set-list real-interval real-interval (interval -0.1 0.2))))
+
+#;
+(begin
+  (interval-max-splits 1)
+  
+  (define f-expr
+    (drbayes
+     (let ([x  (uniform 0 1)]
+           [y  (uniform -1 1)])
+       (list x y (- x (sqr y))))))
+  
+  (define B (set-list real-interval real-interval (interval -0.1 0.1))))
 
 #;; Test: sine and cosine restricted to [-π,π]
 ;; Looked at top-down, the plots should look like the graphs of the functions
 (begin
-  (interval-max-splits 3)
+  (interval-max-splits 1)
   (define f-expr
     (drbayes
      (let ([x  (uniform (const (- pi)) (const pi))]
@@ -172,17 +213,17 @@
 #;; Test: asin and acos
 ;; Looked at top-down, the plots should look like the graphs of the functions
 (begin
-  (interval-max-splits 3)
+  (interval-max-splits 1)
   
   (define f-expr
     (drbayes
      (let ([x  (uniform -1 1)]
-           [y  (uniform 0 (const pi))
-               ;(uniform (const (* -0.5 pi)) (const (* 0.5 pi)))
+           [y  ;(uniform 0 (const pi))
+               (uniform (const (* -0.5 pi)) (const (* 0.5 pi)))
                ])
        (list x y (- y
-                    (acos x)
-                    ;(asin x)
+                    ;(acos x)
+                    (asin x)
                     )))))
   
   (define B (set-list real-interval real-interval (interval -0.1 0.1))))
@@ -202,15 +243,15 @@
 #;; Test: Normal-Normal model, using expressions
 ;; Preimage should be as above
 (begin
-  (interval-max-splits 1)
-  (interval-min-length (expt 0.5 1.0))
+  (interval-max-splits 2)
+  ;(interval-min-length (expt 0.5 1.0))
   
   (define f-expr
     (drbayes
      (let* ([x  (normal)]
             [y  (normal x)])
        (list x y))))
-  (define B (set-list real-interval (interval 0.999 1.001)))
+  (define B (set-list real-interval (interval 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
 
 #;; Test: thermometer that goes to 100
@@ -221,13 +262,15 @@
     (drbayes
      (let* ([x  (normal 90 10)]
             [y  (- x (normal))])
-       (list x (lazy-if (y . > . 100) 100 y)))))
+       (list x (prim-if (y . > . 100) 100 y)))))
   
   (define B (set-list real-interval (interval 99.0 100.0))))
 
 #;; Test: Normal-Normal model with circular condition
 ;; Preimage should look like a football set up for a field goal
 (begin
+  (interval-max-splits 2)
+  
   (define f-expr
     (rcompose/arr
      (list/arr random/arr random/arr)
@@ -237,18 +280,34 @@
                                                              (rcompose/arr X1 sqr/arr))
                                                    +/arr)
                                      sqrt/arr)))))
-  (define B (set-list real-interval real-interval (interval 0.95 1.05 #t #t))))
+  (define B (set-list real-interval real-interval (interval 0.99 1.01 #t #t))))
 
 #;; Test: Normal-Normal model with circular condition, using expressions
 ;; Preimage should be as above
 (begin
-  (interval-max-splits 5)
+  (interval-max-splits 4)
+  
+  (define/drbayes (hypot x y)
+    (sqrt (+ (sqr x) (sqr y))))
   
   (define f-expr
     (drbayes
      (let* ([x0  (normal)]
             [x1  (normal x0)])
-       (list x0 x1 (sqrt (+ (sqr x0) (sqr x1)))))))
+       (list x0 x1 (hypot x0 x1)))))
+  
+  (define B (set-list real-interval real-interval (interval 0.95 1.05))))
+
+#;; Same as above, but with obviously repeated variable in condition
+(begin
+  (interval-max-splits 2)
+  
+  (define f-expr
+    (drbayes
+     (let* ([x0  (uniform)]
+            [x1  (uniform)])
+       (list x0 x1 (sqrt (+ (sqr x0) (sqr (+ x0 x1))))))))
+  
   (define B (set-list real-interval real-interval (interval 0.99 1.01))))
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
@@ -271,6 +330,7 @@
 
 #;; Test: Normal-Normal or Cauchy-Cauchy, depending on random variable
 (begin
+  (interval-max-splits 2)
   (define f-expr
     (drbayes
      (lazy-if ((uniform) . < . (const #i499/1000))
@@ -289,7 +349,7 @@
 
 #;; Test: Geometric(p) distribution
 (begin
-  (interval-max-splits 0)
+  (interval-max-splits 1)
   (define p #i1/16)
   
   (define/drbayes (geometric-p)
@@ -316,10 +376,10 @@
     (printf "E[x] = ~v~n" (mean xs))
     (printf "sd[x] = ~v~n" (stddev xs))))
 
-;; Test: Conditioning on Geometric(0.5) distribution defined via recursion
+#;; Test: Conditioning on Geometric(0.5) distribution defined via recursion
 ;; Image points should lie on integer x coordinates and be clustered around 3
 (begin
-  (interval-max-splits 1)
+  (interval-max-splits 2)
   
   (define p #i499/1000)
   
@@ -343,11 +403,11 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
-  (interval-max-splits 4)
-  (interval-min-length (flexpt 0.5 4.0))
+  (interval-max-splits 5)
+  ;(interval-min-length (flexpt 0.5 5.0))
   
   (define f-expr
     (drbayes
@@ -361,13 +421,13 @@
              (normal x)))))
   (define B
     (set-list real-interval
-              (interval 2.2 2.4 #t #t)
+              (interval 3.2 3.4 #t #t)
+              (interval 1.9 2.1 #t #t)
               (interval 0.9 1.1 #t #t)
-              (interval -0.1 0.1 #t #t)
-              (interval -0.9 -0.7 #t #t)
-              (interval 0.4 0.6 #t #t)
-              (interval 1.3 1.5 #t #t)))
-  (normal-normal/lw 0 1 '(2.3 1.0 0.0 -0.8 0.5 1.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
+              (interval 0.1 0.3 #t #t)
+              (interval 1.4 1.6 #t #t)
+              (interval 2.3 2.5 #t #t)))
+  (normal-normal/lw 0 1 '(3.3 2.0 1.0 0.2 1.5 2.4) '(1.0 1.0 1.0 1.0 1.0 1.0)))
 
 #;
 (begin
@@ -380,36 +440,15 @@
        (prim-if (x . < . y) (fail) z))))
   (define B universe))
 
-#;
-(begin
-  (define/drbayes (S)
-    (lazy-if (boolean (const 0.5)) (T) (F)))
-
-  (define/drbayes (T)
-    (lazy-cond [(boolean (const 0.4))  (cons #t (T))]
-               [(boolean (const 0.5))  (cons #t (F))]
-               [else  null]))
-  
-  (define/drbayes (F)
-    (lazy-cond [(boolean (const 0.4))  (cons #f (F))]
-               [(boolean (const 0.5))  #;(cons #f (T))
-                                       (cons #f (let ([s  (T)])
-                                                  s #;(strict-if (list-ref s (const 1))
-                                                             (fail)
-                                                             s)))]
-               [else  null]))
-  
-  (define f-expr (drbayes (S)))
-  
-  (define B (set-list* booleans trues falses trues falses trues falses universe)))
-
 #;; Test: tagging
+;; Preimage should be [0,1]
 (begin
   (define t0 (make-set-tag 't0))
   (define f-expr (drbayes (tag (uniform) t0)))
   (define B (set-tag real-interval t0)))
 
 #;; Test: tagging and untagging
+;; Preimage should be [0,1]
 (begin
   (define t0 (make-set-tag 't0))
   (define f-expr (drbayes (untag (tag (uniform) t0) t0)))
@@ -430,14 +469,12 @@
   (define t0 (make-set-tag 't0))
   (define f-expr
     (drbayes
-     (let* ([x0  (lazy-if (boolean (const 0.5))
+     (let* ([x0  (lazy-if ((uniform) . < . 0.45)
                           (tag (normal 0.0 2.0) t0)
                           (normal))]
             [y0  (prim-if (tag? x0 t0) (* 0.5 (untag x0 t0)) x0)]
             [x1  (normal y0)])
-       (list y0
-             x1
-             (sqrt (+ (sqr y0) (sqr x1)))))))
+       (list y0 x1 (sqrt (+ (sqr y0) (sqr x1)))))))
   (define B (set-list real-interval real-interval (interval 0.95 1.05))))
 
 ;; ===================================================================================================
@@ -462,7 +499,7 @@
 (struct: domain-sample ([Ω : Omega-Rect]
                         [Z : Branches-Rect]
                         [ω : Omega]
-                        [x : (U forward-fail Value)]
+                        [x : Maybe-Value]
                         [z : Branches]
                         [measure : Flonum]
                         [prob : Flonum]
@@ -473,7 +510,7 @@
 (: accept-sample? (domain-sample -> Boolean))
 (define (accept-sample? s)
   (define x (domain-sample-x s))
-  (and (not (forward-fail? x))
+  (and (not (bottom? x))
        (set-member? B x)))
 
 (: orig-samples (Listof omega-rect-sample))
@@ -492,17 +529,19 @@
        [else
         (define s (first orig-samples))
         (match-define (omega-rect-sample Ω Z m p) s)
-        (define t (refinement-sample-point Ω Z 1.0 idxs refine))
-        (cond [t
-               (match-define (omega-sample ω z q) t)
-               (define x (with-handlers ([forward-fail?  (λ: ([e : forward-fail]) e)])
-                           (f-fwd ω z null)))
-               (cons (domain-sample Ω Z ω x z m p q (/ q p)) (loop (rest orig-samples)))]
-              [else
-               (define ω (omega-rect-sample-point Ω))
-               (define z (branches-rect-sample-point Z))
-               (define x (forward-fail "refinement-sample-point failed"))
-               (cons (domain-sample Ω Z ω x z m p m (/ m p)) (loop (rest orig-samples)))])]))))
+        (define pt (refinement-sample-point Ω Z idxs refine))
+        ;(define ω (omega-rect-sample-point Ω))
+        ;(define z (branches-rect-sample-point Z))
+        ;(define pt (omega-sample ω z m))
+        (match pt
+          [(omega-sample ω z q)
+           (define x (f-fwd ω z null))
+           (cons (domain-sample Ω Z ω x z m p q (/ q p)) (loop (rest orig-samples)))]
+          [_
+           (define ω (omega-rect-sample-point Ω))
+           (define z (branches-rect-sample-point Z))
+           (define x (bottom (delay "refinement-sample-point failed")))
+           (cons (domain-sample Ω Z ω x z m p m (/ m p)) (loop (rest orig-samples)))])]))))
 
 (newline)
 
@@ -542,9 +581,15 @@
 (define all-alpha (min 1.0 (/ 250.0 (fl num-all-samples))))
 (define alpha (min 1.0 (/ 250.0 (fl num-samples))))
 
-(plot3d (list (rectangles3d (map (compose omega-rect->plot-rect domain-sample-Ω) not-samples)
+(plot3d (list (rectangles3d (append*
+                             (map (λ: ([s : domain-sample])
+                                    (omega-rect->plot-rects (domain-sample-Ω s)))
+                                  not-samples))
                             #:alpha all-alpha #:color 1 #:line-color 1)
-              (rectangles3d (map (compose omega-rect->plot-rect domain-sample-Ω) samples)
+              (rectangles3d (append*
+                             (map (λ: ([s : domain-sample])
+                                    (omega-rect->plot-rects (domain-sample-Ω s)))
+                                  samples))
                             #:alpha all-alpha #:color 3 #:line-color 3))
         #:x-min 0 #:x-max 1 #:y-min 0 #:y-max 1 #:z-min 0 #:z-max 1
         #:x-label "x1" #:y-label "x2" #:z-label "x3")
@@ -590,8 +635,9 @@
 
 (printf "Corr(W,M) = ~v~n" (correlation ws ms))
 
-(plot (density (sample (discrete-dist x0s ws) num-samples))
-      #:x-label "x0" #:y-label "density")
+(with-handlers ([exn?  (λ (_) (printf "density plot failed~n"))])
+  (plot (density (sample (discrete-dist x0s ws) num-samples) 2)
+        #:x-label "x0" #:y-label "density"))
 
 (printf "E[x0] = ~v~n" (mean x0s (ann ws (Sequenceof Real))))
 (printf "sd[x0] = ~v~n" (stddev x0s (ann ws (Sequenceof Real))))

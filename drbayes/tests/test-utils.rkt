@@ -1,6 +1,7 @@
 #lang typed/racket/base
 
 (require racket/match
+         racket/list
          plot/typed
          "../main.rkt")
 
@@ -18,26 +19,46 @@
     (profile-thunk (λ () (set! val (thnk))) . args)
     (assert val (λ: ([x : Any]) x))))
 
-(: interval->ivl (Interval -> ivl))
-(define (interval->ivl A)
-  (match-define (interval a b a? b?) A)
-  (ivl a b))
+(: interval*->ivls (Interval* -> (Listof ivl)))
+(define (interval*->ivls I)
+  (cond [(interval? I)  (match-define (interval a b a? b?) I)
+                        (list (ivl a b))]
+        [else  (append* (map interval*->ivls (interval-list-elements I)))]))
 
 (: maybe-pad-list (All (A) ((Listof A) Integer (-> A) -> (Listof A))))
 (define (maybe-pad-list lst n thnk)
   (append lst (build-list (max 0 (- n (length lst))) (λ (_) (thnk)))))
 
-(: omega-rect->plot-rect (Omega-Rect -> (Listof ivl)))
-(define (omega-rect->plot-rect Ω)
-  (define lst (omega-rect-map Ω interval->ivl))
-  (maybe-pad-list lst 3 (λ () (ivl 0 1))))
+(: cons-product (All (A B) ((Listof A) (Listof B) -> (Listof (Pair A B)))))
+(define (cons-product as bs)
+  (let a-loop ([as as])
+    (cond [(empty? as)  empty]
+          [else
+           (define a (first as))
+           (let b-loop ([bs bs])
+             (cond [(empty? bs)  (a-loop (rest as))]
+                   [else  (cons (cons a (first bs)) (b-loop (rest bs)))]))])))
+
+(: list-product (All (A) ((Listof (Listof A)) -> (Listof (Listof A)))))
+(define (list-product xss)
+  (cond [(empty? xss)  (list empty)]
+        [else  (cons-product (first xss) (list-product (rest xss)))]))
+
+(: omega-rect->plot-rects (Omega-Rect -> (Listof (Listof ivl))))
+(define (omega-rect->plot-rects Ω)
+  (map (λ: ([lst : (Listof ivl)])
+         (maybe-pad-list lst 3 (λ () (ivl 0 1))))
+       (list-product (map (λ: ([lst : (Listof ivl)])
+                            (define n (length lst))
+                            (take lst (min n 3)))
+                          (omega-rect-map Ω interval*->ivls)))))
 
 (: omega->point (Omega -> (Listof Flonum)))
 (define (omega->point ω)
   (define lst (omega-map ω (λ: ([x : Flonum]) x)))
   (maybe-pad-list lst 3 random))
 
-(: value->listof-flonum (Value -> (Listof Flonum)))
+(: value->listof-flonum (Maybe-Value -> (Listof Flonum)))
 (define (value->listof-flonum v)
   (cond [(flonum? v)  (list v)]
         [(boolean? v)  (list (if v (+ 0.9 (* 0.1 (random))) (* 0.1 (random))))]
@@ -46,3 +67,4 @@
         [(null? v)  (list)]
         [(tagged? v)  (value->listof-flonum (get-val v))]
         [else  (list -1.0)]))
+

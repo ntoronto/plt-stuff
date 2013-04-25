@@ -44,7 +44,7 @@
 ;; ===================================================================================================
 ;; Set types
 
-(define-type Rect (U Interval Null-Rect Pair-Rect Boolean-Rect))
+(define-type Rect (U Interval* Null-Rect Pair-Rect Boolean-Rect))
 (define-type Maybe-Rect (U Empty-Set Rect))
 
 (define-type Top-Rect (Top-Rect-Struct Rect-Tag Maybe-Rect))
@@ -88,12 +88,18 @@
 ;; ===================================================================================================
 ;; Top rectangles
 
-(: rect? (Set -> Boolean : Rect))
-(define rect? (λ: ([A : Set]) (or (interval? A) (null-rect? A) (pair-rect? A) (boolean-rect? A))))
+;(define-predicate interval*? Interval*)
+
+(define interval*?
+  (λ: ([A : Set]) (or (interval-list? A) (interval? A))))
+
+;(: rect? (Set -> Boolean : Rect))
+(define rect?
+  (λ: ([A : Set]) (or (interval*? A) (null-rect? A) (pair-rect? A) (boolean-rect? A))))
 
 (: rect-tag (Rect -> Rect-Tag))
 (define (rect-tag A)
-  (cond [(interval? A)   real-tag]
+  (cond [(interval*? A)  real-tag]
         [(null-rect? A)  null-tag]
         [(pair-rect? A)  pair-tag]
         [(boolean-rect? A)  boolean-tag]))
@@ -227,7 +233,7 @@
 (: bot-tag ((U Rect Bot-Set) -> Symbol))
 (define (bot-tag A)
   (cond [(bot-set? A)  (get-tag A)]
-        [(interval? A)  real-tag]
+        [(interval*? A)  real-tag]
         [(null-rect? A)  null-tag]
         [(pair-rect? A)  pair-tag]
         [(boolean-rect? A)  boolean-tag]))
@@ -383,7 +389,7 @@
                                [(eq? tag pair-tag)  all-pairs]
                                [(eq? tag boolean-tag)  booleans]
                                [else  empty-set])]
-        [(interval? A)   (if (eq? tag real-tag) A empty-set)]
+        [(interval*? A)  (if (eq? tag real-tag) A empty-set)]
         [(null-rect? A)  (if (eq? tag null-tag) A empty-set)]
         [(pair-rect? A)  (if (eq? tag pair-tag) A empty-set)]
         [(boolean-rect? A)  (if (eq? tag boolean-tag) A empty-set)]

@@ -13,7 +13,7 @@
 ;; ===================================================================================================
 ;; Random expressions
 
-(define-type Rand-Forward-Fun (Omega Branches Value -> Value))
+(define-type Rand-Forward-Fun (Omega Branches Value -> Maybe-Value))
 (define-type Rand-Preimage-Fun
   (Branches-Rect Nonempty-Set -> (Values Maybe-Omega-Rect Maybe-Branches-Rect Set)))
 
@@ -53,6 +53,11 @@
                                (rand-expression Omega-Index -> rand-expression-meaning)))
 (define (run-rand-expression e [r empty])
   ((rand-expression-fun e) r))
+
+(: run-rand-forward (Rand-Forward-Fun Omega Branches Maybe-Value -> Maybe-Value))
+(define (run-rand-forward f ω z γ)
+  (cond [(bottom? γ)  γ]
+        [else  (f ω z γ)]))
 
 (: run-rand-preimage (Rand-Preimage-Fun Maybe-Branches-Rect Set
                                         -> (Values Maybe-Omega-Rect Maybe-Branches-Rect Set)))
@@ -125,7 +130,7 @@
 (: rand-rcompose/fwd (Rand-Forward-Fun Rand-Forward-Fun -> Rand-Forward-Fun))
 (define ((rand-rcompose/fwd f-fwd g-fwd) ω z γ)
   (let* ([kf  (f-fwd ω z γ)]
-         [kg  (g-fwd ω z kf)])
+         [kg  (run-rand-forward g-fwd ω z kf)])
     kg))
 
 (: rand-rcompose/pre (Rand-Preimage-Fun Rand-Preimage-Fun Omega-Rect -> Rand-Preimage-Fun))
@@ -179,34 +184,24 @@
 
 (: rand-pair/fwd (Rand-Forward-Fun Rand-Forward-Fun -> Rand-Forward-Fun))
 (define ((rand-pair/fwd fst-fwd snd-fwd) ω z γ)
-  (let ([k1  (fst-fwd ω z γ)]
-        [k2  (snd-fwd ω z γ)])
-    (cons k1 k2)))
+  (define k1 (fst-fwd ω z γ))
+  (cond [(bottom? k1)  k1]
+        [else  (define k2 (snd-fwd ω z γ))
+               (cond [(bottom? k2)  k2]
+                     [else  (cons k1 k2)])]))
 
-(: rand-pair/pre (Rand-Preimage-Fun
-                  Rand-Preimage-Fun
-                  Omega-Rect Omega-Rect Omega-Rect Nonempty-Set
-                  Maybe-Branches-Rect Maybe-Branches-Rect Set Set
-                  -> Rand-Preimage-Fun))
-(define (rand-pair/pre pre1 pre2 Ω Ω1 Ω2 Γ old-Z1 old-Z2 old-K1 old-K2)
-  (λ (Z K)
-    (define K1 (set-pair-ref K 'fst))
-    (define K2 (set-pair-ref K 'snd))
-    (define Z1 (branches-rect-fst Z))
-    (define Z2 (branches-rect-snd Z))
-    (define 1? (if pair-cache-preimages? (not (and (eq? K1 old-K1) (eq? Z1 old-Z1))) #t))
-    (define 2? (if pair-cache-preimages? (not (and (eq? K2 old-K2) (eq? Z2 old-Z2))) #t))
-    (when (and pair-cache-preimages? pair-preimage-stats?)
-      (increment-cache-stat (if 1? 'pair-preimage-hits/fst 'pair-preimage-misses/fst))
-      (increment-cache-stat (if 2? 'pair-preimage-hits/snd 'pair-preimage-misses/snd)))
-    (let*-values ([(Ω1 Z1 Γ1)  (if 1? (run-rand-preimage pre1 Z1 K1) (values Ω1 Z1 Γ))]
-                  [(Ω2 Z2 Γ2)  (if 2? (run-rand-preimage pre2 Z2 K2) (values Ω2 Z2 Γ))]
-                  [(Ω)  (unit-omega-rect-node/last Ω Ω1 Ω2)]
-                  [(Z)  (branches-rect-node/last Z booleans Z1 Z2)]
-                  [(Γ)  (cond [(eq? Γ1 Γ)  (set-intersect Γ Γ2)]
-                              [(eq? Γ2 Γ)  (set-intersect Γ Γ1)]
-                              [else  (set-intersect Γ1 Γ2)])])
-      (values Ω Z Γ))))
+(: rand-pair/pre (Rand-Preimage-Fun Rand-Preimage-Fun Omega-Rect Omega-Rect Omega-Rect
+                                    -> Rand-Preimage-Fun))
+(define ((rand-pair/pre pre1 pre2 Ω Ω1 Ω2) Z K)
+  (define K1 (set-pair-ref K 'fst))
+  (define K2 (set-pair-ref K 'snd))
+  (define Z1 (branches-rect-fst Z))
+  (define Z2 (branches-rect-snd Z))
+  (let-values ([(Ω1 Z1 Γ1)  (run-rand-preimage pre1 Z1 K1)]
+               [(Ω2 Z2 Γ2)  (run-rand-preimage pre2 Z2 K2)])
+    (values (unit-omega-rect-node/last Ω Ω1 Ω2)
+            (branches-rect-node/last Z booleans Z1 Z2)
+            (set-intersect Γ1 Γ2))))
 
 (: rand-pair/comp (Rand-Computation Rand-Computation -> Rand-Computation))
 (define (rand-pair/comp comp1 comp2)
@@ -215,7 +210,7 @@
      (define Ω1 (omega-rect-fst Ω))
      (define Ω2 (omega-rect-snd Ω))
      (define Z1 (branches-rect-fst Z))
-     (define Z2 (branches-rect-fst Z))
+     (define Z2 (branches-rect-snd Z))
      (define meaning1 (comp1 Ω1 Z1 Γ))
      (define meaning2 (if (empty-meaning? meaning1) empty-meaning (comp2 Ω2 Z2 Γ)))
      (cond
@@ -225,7 +220,7 @@
         (match-define (rand-computation-meaning Z2 K2 pre2) meaning2)
         (let ([Z  (branches-rect-node/last Z booleans Z1 Z2)]
               [K  (set-pair K1 K2)])
-          (define pre (rand-preimage Ω Γ Z K (rand-pair/pre pre1 pre2 Ω Ω1 Ω2 Γ Z1 Z2 K1 K2)))
+          (define pre (rand-preimage Ω Γ Z K (rand-pair/pre pre1 pre2 Ω Ω1 Ω2)))
           (rand-computation-meaning Z K pre))]))))
 
 (: rand-pair/arr (rand-expression rand-expression -> rand-expression))
@@ -245,10 +240,10 @@
 (define ((rand-switch/fwd idx t-fwd f-fwd) ω z γ)
   (match-let ([(cons b γ)  γ])
     (define zb (branches-ref z idx))
-    (cond [(not (boolean? b))  (raise-argument-error 'switch/fwd "Boolean" b)]
+    (cond [(not (boolean? b))  (bottom (delay (format "if: expected Boolean condition; given ~e" b)))]
           [(and (eq? b #t) (or (eq? zb #t) (eq? zb 'either)))  ((t-fwd) ω z γ)]
           [(and (eq? b #f) (or (eq? zb #f) (eq? zb 'either)))  ((f-fwd) ω z γ)]
-          [else  (raise (forward-fail "bad branch"))])))
+          [else  (bottom (delay (format "if: missed branch at index ~a" idx)))])))
 
 (: rand-switch-t/pre ((-> Rand-Computation) Omega-Rect Omega-Rect Omega-Rect Nonempty-Set
                                             -> Rand-Preimage-Fun))
@@ -316,7 +311,7 @@
            (cond [(empty-meaning? t-meaning)  empty-meaning]
                  [else
                   (match-define (rand-computation-meaning Zt Kt t-pre) t-meaning)
-                  (let ([Z  (branches-rect-node/last Z trues Zt Zf)])
+                  (let ([Z  (branches-rect-node trues Zt Zf)])
                     (define pre (rand-preimage Ω Γ Z Kt (rand-switch-t/pre t-comp Ω Ωt Ωf Γtf)))
                     (rand-computation-meaning Z Kt pre))])]
           [(eq? Γb falses)
@@ -324,7 +319,7 @@
            (cond [(empty-meaning? f-meaning)  empty-meaning]
                  [else
                   (match-define (rand-computation-meaning Zf Kf f-pre) f-meaning)
-                  (let ([Z  (branches-rect-node/last Z falses Zt Zf)])
+                  (let ([Z  (branches-rect-node falses Zt Zf)])
                     (define pre (rand-preimage Ω Γ Z Kf (rand-switch-f/pre f-comp Ω Ωt Ωf Γtf)))
                     (rand-computation-meaning Z Kf pre))])]
           [else
@@ -362,8 +357,8 @@
   (define Ω1 (omega-rect-fst Ω))
   (define Ω2 (omega-rect-snd Ω))
   (λ (Z K)
-    (cond [(interval? K)  (values (omega-rect-node K Ω1 Ω2) Z Γ)]
-          [else           (values empty-set empty-set empty-set)])))
+    (cond [(interval*? K)  (values (omega-rect-node K Ω1 Ω2) Z Γ)]
+          [else            (values empty-set empty-set empty-set)])))
 
 (: random/comp (-> Rand-Computation))
 (define (random/comp)
@@ -377,6 +372,17 @@
   (rand-expression
    (λ (r)
      (define idx (reverse r))
-     (rand-expression-meaning (list (make-interval-index idx interval-split))
+     (rand-expression-meaning (list (interval-index idx #f))
                               (random/fwd idx)
                               (random/comp)))))
+
+#;
+((rand-computation-meaning-preimage
+  (assert
+   ((rand-expression-meaning-computation
+     (run-rand-expression (rand-rcompose/arr (random/ 0.6)
+                                             (rand-switch/arr (->rand (c/arr #t))
+                                                              (->rand (c/arr #f))))))
+    omega-rect (branches-rect-set branches-rect '(1) trues) null-set)
+   rand-computation-meaning?))
+ (branches-rect-set branches-rect '(1) trues) universe)

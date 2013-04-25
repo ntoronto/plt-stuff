@@ -33,113 +33,129 @@
 ;; ===================================================================================================
 ;; Search tree types
 
-(struct: failure-leaf () #:transparent)
-(struct: (T) success-leaf ([value : T] [prob : Flonum]) #:transparent)
-(struct: (T) search-node ([trees : (Listof+2 (U (Promise (Search-Tree T)) (Search-Tree T)))]
-                          [probs : (Listof+2 Flonum)]  ; assumes (flsum probs) ≈ 1.0
+(struct: (X) search-leaf ([value : X] [prob : Flonum]) #:transparent)
+
+(struct: (X) search-node ([children : (Listof+2 (Maybe-Promise (Search-Tree X)))]
+                          [probs : (Listof+2 Flonum)]
+                          [choice : (U 'nondeterministic 'probabilistic)]
                           [name : Symbol])
   #:transparent)
 
-(define-type (Search-Leaf T) (U failure-leaf (success-leaf T)))
-(define-type (Search-Tree T) (U (Search-Leaf T) (search-node T)))
+(define-type (Search-Tree X) (U (search-leaf X) (search-node X)))
 
 ;; ===================================================================================================
-;; Nonadaptive, independent search
+;; Nonadaptive, independent sampling
 
-(: sample-search-tree-once (All (T) ((Search-Tree T) Flonum -> (Values (Search-Tree T) Flonum))))
+(: sample-search-tree-once (All (X) ((Search-Tree X) Flonum -> (Values (Listof (search-leaf X))
+                                                                       (Listof Flonum)))))
 ;; Straightforward sampler, useful only for rejection sampling
-;; Returns a leaf in the search tree, and the probability of finding that leaf
+;; Returns a leaf in the search tree, and the probability of returning that leaf
 (define (sample-search-tree-once t p)
-  (cond [(search-node? t)
-         (match-define (search-node cs qs name) t)
-         (when search-stats? (increment-search-stat name))
-         (define i (sample-index qs))
-         (define c (list-ref cs i))
-         (define q (list-ref qs i))
-         (sample-search-tree-once (maybe-force c) (* p q))]
-        [else
-         (values t p)]))
+  (cond
+    [(search-node? t)
+     (match-define (search-node cs qs choice name) t)
+     (when search-stats? (increment-search-stat name))
+     (cond [(eq? choice 'probabilistic)
+            (define i (sample-index qs))
+            (define c (maybe-force (list-ref cs i)))
+            (define q (list-ref qs i))
+            (sample-search-tree-once c (* p q))]
+           [(eq? choice 'nondeterministic)
+            (define: ts : (Listof (search-leaf X))  empty)
+            (define: ps : (Listof Flonum)  empty)
+            (let loop ([cs cs] [ts ts] [ps ps])
+              (cond [(empty? cs)  (values ts ps)]
+                    [else
+                     (define-values (new-ts new-ps)
+                       (sample-search-tree-once (maybe-force (first cs)) p))
+                     (loop (rest cs) (append new-ts ts) (append new-ps ps))]))])]
+    [else
+     (values (list t) (list p))]))
 
-(: sample-search-tree-once* (All (T) ((Search-Tree T) Integer -> (Values (Listof (success-leaf T))
+(: sample-search-tree-once* (All (X) ((Search-Tree X) Integer -> (Values (Listof (search-leaf X))
                                                                          (Listof Flonum)))))
+;; Samples multiple leaves using `sample-search-tree-once'
 (define (sample-search-tree-once* t n)
   (cond
     [(not (index? n))   (raise-argument-error 'sample-search-tree-once* "Index" 1 t n)]
-    [(failure-leaf? n)  (values empty empty)]
     [else
-     (let: loop ([i : Nonnegative-Fixnum  0]
-                 [ss : (Listof (success-leaf T))  empty]
-                 [ps : (Listof Flonum)  empty])
-       (cond [(i . < . n)
-              (let ([i  (+ i 1)])
-                (when (= 0 (remainder i 100))
-                  (printf "i = ~v~n" i)
-                  (flush-output))
-                (let-values ([(s p)  (sample-search-tree-once t 1.0)])
-                  (cond [(success-leaf? s)
-                         (loop i (cons s ss) (cons p ps))]
-                        [else
-                         (when search-stats? (increment-search-stat 'restarts))
-                         (loop i ss ps)])))]
+     (define: ts : (Listof (search-leaf X))  empty)
+     (define: ps : (Listof Flonum)  empty)
+     (let: loop ([i : Positive-Fixnum  1] [ts ts] [ps ps])
+       (cond [(i . <= . n)
+              (when (= 0 (remainder i 100))
+                (printf "i = ~v~n" i)
+                (flush-output))
+              (let-values ([(leaf-ts leaf-ps)  (sample-search-tree-once t 1.0)])
+                (loop (+ i 1) (append leaf-ts ts) (append leaf-ps ps)))]
              [else
-              (values ss ps)]))]))
+              (values ts ps)]))]))
 
 ;; ===================================================================================================
 ;; Adaptive search
 
-(: sample-search-tree
-   (All (T) ((Search-Tree T) Flonum -> (Values (Search-Leaf T) Flonum (Search-Tree T) Flonum))))
-;; Like `sample-search-tree', but when it returns failure, it also returns a tree without that failure
-;; The returned tree is equivalent in the sense that successes are returned with the same
-;; probabilities in future searches (up to floating-point error)
+(: sample-search-tree (All (X) ((Search-Tree X) Flonum -> (Values (Listof (search-leaf X))
+                                                                  (Listof Flonum)
+                                                                  (Search-Tree X)
+                                                                  Nonnegative-Flonum))))
+;; Like `sample-search-tree-once', but returns an adjusted tree in which the probability of choosing
+;; the leaf is the leaf value's actual probability
 (define (sample-search-tree t p)
-  (cond [(search-node? t)
-         (match-define (search-node cs qs name) t)
-         (when search-stats? (increment-search-stat name))
-         (define i (sample-index qs))
-         (define c (list-ref cs i))
-         (define q (list-ref qs i))
-         (define pq (* p q))
-         (let-values ([(s u c new-pq)  (sample-search-tree (maybe-force c) pq)])
-           (define new-t
-             (cond [(new-pq . > . 0.0)
-                    (let* ([cs  (list-set/+2 cs i c)]
-                           [qs  (list-set/+2 qs i (/ new-pq p))]
-                           [qs  (normalize-probs/+2 qs)])
-                      (search-node cs qs name))]
-                   [else
-                    (let ([cs  (remove-index/+2 cs i)]
-                          [qs  (remove-index/+2 qs i)])
-                      (cond [(or (empty? (rest cs)) (empty? (rest qs)))
-                             (maybe-force (first cs))]
-                            [else
-                             (search-node cs (normalize-probs/+2 qs) name)]))]))
-           (values s u new-t (- p (- pq new-pq))))]
-        [(failure-leaf? t)
-         (values t p t 0.0)]
-        [else
-         (values t p t (success-leaf-prob t))]))
+  ;(define-values (leaf-ts leaf-ps) (sample-search-tree-once t p))
+  ;(values leaf-ts leaf-ps t p)
+  (cond
+    [(search-node? t)
+     (match-define (search-node cs qs choice name) t)
+     (when search-stats? (increment-search-stat name))
+     (define i (sample-index qs))
+     (define c (maybe-force (list-ref cs i)))
+     (define q (list-ref qs i))
+     (define pq (* p q))
+     (let*-values
+         ([(leaf-ts leaf-ps c child-pq)  (sample-search-tree c pq)]
+          [(child-q)  (max 0.0 (/ child-pq p))]
+          [(t)  (cond [(zero? child-q)
+                       (let* ([cs  (remove-index/+2 cs i)]
+                              [qs  (remove-index/+2 qs i)])
+                         (cond [(or (empty? (rest cs)) (empty? (rest qs)))
+                                (maybe-force (first cs))]
+                               [else
+                                ;(printf "normalizing ~v probabilities~n" (length qs))
+                                (let ([qs  (normalize-probs/+2 qs)])
+                                  (search-node cs qs choice name))]))]
+                      [else
+                       (let* ([cs  (list-set/+2 cs i c)]
+                              [qs  (list-set/+2 qs i child-q)]
+                              ;[_   (printf "normalizing ~v probabilities~n" (length qs))]
+                              [qs  (normalize-probs/+2 qs)])
+                         (search-node cs qs choice name))])])
+       (values leaf-ts leaf-ps t (max 0.0 (* p (- 1.0 (- q child-q))))))]
+    [else
+     (define leaf-p (search-leaf-prob t))
+     (values (list t) (list p)
+             t
+             #;(if (zero? leaf-p) 0.0 (max 0.0 p))
+             (max 0.0 (min p leaf-p)))]))
 
-(: sample-search-tree* (All (T) ((Search-Tree T) Integer -> (Values (Listof (success-leaf T))
-                                                                    (Listof Flonum)))))
-;; Samples multiple success leaves using `sample-search-tree'
+(: sample-search-tree* (All (X) ((Search-Tree X) Integer -> (Values (Listof (search-leaf X))
+                                                                    (Listof Flonum)
+                                                                    (Search-Tree X)
+                                                                    Flonum))))
+;; Samples multiple leaves using `sample-search-tree'
 (define (sample-search-tree* t n)
   (cond
-    [(index? n)
-     (define: ss : (Listof (success-leaf T))  empty)
-     (define: ps : (Listof Flonum)  empty)
-     (let: loop ([i : Nonnegative-Fixnum  0] [ss ss] [ps ps] [t t] [q 1.0])
-       (cond [(and (i . < . n) (q . > . 0.0) (not (failure-leaf? t)))
-              (let-values ([(s p t q)  (sample-search-tree t q)])
-                (cond [(success-leaf? s)
-                       (let ([i  (+ i 1)])
-                         (when (= 0 (remainder i 100))
-                           (printf "i = ~v~n" i)
-                           (flush-output))
-                         (loop i (list* s ss) (cons p ps) t q))]
-                      [else
-                       (when search-stats? (increment-search-stat 'restarts))
-                       (loop i ss ps t q)]))]
-             [else  (values ss ps)]))]
+    [(not (index? n))  (raise-argument-error 'sample-search-tree* "Index" 1 t n)]
     [else
-     (raise-argument-error 'sample-search-tree* "Index" 1 t n)]))
+     (define: ts : (Listof (search-leaf X))  empty)
+     (define: ps : (Listof Flonum)  empty)
+     (let: loop ([i : Positive-Fixnum  1] [ts ts] [ps ps] [t t] [q 1.0])
+       (cond [(and (i . <= . n) (q . > . 0.0))
+              (let-values ([(leaf-ts leaf-ps t q)  (sample-search-tree t q)])
+                (when (= 0 (remainder i 100))
+                  (printf "i = ~v~n" i)
+                  (flush-output))
+                (loop (+ i 1) (append leaf-ts ts) (append leaf-ps ps) t q))]
+             [else
+              (when (q . <= . 0.0)
+                (printf "bailing because top probability is zero~n"))
+              (values ts ps t q)]))]))

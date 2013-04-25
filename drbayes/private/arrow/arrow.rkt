@@ -82,26 +82,25 @@
 (define ((boolean/fwd r p) ω z γ)
   ((omega-ref ω r) . < . p))
 
-(: boolean/pre (Omega-Rect Nonempty-Set (U Empty-Set Interval) (U Empty-Set Interval)
-                           -> Rand-Preimage-Fun))
+(: boolean/pre (Omega-Rect Nonempty-Set Maybe-Interval* Maybe-Interval* -> Rand-Preimage-Fun))
 (define (boolean/pre Ω Γ It If)
   (define Ω1 (omega-rect-fst Ω))
   (define Ω2 (omega-rect-snd Ω))
   (λ (Z K)
-    (define I (cond [(eq? K booleans)  (set-join It If)]
+    (define I (cond [(eq? K booleans)  (interval*-union It If)]
                     [(eq? K trues)     It]
                     [(eq? K falses)    If]
                     [else              empty-set]))
-    (cond [(interval? I)  (values (omega-rect-node I Ω1 Ω2) Z Γ)]
-          [else           (values empty-set empty-set empty-set)])))
+    (cond [(interval*? I)  (values (omega-rect-node I Ω1 Ω2) Z Γ)]
+          [else            (values empty-set empty-set empty-set)])))
 
 (: boolean/comp (Interval Interval -> Rand-Computation))
 (define (boolean/comp It If)
   (cached-rand-computation
    (λ (Ω Z Γ)
      (define I (omega-rect-value Ω))
-     (let ([It  (interval-intersect I It)]
-           [If  (interval-intersect I If)])
+     (let ([It  (interval*-intersect I It)]
+           [If  (interval*-intersect I If)])
        (define K (booleans->boolean-rect (not (empty-set? It)) (not (empty-set? If))))
        (cond [(empty-set? K)  empty-meaning]
              [else  (define pre (rand-preimage Ω Γ Z K (boolean/pre Ω Γ It If)))
@@ -117,7 +116,7 @@
      (rand-expression
       (λ (r)
         (define idx (reverse r))
-        (rand-expression-meaning (list (interval-index idx split 1 0.0))
+        (rand-expression-meaning (list (interval-index idx split))
                                  (boolean/fwd idx p)
                                  (boolean/comp It If))))]
     [(= p 0.0)  (c/arr #f)]

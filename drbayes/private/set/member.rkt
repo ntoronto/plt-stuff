@@ -32,7 +32,7 @@
 (: rect-member? (Maybe-Rect Value -> Boolean))
 (define (rect-member? A x)
   (cond [(empty-set? A)  #f]
-        [(interval? A)   (and (flonum? x) (interval-member? A x))]
+        [(interval*? A)  (and (flonum? x) (interval*-member? A x))]
         [(null-rect? A)  (null? x)]
         [(pair-rect? A)  (and (pair? x) (pair-rect-member? A x))]
         [(boolean-rect? A)  (and (boolean? x) (boolean-rect-member? A x))]))

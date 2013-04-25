@@ -9,9 +9,22 @@
          interval-join
          interval-subseteq?
          interval-member?
-         interval-disjoint?
          interval-sample-point
-         interval-measure)
+         interval-measure
+         Interval-List Interval* Maybe-Interval*
+         interval-list
+         interval-list?
+         interval-list-elements
+         interval*-subtract
+         interval*-union
+         interval*-intersect
+         interval*-subseteq?
+         interval*-member?
+         interval*-sample-point
+         interval*-measure
+         interval*-map/mono
+         interval*-map
+         )
 
 (module typed-defs typed/racket/base
   (provide (all-defined-out))
@@ -20,7 +33,12 @@
            racket/flonum
            racket/list
            math/private/utils
-           "extremal-set.rkt")
+           math/flonum
+           math/distributions
+           "extremal-set.rkt"
+           "../utils.rkt")
+  
+  (define check-interval*-valid? #t)
   
   (: print-interval (Interval Output-Port (U #t #f 0 1) -> Any))
   (define (print-interval I port mode)
@@ -28,8 +46,18 @@
     (cond [(and a? b?)  (pretty-print-constructor 'interval (list a b) port mode)]
           [else  (pretty-print-constructor 'interval (list a b a? b?) port mode)]))
   
+  (: interval-guard (Flonum Flonum Boolean Boolean Symbol -> (Values Flonum Flonum Boolean Boolean)))
+  (define (interval-guard a b a? b? name)
+    (cond [(and (or (a . < . b) (and (= a b) a? b?))
+                (if (= a -inf.0) (not a?) #t)
+                (if (= b +inf.0) (not b?) #t))
+           (values a b a? b?)]
+          [else
+           (error name "expected strictly increasing endpoints; given ~a ~a ~a ~a" a b a? b?)]))
+  
   (struct: Interval ([min : Flonum] [max : Flonum] [min? : Boolean] [max? : Boolean])
     #:transparent
+    #:guard interval-guard
     #:property prop:custom-print-quotable 'never
     #:property prop:custom-write print-interval)
   
@@ -111,21 +139,6 @@
           [(and (= x b) b?)  #t]
           [else  #f]))
   
-  (: interval-disjoint2? (Interval Interval -> Boolean))
-  (define (interval-disjoint2? A B)
-    (empty-set? (interval-intersect A B)))
-  
-  (: interval-disjoint? (Interval * -> Boolean))
-  (define (interval-disjoint? . As)
-    (let loop0 ([As As])
-      (if (empty? As)
-          #t
-          (let-values ([(A As)  (values (first As) (rest As))])
-            (let loop1 ([Bs As])
-              (if (empty? Bs)
-                  (loop0 As)
-                  (and (interval-disjoint2? A (first Bs)) (loop1 (rest Bs)))))))))
-  
   (: interval-sample-point (Interval -> Flonum))
   (define (interval-sample-point I)
     (match-define (Interval a b a? b?) I)
@@ -140,7 +153,294 @@
   (: interval-measure (Interval -> Flonum))
   (define (interval-measure I)
     (- (Interval-max I) (Interval-min I)))
-  )
+  
+  ;; =================================================================================================
+  ;; Sorted, disjoint interval unions
+  
+  (: interval-list-valid? ((Listof+2 Interval) -> Boolean))
+  (define (interval-list-valid? Is)
+    (let loop ([I1  (first Is)] [I2  (second Is)] [Is  (rest (rest Is))])
+      (match-define (Interval a1 b1 a1? b1?) I1)
+      (match-define (Interval a2 b2 a2? b2?) I2)
+      (cond [(not (or (b1 . < . a2) (and (= b1 a2) (not b1?) (not a2?))))  #f]
+            [(empty? Is)  #t]
+            [else  (loop I2 (first Is) (rest Is))])))
+  
+  (: interval*-guard ((Listof+2 Interval) Symbol -> (Listof+2 Interval)))
+  (define (interval*-guard Is name)
+    (cond [(interval-list-valid? Is)  Is]
+          [else
+           (error name "expected strictly increasing, nonoverlapping intervals; given ~e" Is)]))
+  
+  (struct: Interval-List ([elements : (Listof+2 Interval)])
+    #:transparent
+    #:guard interval*-guard)
+  
+  (define-type Interval* (U Interval Interval-List))
+  (define-type Maybe-Interval* (U Empty-Set Interval*))
+  
+  (: interval-list (case-> ((Pair Interval (Listof Interval)) -> Interval*)
+                           ((Listof Interval) -> Maybe-Interval*)))
+  (define (interval-list Is)
+    (cond [(empty? Is)  empty-set]
+          [(empty? (rest Is))  (first Is)]
+          [else  (Interval-List Is)]))
+  
+  (: min<? (Flonum Boolean Flonum Boolean -> Boolean))
+  (define (min<? a1 a1? a2 a2?)
+    (or (a1 . < . a2) (and (= a1 a2) a1? (not a2?))))
+  
+  (: max<? (Flonum Boolean Flonum Boolean -> Boolean))
+  (define (max<? b1 b1? b2 b2?)
+    (or (b1 . < . b2) (and (= b1 b2) (not b1?) b2?)))
+  
+  ;; -------------------------------------------------------------------------------------------------
+  ;; Subtraction
+  
+  (: interval-list-subtract ((Listof Interval) (Listof Interval) -> (Listof Interval)))
+  (define (interval-list-subtract I1 I2)
+    (cond
+      [(or (empty? I1) (empty? I2))  I1]
+      [else
+       (match-define (Interval a1 b1 a1? b1?) (first I1))
+       (match-define (Interval a2 b2 a2? b2?) (first I2))
+       (cond
+         [(or (b1 . < . a2) (and (= b1 a2) (or (not b1?) (not a2?))))
+          ;; ------
+          ;;       ------
+          (cons (first I1) (interval-list-subtract (rest I1) I2))]
+         [(or (b2 . < . a1) (and (= b2 a1) (or (not b2?) (not a1?))))
+          ;;       ------
+          ;; ------
+          (interval-list-subtract I1 (rest I2))]
+         [(min<? a1 a1? a2 a2?)
+          (cond [(max<? b2 b2? b1 b1?)
+                 ;; ------
+                 ;;   --
+                 (define I3 (assert (make-interval a1 a2 a1? (not a2?)) Interval?))
+                 (define I4 (assert (make-interval b2 b1 (not b2?) b1?) Interval?))
+                 (cons I3 (interval-list-subtract (cons I4 (rest I1)) (rest I2)))]
+                [else
+                 ;; ------           ------
+                 ;;    ------   or      ---
+                 (define I3 (assert (make-interval a1 a2 a1? (not a2?)) Interval?))
+                 (cons I3 (interval-list-subtract (rest I1) I2))])]
+         [else
+          (cond [(max<? b2 b2? b1 b1?)
+                 ;;    ------        ------
+                 ;; ------      or   ---
+                 (define I4 (assert (make-interval b2 b1 (not b2?) b1?) Interval?))
+                 (interval-list-subtract (cons I4 (rest I1)) (rest I2))]
+                [else
+                 ;;   --             ---        ---           ------
+                 ;; ------   or   ------   or   ------   or   ------
+                 (interval-list-subtract (rest I1) I2)])])]))
+  
+  (: interval*-subtract (Maybe-Interval* Maybe-Interval* -> Maybe-Interval*))
+  (define (interval*-subtract I1 I2)
+    (cond [(empty-set? I1)  empty-set]
+          [(empty-set? I2)  I1]
+          [else  (interval-list
+                  (interval-list-subtract
+                   (if (Interval? I1) (list I1) (Interval-List-elements I1))
+                   (if (Interval? I2) (list I2) (Interval-List-elements I2))))]))
+  
+  ;; -------------------------------------------------------------------------------------------------
+  ;; Union
+  
+  (: interval-list-union ((Listof Interval) (Listof Interval) -> (Listof Interval)))
+  (define (interval-list-union I1 I2)
+    (cond
+      [(empty? I1)  I2]
+      [(empty? I2)  I1]
+      [else
+       (match-define (Interval a1 b1 a1? b1?) (first I1))
+       (match-define (Interval a2 b2 a2? b2?) (first I2))
+       (cond
+         [(or (b1 . < . a2) (and (= b1 a2) (not b1?) (not a2?)))
+          ;; ------
+          ;;        ------
+          (cons (first I1) (interval-list-union (rest I1) I2))]
+         [(or (b2 . < . a1) (and (= b2 a1) (not b2?) (not a1?)))
+          ;;        ------
+          ;; ------
+          (cons (first I2) (interval-list-union I1 (rest I2)))]
+         [(min<? a1 a1? a2 a2?)
+          (cond [(max<? b2 b2? b1 b1?)
+                 ;; ------
+                 ;;   --
+                 (interval-list-union I1 (rest I2))]
+                [else
+                 ;; ------           ------
+                 ;;    ------   or      ---
+                 (define I (assert (make-interval a1 b2 a1? b2?) Interval?))
+                 (interval-list-union (rest I1) (cons I (rest I2)))])]
+         [else
+          (cond [(max<? b2 b2? b1 b1?)
+                 ;;    ------        ------
+                 ;; ------      or   ---
+                 (define I (assert (make-interval a2 b1 a2? b1?) Interval?))
+                 (interval-list-union (cons I (rest I1)) (rest I2))]
+                [else
+                 ;;   --             ---        ---           ------
+                 ;; ------   or   ------   or   ------   or   ------
+                 (interval-list-union (rest I1) I2)])])]))
+  
+  (: interval*-union (case-> (Interval* Interval* -> Interval*)
+                             (Maybe-Interval* Maybe-Interval* -> Maybe-Interval*)))
+  (define (interval*-union I1 I2)
+    (cond [(empty-set? I1)  I2]
+          [(empty-set? I2)  I1]
+          [else
+           (define Is
+             (interval-list-union
+              (if (Interval? I1) (list I1) (Interval-List-elements I1))
+              (if (Interval? I2) (list I2) (Interval-List-elements I2))))
+           (cond [(empty? Is)
+                  (raise-result-error 'interval-list-union "nonempty (Listof Interval)" Is)]
+                 [else
+                  (interval-list Is)])]))
+  
+  ;; -------------------------------------------------------------------------------------------------
+  ;; Intersection
+  
+  (: interval-list-intersect ((Listof Interval) (Listof Interval) -> (Listof Interval)))
+  (define (interval-list-intersect I1 I2)
+    (cond
+      [(empty? I1)  I1]
+      [(empty? I2)  I2]
+      [else
+       (match-define (Interval a1 b1 a1? b1?) (first I1))
+       (match-define (Interval a2 b2 a2? b2?) (first I2))
+       (cond
+         [(or (b1 . < . a2) (and (= b1 a2) (or (not b1?) (not a2?))))
+          ;; ------
+          ;;       ------
+          (interval-list-intersect (rest I1) I2)]
+         [(or (b2 . < . a1) (and (= b2 a1) (or (not b2?) (not a1?))))
+          ;;       ------
+          ;; ------
+          (interval-list-intersect I1 (rest I2))]
+         [(min<? a1 a1? a2 a2?)
+          (cond [(max<? b2 b2? b1 b1?)
+                 ;; ------
+                 ;;   --
+                 (cons (first I2) (interval-list-intersect I1 (rest I2)))]
+                [else
+                 ;; ------           ------
+                 ;;    ------   or      ---
+                 (define I (assert (make-interval a2 b1 a2? b1?) Interval?))
+                 (cons I (interval-list-intersect (rest I1) I2))])]
+         [else
+          (cond [(max<? b2 b2? b1 b1?)
+                 ;;    ------        ------
+                 ;; ------      or   ---
+                 (define I (assert (make-interval a1 b2 a1? b2?) Interval?))
+                 (cons I (interval-list-intersect I1 (rest I2)))]
+                [else
+                 ;;   --             ---        ---           ------
+                 ;; ------   or   ------   or   ------   or   ------
+                 (cons (first I1) (interval-list-intersect (rest I1) I2))])])]))
+  
+  (: interval*-intersect (Maybe-Interval* Maybe-Interval* -> Maybe-Interval*))
+  (define (interval*-intersect I1 I2)
+    (cond [(empty-set? I1)  I1]
+          [(empty-set? I2)  I2]
+          [(and (Interval? I1) (Interval? I2))  (interval-intersect I1 I2)]
+          [else  (interval-list
+                  (interval-list-intersect
+                   (if (Interval? I1) (list I1) (Interval-List-elements I1))
+                   (if (Interval? I2) (list I2) (Interval-List-elements I2))))]))
+  
+  ;; -------------------------------------------------------------------------------------------------
+  ;; Subset
+  
+  (: interval-list-subseteq? ((Listof Interval) (Listof Interval) -> Boolean))
+  (define (interval-list-subseteq? I1 I2)
+    (cond [(empty? I1)  #t]
+          [(empty? I2)  #f]
+          [else
+           (match-define (Interval a1 b1 a1? b1?) (first I1))
+           (match-define (Interval a2 b2 a2? b2?) (first I2))
+           (cond
+             [(or (b1 . < . a2) (and (= b1 a2) (or (not b1?) (not a2?))))
+              ;; ------
+              ;;       ------
+              #f]
+             [(or (b2 . < . a1) (and (= b2 a1) (or (not b2?) (not a1?))))
+              ;;       ------
+              ;; ------
+              (interval-list-subseteq? I1 (rest I2))]
+             [(min<? a1 a1? a2 a2?)
+              ;; ------        ------           ------
+              ;;   --     or      ------   or      ---
+              #f]
+             [(max<? b2 b2? b1 b1?)
+              ;;    ------        ------
+              ;; ------      or   ---
+              #f]
+             [else
+              ;;   --             ---        ---           ------
+              ;; ------   or   ------   or   ------   or   ------
+              (interval-list-subseteq? (rest I1) I2)])]))
+  
+  (: interval*-subseteq? (Maybe-Interval* Maybe-Interval* -> Boolean))
+  (define (interval*-subseteq? I1 I2)
+    (cond [(empty-set? I1)  #t]
+          [(empty-set? I2)  #f]
+          [(and (Interval? I1) (Interval? I2))  (interval-subseteq? I1 I2)]
+          [else  (interval-list-subseteq?
+                  (if (Interval? I1) (list I1) (Interval-List-elements I1))
+                  (if (Interval? I2) (list I2) (Interval-List-elements I2)))]))
+  
+  ;; -------------------------------------------------------------------------------------------------
+  ;; Other ops
+  
+  (: interval*-member? (Maybe-Interval* Flonum -> Boolean))
+  (define (interval*-member? I x)
+    (cond [(empty-set? I)  #f]
+          [(Interval? I)   (interval-member? I x)]
+          [else  (ormap (λ: ([I : Interval]) (interval-member? I x))
+                        (Interval-List-elements I))]))
+  
+  (: interval*-sample-point (Interval* -> Flonum))
+  (define (interval*-sample-point I)
+    (cond [(Interval? I)  (interval-sample-point I)]
+          [else
+           (define Is (Interval-List-elements I))
+           (define i (sample-index (normalize-probs/+2 (map/+2 interval-measure Is))))
+           (interval-sample-point (list-ref Is i))]))
+  
+  (: interval*-measure (Maybe-Interval* -> Flonum))
+  (define (interval*-measure I)
+    (cond [(empty-set? I)  0.0]
+          [(Interval? I)   (interval-measure I)]
+          [else  (flsum (map interval-measure (Interval-List-elements I)))]))
+  
+  (: interval*-map/mono ((Interval -> Maybe-Interval*) Interval* Any -> Maybe-Interval*))
+  (define (interval*-map/mono f I increasing?)
+    (: Is (Listof Interval))
+    (define Is
+      (let: loop ([Is : (Listof Interval)  (if (Interval? I) (list I) (Interval-List-elements I))])
+        (cond [(empty? Is)  empty]
+              [else  (define I (f (first Is)))
+                     (cond [(empty-set? I)  (loop (rest Is))]
+                           [(Interval? I)   (cons I (loop (rest Is)))]
+                           [else  (append (Interval-List-elements I) (loop (rest Is)))])])))
+    (interval-list (if increasing? Is (reverse Is))))
+  
+  (: interval*-map ((Interval -> Maybe-Interval*) Interval* -> Maybe-Interval*))
+  (define (interval*-map f I)
+    (: Is (Listof Interval*))
+    (define Is
+      (let: loop ([Is : (Listof Interval)  (if (Interval? I) (list I) (Interval-List-elements I))])
+        (cond [(empty? Is)  empty]
+              [else  (define I (f (first Is)))
+                     (cond [(empty-set? I)  (loop (rest Is))]
+                           [else   (cons I (loop (rest Is)))])])))
+    (foldr interval*-union empty-set Is))
+  
+  )  ; module type
 
 (module untyped-defs racket/base
   (provide (all-defined-out))
@@ -161,6 +461,9 @@
       (syntax-case stx ()
         [(_ a b a? b?)  (syntax/loc stx (Interval a b a? b?))]))
     (make-head-form #'make-interval))
+  
+  (define-syntax interval-list? (make-rename-transformer #'Interval-List?))
+  (define-syntax interval-list-elements (make-rename-transformer #'Interval-List-elements))
   
   )  ; module
 

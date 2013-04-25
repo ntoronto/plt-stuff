@@ -25,7 +25,7 @@
          quote null empty
          and or not
          car cdr real? null? pair? boolean?
-         exp log sqr sqrt
+         exp log abs sqr sqrt
          negative? positive? nonnegative? nonpositive?
          acos asin partial-cos partial-sin
          cons + * - / < <= > >=
@@ -44,18 +44,22 @@
 (module typed-defs typed/racket/base
   (provide (all-defined-out))
   
-  (require "../arrow.rkt"
+  (require racket/promise
+           "../arrow.rkt"
            "../set.rkt")
   
   (: run-forward (Expression -> Value))
   (define (run-forward e)
-    (cond [(prim-expression? e)
-           ((prim-expression-meaning-forward (run-prim-expression e)) null)]
-          [else
-           ((rand-expression-meaning-forward (run-rand-expression e))
-            (omega-rect-sample-point omega-rect)
-            (branches-rect-sample-point branches-rect)
-            null)]))
+    (define v
+      (cond [(prim-expression? e)
+             ((prim-expression-meaning-forward (run-prim-expression e)) null)]
+            [else
+             ((rand-expression-meaning-forward (run-rand-expression e))
+              (omega-rect-sample-point omega-rect)
+              (branches-rect-sample-point branches-rect)
+              null)]))
+    (cond [(bottom? v)  (error 'drbayes (force (bottom-message v)))]
+          [else  v]))
   )
 
 (require 'typed-defs)
@@ -101,7 +105,7 @@
     #:description "unary primitive operator"
     #:attributes (combinator)
     #:literals (car cdr real? null? pair? boolean?
-                    exp log sqr sqrt
+                    exp log abs sqr sqrt
                     negative? positive? nonnegative? nonpositive?
                     acos asin partial-cos partial-sin)
     (pattern car #:attr combinator #'fst/exp)
@@ -112,6 +116,7 @@
     (pattern boolean? #:attr combinator #'boolean?/exp)
     (pattern exp #:attr combinator #'exp/exp)
     (pattern log #:attr combinator #'log/exp)
+    (pattern abs #:attr combinator #'abs/exp)
     (pattern sqr #:attr combinator #'sqr/exp)
     (pattern sqrt #:attr combinator #'sqrt/exp)
     (pattern negative? #:attr combinator #'negative?/exp)

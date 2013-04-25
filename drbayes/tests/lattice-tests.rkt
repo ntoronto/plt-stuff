@@ -8,212 +8,12 @@
 
 (require typed/rackunit
          math/distributions
-         "../private/set.rkt")
-
-(define-syntax-rule (implies a b) (or (not a) b))
-
-(: flip (All (A B C) ((A B -> C) -> (B A -> C))))
-(define ((flip f) x y) (f y x))
-
-;; Using this is about 1000x faster than using `check-true' directly, mostly because it doesn't have
-;; to construct the message unless there's a failure
-(define-syntax-rule (check-prop expr msg)
-  (if expr (void) (check-true expr msg)))
-
-;; ===================================================================================================
-;; Bounded lattice property checks
-
-;; Partial order properties
-
-(: check-reflexive (All (T) ((T T -> Boolean) T -> Any)))
-(define (check-reflexive lte? A)
-  (check-prop (lte? A A)
-              (format "~a: reflexivity failed on ~v" lte? A)))
-
-(: check-antisymmetric (All (T) ((T T -> Boolean) T T -> Any)))
-(define (check-antisymmetric lte? A B)
-  (check-prop (implies (and (lte? A B) (lte? B A))
-                       (equal? A B))
-              (format "~a: antisymmetry failed on ~v ~v" lte? A B)))
-
-(: check-transitive (All (T) ((T T -> Boolean) T T T -> Any)))
-(define (check-transitive lte? A B C)
-  (check-prop (implies (and (lte? A B) (lte? B C))
-                       (lte? A C))
-              (format "~a: transitivity failed on ~v ~v ~v" lte? A B C)))
-
-;; Lattice operator properties
-
-(: check-identity (All (T) ((T T -> T) T T -> Any)))
-(define (check-identity op id A)
-  (check-prop (equal? (op id A) A)
-              (format "~a ~a: identity failed on ~v" op id A)))
-
-(: check-commutative (All (T) ((T T -> T) T T -> Any)))
-(define (check-commutative op A B)
-  (check-prop (equal? (op A B) (op B A))
-              (format "~a: commutativity failed on ~v ~v" op A B)))
-
-(: check-absorption (All (T) ((T T -> T) (T T -> T) T T -> Any)))
-(define (check-absorption op1 op2 A B)
-  (check-prop (equal? (op1 A (op2 A B)) A)
-              (format "~a ~a: absorption failed on ~v ~v" op1 op2 A B)))
-
-(: check-associative (All (T) ((T T -> T) T T T -> Any)))
-(define (check-associative op A B C)
-  (check-prop (equal? (op (op A B) C) (op A (op B C)))
-              (format "~a: associativity failed on ~v ~v ~v" op A B C)))
-
-;; Other properties (those that involve both the partial order and the operations)
-
-(: check-nondecreasing (All (T) ((T T -> Boolean) (T T -> T) T T -> Any)))
-(define (check-nondecreasing lte? op A B)
-  (define C (op A B))
-  (check-prop (and (lte? A C) (lte? B C))
-              (format "~a ~a: nondecreasing failed on ~v ~v" lte? op A B)))
-
-(: check-order-equiv (All (T) ((T T -> Boolean) (T T -> T) (T T -> T) T T -> Any)))
-(define (check-order-equiv lte? join meet A B)
-  (check-prop (eq? (or (equal? A (meet A B))
-                       (equal? B (join A B)))
-                   (lte? A B))
-              (format "~a ~a ~a: equivalent order definition failed on ~v ~v" lte? join meet A B)))
-
-(: check-monotone (All (T) ((T T -> Boolean) (T T -> T) T T T T -> Any)))
-(define (check-monotone lte? op A1 A2 B1 B2)
-  (check-prop (implies (and (lte? A1 A2) (lte? B1 B2))
-                       (lte? (op A1 B1) (op A2 B2)))
-              (format "~a ~a: monotonicity failed on ~v ~v ~v ~v" lte? op A1 A2 B1 B2)))
-
-;; All bounded lattice properties
-
-(: check-bounded-lattice (All (T) ((T T -> Boolean) (T T -> T) (T T -> T) T T (-> T) -> Any)))
-(define (check-bounded-lattice lte? join meet bot top random-set)
-  (define A (random-set))
-  (define B (random-set))
-  (define C (random-set))
-  (define D (random-set))
-  
-  ;(printf "A = ~v~n" A)
-  ;(printf "B = ~v~n" B)
-  ;(printf "C = ~v~n" C)
-  ;(printf "D = ~v~n~n" D)
-  
-  ;; Partial order properties
-  
-  (check-reflexive lte? A)
-  (check-antisymmetric lte? A B)
-  (check-transitive lte? A B C)
-  
-  ;; Lattice operator properties
-  
-  (check-identity join bot A)
-  (check-identity meet top A)
-  (check-commutative join A B)
-  (check-commutative meet A B)
-  (check-associative join A B C)
-  (check-associative meet A B C)
-  (check-absorption join meet A B)
-  (check-absorption meet join A B)
-  
-  ;; Other properties
-  
-  (check-nondecreasing lte? join A B)
-  (check-nondecreasing (flip lte?) meet A B)
-  (check-order-equiv lte? join meet A B)
-  (check-monotone lte? join A B C D)
-  (check-monotone lte? meet A B C D))
-
-;; ===================================================================================================
-;; Checks for lattices defined by membership
-
-(: check-member (All (T X) ((T X -> Boolean) T X -> Any)))
-(define (check-member member? A x)
-  (check-prop (member? A x)
-              (format "~a: membership failed on ~v ~v" member? A x)))
-
-(: check-subseteq (All (T X) ((T X -> Boolean) (T T -> Boolean) T X T X -> Any)))
-(define (check-subseteq member? subseteq? A x B y)
-  (when (subseteq? A B)
-    (check-prop (implies (member? A x) (member? B x))
-                (format "~a ~a: subseteq membership failed on ~v ~v ~v" member? subseteq? A B x))
-    (check-prop (implies (not (member? B x)) (not (member? A x)))
-                (format "~a ~a: subseteq non-membership failed on ~v ~v ~v" member? subseteq? A B x))
-    (check-prop (implies (member? A y) (member? B y))
-                (format "~a ~a: subseteq membership failed on ~v ~v ~v" member? subseteq? A B y))
-    (check-prop (implies (not (member? B y)) (not (member? A y)))
-                (format "~a ~a: subseteq non-membership failed on ~v ~v ~v" member? subseteq? A B y))
-    ))
-
-(: check-join (All (T X) ((T X -> Boolean) (T T -> T) T X T X -> Any)))
-(define (check-join member? join A x B y)
-  (define C (join A B))
-  (check-prop (implies (or (member? A x) (member? B x)) (member? C x))
-              (format "~a ~a: join membership failed on ~v ~v ~v" member? join A B x))
-  (check-prop (implies (or (member? A y) (member? B y)) (member? C y))
-              (format "~a ~a: join membership failed on ~v ~v ~v" member? join A B y)))
-
-(: check-meet (All (T X) ((T X -> Boolean) (T T -> T) T X T X -> Any)))
-(define (check-meet member? meet A x B y)
-  (define C (meet A B))
-  (check-prop (implies (and (member? A x) (member? B x)) (member? C x))
-              (format "~a ~a: meet membership failed on ~v ~v ~v ~v" member? meet A B x))
-  (check-prop (implies (and (member? A y) (member? B y)) (member? C y))
-              (format "~a ~a: meet membership failed on ~v ~v ~v ~v" member? meet A B y)))
-
-;; All membership lattice properties
-
-(: check-membership-lattice (All (T X) ((T -> Boolean)
-                                        (T X -> Boolean)
-                                        (T T -> Boolean)
-                                        (T T -> T)
-                                        (T T -> T)
-                                        (-> T)
-                                        (T -> X) -> Any)))
-(define (check-membership-lattice empty? member? subseteq? join meet random-set random-member)
-  (define A (random-set))
-  (define B (random-set))
-  
-  ;(printf "A = ~v~n" A)
-  ;(printf "B = ~v~n" B)
-
-   (when (and (not (empty? A)) (not (empty? B)))
-     (define x (random-member A))
-     (define y (random-member B))
-     
-     ;(printf "x = ~v~n" x)
-     ;(printf "y = ~v~n" y)
-     
-     (check-member member? A x)
-     (check-member member? B y)
-     
-     (check-subseteq member? subseteq? A x B y)
-     
-     (check-join member? join A x B y)
-     (check-meet member? meet A x B y)))
-
-;; ===================================================================================================
-;; Random intervals
-
-;; Using a discrete distribution for interval endpoints makes it more likely that two endpoints from
-;; different intervals will be the same but one open and the other closed
-(define real-endpoint-dist (discrete-dist '(-inf.0 -2.0 -1.0 -0.0 0.0 1.0 2.0 +inf.0)))
-
-(: random-interval ((Discrete-Dist Flonum) -> Interval))
-(define (random-interval dist)
-  (define a (sample dist))
-  (define b (sample dist))
-  (define a? ((random) . < . 0.5))
-  (define b? ((random) . < . 0.5))
-  (define I (interval (min a b) (max a b) a? b?))
-  (if (empty-set? I) (random-interval dist) I))
+         "../private/set.rkt"
+         "rackunit-utils.rkt"
+         "random-interval.rkt")
 
 ;; ===================================================================================================
 ;; Random Set generation
-
-(: random-tagged-interval (-> Interval))
-(define (random-tagged-interval)
-  (random-interval real-endpoint-dist))
 
 (: random-pair-rect (-> Pair-Rect))
 (define (random-pair-rect)
@@ -233,7 +33,7 @@
 (: random-rect (-> Rect))
 (define (random-rect)
   (define r (random))
-  (cond [(r . < . #i1/4)  (random-tagged-interval)]
+  (cond [(r . < . #i1/4)  (random-interval*)]
         [(r . < . #i2/4)  null-set]
         [(r . < . #i3/4)  (random-pair-rect)]
         [else             (random-boolean-rect)]))
@@ -299,20 +99,10 @@
 ;; ===================================================================================================
 ;; Random Value generation
 
-(: random-element (All (A) ((Listof A) -> A)))
-(define (random-element xs)
-  (list-ref xs (random (length xs))))
-
-(define random-reals '(-3.0 -2.0 -1.5 -1.0 -0.5 -0.0 0.0 0.5 1.0 1.5 2.0 3.0))
-
-(: random-real (Interval -> Flonum))
-(define (random-real I)
-  (random-element (filter (λ: ([x : Flonum]) (interval-member? I x)) random-reals)))
-
 (: random-rect-member (Rect -> Value))
 (define (random-rect-member A)
-  (cond [(interval? A)  (random-real A)]
-        [(null-rect? A)   null]
+  (cond [(interval*? A)  (random-real A)]
+        [(null-rect? A)  null]
         [(pair-rect? A)
          (match-define (pair-rect A1 A2) A)
          (cons (random-set-member A1) (random-set-member A2))]
@@ -386,11 +176,11 @@
 ;; ===================================================================================================
 ;; Random Omega-Rect generation
 
-(: omega-rect-node-subseteq? ((Omega-Node Interval) (Omega-Node Interval) -> Boolean))
+(: omega-rect-node-subseteq? ((Omega-Node Interval*) (Omega-Node Interval*) -> Boolean))
 (define (omega-rect-node-subseteq? A B)
   (match-define (Omega-Node I1 A1 A2) A)
   (match-define (Omega-Node I2 B1 B2) B)
-  (and (interval-subseteq? I1 I2)
+  (and (interval*-subseteq? I1 I2)
        (omega-rect-subseteq? A1 B1)
        (omega-rect-subseteq? A2 B2)))
 

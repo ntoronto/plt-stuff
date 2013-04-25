@@ -2,13 +2,22 @@
 
 (provide (all-defined-out))
 
-(require racket/match
+(require (for-syntax racket/base)
+         racket/match
          "interval.rkt"
          "boolean-rect.rkt"
          "union.rkt")
 
-(define-type Tagged-Value (Tagged Set-Tag Value))
+(struct: Bottom ([message : (Promise String)]) #:transparent)
+
+(define-syntax bottom (make-rename-transformer #'Bottom))
+(define-syntax bottom? (make-rename-transformer #'Bottom?))
+(define-syntax bottom-message (make-rename-transformer #'Bottom-message))
+
 (define-type Value (Rec Value (U Flonum Boolean Null (Pair Value Value) (Tagged Set-Tag Value))))
+(define-type Maybe-Value (U Value Bottom))
+
+(define-type Tagged-Value (Tagged Set-Tag Value))
 
 ;; ===================================================================================================
 

@@ -29,11 +29,11 @@
         [(top-union? A)  (if (set-nonfull-top? B) (top-top-intersect A B) (bot-top-intersect B A))]
         [(bot-union? B)  (if (top-entry? A) (bot-top-intersect B A) (bot-bot-intersect A B))]
         [(top-union? B)  (if (top-entry? A) (top-top-intersect A B) (bot-top-intersect A B))]
-        [(interval? A)
-         (cond [(interval? B)  (interval-intersect A B)]
-               [(top-rect? B)  (bot-top-rect-intersect A B)]
-               [(top-set? B)   A]
-               [else           empty-set])]
+        [(interval*? A)
+         (cond [(interval*? B)  (interval*-intersect A B)]
+               [(top-rect? B)   (bot-top-rect-intersect A B)]
+               [(top-set? B)    A]
+               [else            empty-set])]
         [(null-rect? A)
          (cond [(null-rect? B)  A]
                [(top-rect? B)   (bot-top-rect-intersect A B)]
@@ -117,7 +117,7 @@
 (define (rect-intersect A B)
   (cond [(empty-set? A)  A]
         [(empty-set? B)  B]
-        [(and (interval? A) (interval? B))  (interval-intersect A B)]
+        [(and (interval*? A) (interval*? B))  (interval*-intersect A B)]
         [(and (null-rect? A) (null-rect? B))  A]
         [(and (pair-rect? A) (pair-rect? B))  (pair-rect-intersect A B)]
         [(and (boolean-rect? A) (boolean-rect? B))  (boolean-rect-intersect A B)]
