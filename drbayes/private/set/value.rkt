@@ -4,8 +4,11 @@
 
 (require (for-syntax racket/base)
          racket/match
-         "interval.rkt"
-         "boolean-rect.rkt"
+         "real-set.rkt"
+         "bool-set.rkt"
+         "null-set.rkt"
+         "pair-set.rkt"
+         "extremal-set.rkt"
          "union.rkt")
 
 (struct: Bottom ([message : (Promise String)]) #:transparent)
@@ -14,22 +17,20 @@
 (define-syntax bottom? (make-rename-transformer #'Bottom?))
 (define-syntax bottom-message (make-rename-transformer #'Bottom-message))
 
-(define-type Value (Rec Value (U Flonum Boolean Null (Pair Value Value) (Tagged Set-Tag Value))))
+(define-type Value (Rec Value (U Flonum Boolean Null (Pair Value Value) tagged-value)))
 (define-type Maybe-Value (U Value Bottom))
 
-(define-type Tagged-Value (Tagged Set-Tag Value))
+(struct: tagged-value ([tag : Symbol] [value : Value]) #:transparent)
 
 ;; ===================================================================================================
 
-(: value-tag (case-> ((U Flonum Null Pair Boolean) -> Rect-Tag)
-                     (Tagged-Value -> Set-Tag)
-                     (Value -> (U Rect-Tag Set-Tag))))
+(: value-tag (Value -> Tag))
 (define (value-tag v)
-  (cond [(tagged? v)  (get-tag v)]
-        [(flonum? v)  real-tag]
-        [(null? v)    null-tag]
-        [(pair? v)    pair-tag]
-        [(boolean? v)  boolean-tag]))
+  (cond [(flonum? v)   real-tag]
+        [(boolean? v)  bool-tag]
+        [(null? v)     null-tag]
+        [(pair? v)     pair-tag]
+        [else          (tagged-value-tag v)]))
 
 ;; ===================================================================================================
 ;; Ref
@@ -50,30 +51,30 @@
 ;; ===================================================================================================
 ;; Singleton
 
-(: value->singleton (Value -> Nonextremal-Set))
+(: value->singleton (Value -> Bot-Entry))
 (define (value->singleton v)
   (cond [(flonum? v)   (flonum->singleton v)]
-        [(null? v)     null-set]
-        [(pair? v)     (pair->singleton v)]
         [(boolean? v)  (boolean->singleton v)]
+        [(null? v)     nulls]
+        [(pair? v)     (pair->singleton v)]
         [else          (tagged-value->singleton v)]))
 
-(: pair->singleton ((Pair Value Value) -> Rect))
-(define (pair->singleton x1x2)
-  (match-define (cons x1 x2) x1x2)
-  (pair-rect (value->singleton x1)
-             (value->singleton x2)))
-
-(: flonum->singleton (Flonum -> Rect))
+(: flonum->singleton (Flonum -> Bot-Basic))
 (define (flonum->singleton x)
-  (cond [(< -inf.0 x +inf.0)  (Interval x x #t #t)]
+  (cond [(< -inf.0 x +inf.0)  (Nonextremal-Interval x x #t #t)]
         [else  (raise-argument-error 'flonum->singleton "rational Flonum" x)]))
 
-(: boolean->singleton (Boolean -> Rect))
+(: boolean->singleton (Boolean -> Bot-Basic))
 (define (boolean->singleton b)
   (if b trues falses))
 
-(: tagged-value->singleton (Tagged-Value -> Bot-Set))
+(: pair->singleton ((Pair Value Value) -> Bot-Basic))
+(define (pair->singleton x)
+  ((inst Nonextremal-Pair-Rect Nonextremal-Set Universe)
+   (value->singleton (car x))
+   (value->singleton (cdr x))))
+
+(: tagged-value->singleton (tagged-value -> Bot-Tagged))
 (define (tagged-value->singleton v)
-  (match-define (Tagged tag val) v)
-  (bot-set tag (value->singleton val)))
+  (match-define (tagged-value tag val) v)
+  (bot-tagged tag (value->singleton val)))

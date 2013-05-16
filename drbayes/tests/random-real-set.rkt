@@ -1,14 +1,10 @@
 #lang typed/racket
 
 (require math/distributions
-         "../private/set/interval.rkt"
-         "../private/set/extremal-set.rkt")
+         "../private/set/real-set.rkt"
+         "random-utils.rkt")
 
 (provide (all-defined-out))
-
-(: random-element (All (A) ((Listof A) -> A)))
-(define (random-element xs)
-  (list-ref xs (random (length xs))))
 
 ;; Using a discrete distribution for interval endpoints makes it more likely that two endpoints from
 ;; different intervals will be the same but one open and the other closed
@@ -23,16 +19,16 @@
   (define b (sample dist))
   (define a? ((random) . < . 0.5))
   (define b? ((random) . < . 0.5))
-  (define I (interval (min a b) (max a b) a? b?))
-  (if (empty-set? I) (random-interval dist) I))
+  (interval (min a b) (max a b) a? b?))
 
-(: random-real (Maybe-Interval* -> Flonum))
+(: random-real (Real-Set -> Flonum))
 (define (random-real I)
-  (cond [(empty-set? I)  +nan.0]
-        [else  (random-element (filter (λ: ([x : Flonum]) (interval*-member? I x)) random-reals))]))
+  (cond [(empty-real-set? I)  +nan.0]
+        [else  (random-element (filter (λ: ([x : Flonum]) (real-set-member? I x)) random-reals))]))
 
-(: random-interval* (-> Interval*))
-(define (random-interval*)
-  (define I (random-interval real-endpoint-dist))
+(: random-real-set (case-> (-> Real-Set)
+                           ((Discrete-Dist Flonum) -> Real-Set)))
+(define (random-real-set [dist real-endpoint-dist])
+  (define I (random-interval dist))
   (cond [((random) . < . 0.5)  I]
-        [else  (interval*-union I (random-interval*))]))
+        [else  (real-set-union I (random-real-set dist))]))

@@ -12,6 +12,7 @@
 
 (define-type (Maybe-Promise T) (U T (Promise T)))
 
+(define-type (Listof+1 A) (Pair A (Listof A)))
 (define-type (Listof+2 A) (Pair A (Pair A (Listof A))))
 
 (: map/+2 (All (A B) ((A -> B) (Listof+2 A) -> (Listof+2 B))))

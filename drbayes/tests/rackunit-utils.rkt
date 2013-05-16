@@ -24,11 +24,11 @@
   (check-prop (lte? A A)
               (format "~a: reflexivity failed on ~v" lte? A)))
 
-(: check-antisymmetric (All (T) ((T T -> Boolean) T T -> Any)))
-(define (check-antisymmetric lte? A B)
+(: check-antisymmetric (All (T) ((T T -> Boolean) (T T -> Boolean) T T -> Any)))
+(define (check-antisymmetric equal? lte? A B)
   (check-prop (implies (and (lte? A B) (lte? B A))
                        (equal? A B))
-              (format "~a: antisymmetry failed on ~v ~v" lte? A B)))
+              (format "~a ~a: antisymmetry failed on ~v ~v" equal? lte? A B)))
 
 (: check-transitive (All (T) ((T T -> Boolean) T T T -> Any)))
 (define (check-transitive lte? A B C)
@@ -38,25 +38,25 @@
 
 ;; Lattice operator properties
 
-(: check-identity (All (T) ((T T -> T) T T -> Any)))
-(define (check-identity op id A)
+(: check-identity (All (T) ((T T -> Boolean) (T T -> T) T T -> Any)))
+(define (check-identity equal? op id A)
   (check-prop (equal? (op id A) A)
-              (format "~a ~a: identity failed on ~v" op id A)))
+              (format "~a ~a ~a: identity failed on ~v" equal? op id A)))
 
-(: check-commutative (All (T) ((T T -> T) T T -> Any)))
-(define (check-commutative op A B)
+(: check-commutative (All (T) ((T T -> Boolean) (T T -> T) T T -> Any)))
+(define (check-commutative equal? op A B)
   (check-prop (equal? (op A B) (op B A))
-              (format "~a: commutativity failed on ~v ~v" op A B)))
+              (format "~a ~a: commutativity failed on ~v ~v" equal? op A B)))
 
-(: check-absorption (All (T) ((T T -> T) (T T -> T) T T -> Any)))
-(define (check-absorption op1 op2 A B)
+(: check-absorption (All (T) ((T T -> Boolean) (T T -> T) (T T -> T) T T -> Any)))
+(define (check-absorption equal? op1 op2 A B)
   (check-prop (equal? (op1 A (op2 A B)) A)
-              (format "~a ~a: absorption failed on ~v ~v" op1 op2 A B)))
+              (format "~a ~a ~a: absorption failed on ~v ~v" equal? op1 op2 A B)))
 
-(: check-associative (All (T) ((T T -> T) T T T -> Any)))
-(define (check-associative op A B C)
+(: check-associative (All (T) ((T T -> Boolean) (T T -> T) T T T -> Any)))
+(define (check-associative equal? op A B C)
   (check-prop (equal? (op (op A B) C) (op A (op B C)))
-              (format "~a: associativity failed on ~v ~v ~v" op A B C)))
+              (format "~a ~a: associativity failed on ~v ~v ~v" equal? op A B C)))
 
 ;; Other properties (those that involve both the partial order and the operations)
 
@@ -66,12 +66,13 @@
   (check-prop (and (lte? A C) (lte? B C))
               (format "~a ~a: nondecreasing failed on ~v ~v" lte? op A B)))
 
-(: check-order-equiv (All (T) ((T T -> Boolean) (T T -> T) (T T -> T) T T -> Any)))
-(define (check-order-equiv lte? join meet A B)
+(: check-order-equiv (All (T) ((T T -> Boolean) (T T -> Boolean) (T T -> T) (T T -> T) T T -> Any)))
+(define (check-order-equiv equal? lte? join meet A B)
   (check-prop (eq? (or (equal? A (meet A B))
                        (equal? B (join A B)))
                    (lte? A B))
-              (format "~a ~a ~a: equivalent order definition failed on ~v ~v" lte? join meet A B)))
+              (format "~a ~a ~a ~a: equivalent order definition failed on ~v ~v"
+                      equal? lte? join meet A B)))
 
 (: check-monotone (All (T) ((T T -> Boolean) (T T -> T) T T T T -> Any)))
 (define (check-monotone lte? op A1 A2 B1 B2)
@@ -81,8 +82,9 @@
 
 ;; All bounded lattice properties
 
-(: check-bounded-lattice (All (T) ((T T -> Boolean) (T T -> T) (T T -> T) T T (-> T) -> Any)))
-(define (check-bounded-lattice lte? join meet bot top random-set)
+(: check-bounded-lattice
+   (All (T) ((T T -> Boolean) (T T -> Boolean) (T T -> T) (T T -> T) T T (-> T) -> Any)))
+(define (check-bounded-lattice equal? lte? join meet bot top random-set)
   (define A (random-set))
   (define B (random-set))
   (define C (random-set))
@@ -96,25 +98,25 @@
   ;; Partial order properties
   
   (check-reflexive lte? A)
-  (check-antisymmetric lte? A B)
+  (check-antisymmetric equal? lte? A B)
   (check-transitive lte? A B C)
   
   ;; Lattice operator properties
   
-  (check-identity join bot A)
-  (check-identity meet top A)
-  (check-commutative join A B)
-  (check-commutative meet A B)
-  (check-associative join A B C)
-  (check-associative meet A B C)
-  (check-absorption join meet A B)
-  (check-absorption meet join A B)
+  (check-identity equal? join bot A)
+  (check-identity equal? meet top A)
+  (check-commutative equal? join A B)
+  (check-commutative equal? meet A B)
+  (check-associative equal? join A B C)
+  (check-associative equal? meet A B C)
+  (check-absorption equal? join meet A B)
+  (check-absorption equal? meet join A B)
   
   ;; Other properties
   
   (check-nondecreasing lte? join A B)
   (check-nondecreasing (flip lte?) meet A B)
-  (check-order-equiv lte? join meet A B)
+  (check-order-equiv equal? lte? join meet A B)
   (check-monotone lte? join A B C D)
   (check-monotone lte? meet A B C D))
 
@@ -183,18 +185,19 @@
 ;; ===================================================================================================
 ;; Set algebra checks
 
-(: check-complement-trivial (All (T) (T T (T T -> T) (T T -> T) (T T -> T) T -> Any)))
-(define (check-complement-trivial empty-set universe subtract union intersect A)
+(: check-complement-trivial
+   (All (T) ((T T -> Boolean) T T (T T -> T) (T T -> T) (T T -> T) T -> Any)))
+(define (check-complement-trivial equal? empty-set universe subtract union intersect A)
   (define Ac (subtract universe A))
   (check-prop (equal? (subtract universe Ac) A)
-              (format "~a ~a ~a ~a ~a: double complement failed on ~v"
-                      empty-set universe subtract union intersect A))
+              (format "~a ~a ~a ~a ~a ~a: double complement failed on ~v"
+                      equal? empty-set universe subtract union intersect A))
   (check-prop (equal? (union A Ac) universe)
-              (format "~a ~a ~a ~a ~a: complement union failed on ~v"
-                      empty-set universe subtract union intersect A))
+              (format "~a ~a ~a ~a ~a ~a: complement union failed on ~v"
+                      equal? empty-set universe subtract union intersect A))
   (check-prop (equal? (intersect A Ac) empty-set)
-              (format "~a ~a ~a ~a ~a: complement intersect failed on ~v"
-                      empty-set universe subtract union intersect A)))
+              (format "~a ~a ~a ~a ~a ~a: complement intersect failed on ~v"
+                      equal? empty-set universe subtract union intersect A)))
 
 (: check-complement-monotone (All (T) ((T T -> Boolean) T (T T -> T) T T -> Any)))
 (define (check-complement-monotone subseteq? universe subtract A B)
@@ -205,32 +208,35 @@
   (check-prop (implies (subseteq? B A) (subseteq? Ac Bc))
               (format "~a ~a ~a: complement non-monotone on ~v ~v" subseteq? universe subtract B A)))
 
-(: check-subtract-trivial (All (T) (T (T T -> T) T -> Any)))
-(define (check-subtract-trivial empty-set subtract A)
+(: check-subtract-trivial (All (T) ((T T -> Boolean) T (T T -> T) T -> Any)))
+(define (check-subtract-trivial equal? empty-set subtract A)
   (check-prop (equal? (subtract A A) empty-set)
-              (format "~a ~a: subtracting self failed on ~v" empty-set subtract A))
+              (format "~a ~a ~a: subtracting self failed on ~v"
+                      equal? empty-set subtract A))
   (check-prop (equal? (subtract empty-set A) empty-set)
-              (format "~a ~a: subtracting from empty-set failed on ~v" empty-set subtract A))
+              (format "~a ~a ~a: subtracting from empty-set failed on ~v"
+                      equal? empty-set subtract A))
   (check-prop (equal? (subtract A empty-set) A)
-              (format "~a ~a: subtracting empty-set failed on ~v" empty-set subtract A)))
+              (format "~a ~a ~a: subtracting empty-set failed on ~v"
+                      equal? empty-set subtract A)))
 
-(: check-subtract-distrib (All (T) ((T T -> T) (T T -> T) (T T -> T) T T T -> Any)))
-(define (check-subtract-distrib subtract union intersect A B C)
+(: check-subtract-distrib (All (T) ((T T -> Boolean) (T T -> T) (T T -> T) (T T -> T) T T T -> Any)))
+(define (check-subtract-distrib equal? subtract union intersect A B C)
   (define C\B (subtract C B))
   (define C\A (subtract C A))
   (define B\A (subtract B A))
   (check-prop (equal? (subtract C (intersect A B)) (union C\A C\B))
-              (format "~a ~a ~a: \\-∩ failed on ~v ~v ~v" subtract union intersect A B C))
+              (format "~a ~a ~a ~a: \\-∩ failed on ~v ~v ~v" equal? subtract union intersect A B C))
   (check-prop (equal? (subtract C (union A B)) (intersect C\A C\B))
-              (format "~a ~a ~a: \\-∪ failed on ~v ~v ~v" subtract union intersect A B C))
+              (format "~a ~a ~a ~a: \\-∪ failed on ~v ~v ~v" equal? subtract union intersect A B C))
   (check-prop (equal? (subtract C B\A) (union (intersect A C) C\B))
-              (format "~a ~a ~a: \\-\\ failed on ~v ~v ~v" subtract union intersect A B C))
+              (format "~a ~a ~a ~a: \\-\\ failed on ~v ~v ~v" equal? subtract union intersect A B C))
   (check-prop (equal? (intersect B\A C) (subtract (intersect B C) A))
-              (format "~a ~a ~a: \\-∩ failed on ~v ~v ~v" subtract union intersect A B C))
+              (format "~a ~a ~a ~a: \\-∩ failed on ~v ~v ~v" equal? subtract union intersect A B C))
   (check-prop (equal? (intersect B\A C) (intersect B C\A))
-              (format "~a ~a ~a: \\-∩ failed on ~v ~v ~v" subtract union intersect A B C))
+              (format "~a ~a ~a ~a: \\-∩ failed on ~v ~v ~v" equal? subtract union intersect A B C))
   (check-prop (equal? (union B\A C) (subtract (union B C) (subtract A C)))
-              (format "~a ~a ~a: \\-∪ failed on ~v ~v ~v" subtract union intersect A B C)))
+              (format "~a ~a ~a ~a: \\-∪ failed on ~v ~v ~v" equal? subtract union intersect A B C)))
 
 (: check-subtract (All (T X) ((T X -> Boolean) (T T -> T) T X T X -> Any)))
 (define (check-subtract member? subtract A x B y)
@@ -261,7 +267,8 @@
     (check-prop (implies (or (not (member? A x)) (not (member? B x))) (not (member? C x)))
                 (format "~a ~a: intersect membership failed on ~v ~v ~v" member? intersect A B x))))
 
-(: check-set-algebra (All (T X) ((T X -> Boolean)
+(: check-set-algebra (All (T X) ((T T -> Boolean)
+                                 (T X -> Boolean)
                                  (T T -> Boolean)
                                  T
                                  T
@@ -270,7 +277,7 @@
                                  (T T -> T)
                                  (-> T)
                                  (T -> X) -> Any)))
-(define (check-set-algebra member? subseteq? empty-set universe subtract union intersect
+(define (check-set-algebra equal? member? subseteq? empty-set universe subtract union intersect
                            random-set random-member)
   (define A (random-set))
   (define B (random-set))
@@ -279,10 +286,10 @@
   ;(printf "A = ~v~n" A)
   ;(printf "B = ~v~n" B)
   
-  (check-subtract-trivial empty-set subtract A)
-  (check-subtract-distrib subtract union intersect A B C)
+  (check-subtract-trivial equal? empty-set subtract A)
+  (check-subtract-distrib equal? subtract union intersect A B C)
   
-  (check-complement-trivial empty-set universe subtract union intersect A)
+  (check-complement-trivial equal? empty-set universe subtract union intersect A)
   (check-complement-monotone subseteq? universe subtract A B)
   
   (when (and (not (equal? A empty-set)) (not (equal? B empty-set)))

@@ -4,8 +4,8 @@
          racket/match
          racket/list
          "extremal-set.rkt"
-         "interval.rkt"
-         "boolean-rect.rkt")
+         "real-set.rkt"
+         "bool-set.rkt")
 
 (provide (all-defined-out))
 
@@ -117,6 +117,20 @@
                                      [else  (make-node v fst snd)])])])]))
   loop)
 
+(: omega-tree-subseteq? (All (A) (A (A A -> Boolean) -> ((Omega-Tree A) (Omega-Tree A) -> Boolean))))
+(define (omega-tree-subseteq? default subseteq?)
+  (: node-subseteq? ((Omega-Tree A) (Omega-Tree A) -> Boolean))
+  (define (node-subseteq? t1 t2)
+    (cond [(eq? t1 t2)  #t]
+          [(omega-leaf? t2)  #t]
+          [(omega-leaf? t1)  #f]
+          [else  (match-define (Omega-Node v1 fst1 snd1) t1)
+                 (match-define (Omega-Node v2 fst2 snd2) t2)
+                 (and (node-subseteq? fst1 fst2)
+                      (subseteq? v1 v2)
+                      (node-subseteq? snd1 snd2))]))
+  node-subseteq?)
+
 (: omega-tree-map (All (A B) (A -> ((Omega-Tree A) (A -> B) -> (Listof B)))))
 (define ((omega-tree-map default) t f)
   (: bs (Listof B))
@@ -174,15 +188,15 @@
 ;; ===================================================================================================
 ;; Infinite product space rectangles
 
-(define-type Omega-Rect (Omega-Tree Interval*))
+(define-type Omega-Rect (Omega-Tree Nonextremal-Real-Set))
 (define-type Maybe-Omega-Rect (U Empty-Set Omega-Rect))
 
 (define omega-nonempty?
   (λ: ([Ω : Maybe-Omega-Rect]) (not (empty-set? Ω))))
 
 (define omega-rect-default unit-interval)
-(define omega-rect-ref ((inst omega-tree-ref Interval*) omega-rect-default))
-(define omega-rect-set ((inst omega-tree-set Interval*) omega-rect-default))
+(define omega-rect-ref ((inst omega-tree-ref Nonextremal-Real-Set) omega-rect-default))
+(define omega-rect-set ((inst omega-tree-set Nonextremal-Real-Set) omega-rect-default))
 
 (: omega-rect-fst (Omega-Rect -> Omega-Rect))
 (define omega-rect-fst omega-tree-fst)
@@ -190,33 +204,51 @@
 (: omega-rect-snd (Omega-Rect -> Omega-Rect))
 (define omega-rect-snd omega-tree-snd)
 
-(: omega-rect-value (Omega-Rect -> Interval*))
+(: omega-rect-value (Omega-Rect -> Nonextremal-Real-Set))
 (define omega-rect-value (omega-tree-value omega-rect-default))
 
 (: omega-rect Omega-Rect)
 (define omega-rect omega-leaf)
 
-(: omega-rect-map (All (B) (Omega-Rect (Interval* -> B) -> (Listof B))))
+(: omega-rect-map (All (B) (Omega-Rect (Nonextremal-Real-Set -> B) -> (Listof B))))
 (define (omega-rect-map Ω f)
-  (((inst omega-tree-map Interval* B) omega-rect-default) Ω f))
+  (((inst omega-tree-map Nonextremal-Real-Set B) omega-rect-default) Ω f))
 
-(define just-omega-rect-node ((inst omega-node Interval*) omega-rect-default))
-(define just-omega-rect-join ((inst omega-tree-join Interval*) omega-rect-default interval*-union))
+(define just-omega-rect-node
+  ((inst omega-node Nonextremal-Real-Set) omega-rect-default))
+
+(define just-omega-rect-join
+  ((inst omega-tree-join Nonextremal-Real-Set)
+   omega-rect-default
+   (λ: ([I1 : Nonextremal-Real-Set] [I2 : Nonextremal-Real-Set])
+     (define I (real-set-union I1 I2))
+     (cond [(reals? I)
+            (error 'omega-rect-join "expected nonfull union; given ~e and ~e" I1 I2)]
+           [else  I]))))
+
 (define just-omega-rect-intersect
-  ((inst omega-tree-intersect Interval* Empty-Set) omega-rect-default interval*-intersect empty-set?))
+  ((inst omega-tree-intersect Nonextremal-Real-Set Empty-Set)
+   omega-rect-default
+   (λ: ([I1 : Nonextremal-Real-Set] [I2 : Nonextremal-Real-Set])
+     (define I (real-set-intersect I1 I2))
+     (if (empty-real-set? I) empty-set I))
+   empty-set?))
+
+(define just-omega-rect-subseteq?
+  ((inst omega-tree-subseteq? Nonextremal-Real-Set) omega-rect-default real-set-subseteq?))
 
 (: omega-rect-node
-   (case-> (Interval* Omega-Rect Omega-Rect -> Omega-Rect)
-           (Maybe-Interval* Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
+   (case-> (Nonextremal-Real-Set Omega-Rect Omega-Rect -> Omega-Rect)
+           (Nonfull-Real-Set Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
 (define (omega-rect-node I Ω1 Ω2)
-  (cond [(empty-set? I)   I]
+  (cond [(empty-real-set? I)   empty-set]
         [(empty-set? Ω1)  Ω1]
         [(empty-set? Ω2)  Ω2]
         [else  (just-omega-rect-node I Ω1 Ω2)]))
 
 (: omega-rect-node/last
-   (case-> (Omega-Rect Interval* Omega-Rect Omega-Rect -> Omega-Rect)
-           (Omega-Rect Maybe-Interval* Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
+   (case-> (Omega-Rect Nonextremal-Real-Set Omega-Rect Omega-Rect -> Omega-Rect)
+           (Omega-Rect Nonfull-Real-Set Maybe-Omega-Rect Maybe-Omega-Rect -> Maybe-Omega-Rect)))
 (define (omega-rect-node/last Ω I Ω1 Ω2)
   (cond [(and (equal? I (omega-rect-value Ω))
               (eq? Ω1 (omega-rect-fst Ω))
@@ -249,25 +281,37 @@
         [(empty-set? Ω2)  Ω2]
         [else  (just-omega-rect-intersect Ω1 Ω2)]))
 
+(: omega-rect-subseteq? (Maybe-Omega-Rect Maybe-Omega-Rect -> Boolean))
+(define (omega-rect-subseteq? Ω1 Ω2)
+  (cond [(empty-set? Ω1)  #t]
+        [(empty-set? Ω2)  #f]
+        [else  (just-omega-rect-subseteq? Ω1 Ω2)]))
+
 (define omega-rect->omega-hash
-  ((inst omega-tree->omega-tree Interval* Flonum) omega-rect-default omega-hash-default))
+  ((inst omega-tree->omega-tree Nonextremal-Real-Set Flonum) omega-rect-default omega-hash-default))
 
 (: omega-rect-sample-point (Omega-Rect -> Omega))
 (define (omega-rect-sample-point Ω)
-  (Omega (box (omega-rect->omega-hash Ω interval*-sample-point))))
+  (Omega (box (omega-rect->omega-hash
+               Ω (λ: ([I : Nonextremal-Real-Set])
+                   (cond [(reals? I)
+                          (raise-argument-error 'omega-rect-sample-point "Nonextremal-Real-Set" I)]
+                         [else
+                          (real-set-sample-point I)]))))))
 
 (: omega-rect-measure (Omega-Rect -> Flonum))
 (define (omega-rect-measure Ω)
-  (real->double-flonum (apply * (omega-rect-map Ω interval*-measure))))
+  (real->double-flonum (apply * (omega-rect-map Ω real-set-measure))))
 
 ;; ===================================================================================================
 ;; Conditional bisection rectangles
 
-(define-type Branches-Rect (Omega-Tree Boolean-Rect))
+(define-type Branches-Rect (Omega-Tree Nonempty-Bool-Set))
 (define-type Maybe-Branches-Rect (U Empty-Set Branches-Rect))
 
-(define branches-rect-ref ((inst omega-tree-ref Boolean-Rect) booleans))
-(define branches-rect-set ((inst omega-tree-set Boolean-Rect) booleans))
+(define branches-rect-default bools)
+(define branches-rect-ref ((inst omega-tree-ref Nonempty-Bool-Set) branches-rect-default))
+(define branches-rect-set ((inst omega-tree-set Nonempty-Bool-Set) branches-rect-default))
 
 (: branches-rect-fst (Branches-Rect -> Branches-Rect))
 (define branches-rect-fst omega-tree-fst)
@@ -275,21 +319,33 @@
 (: branches-rect-snd (Branches-Rect -> Branches-Rect))
 (define branches-rect-snd omega-tree-snd)
 
-(: branches-rect-value (Branches-Rect -> Boolean-Rect))
-(define branches-rect-value (omega-tree-value booleans))
+(: branches-rect-value (Branches-Rect -> Nonempty-Bool-Set))
+(define branches-rect-value (omega-tree-value branches-rect-default))
 
 (: branches-rect Branches-Rect)
 (define branches-rect omega-leaf)
 
-(define just-branches-rect-node ((inst omega-node Boolean-Rect) booleans))
-(define just-branches-rect-join ((inst omega-tree-join Boolean-Rect) booleans boolean-rect-join))
+(define just-branches-rect-node
+  ((inst omega-node Nonempty-Bool-Set) branches-rect-default))
+
+(define just-branches-rect-join
+  ((inst omega-tree-join Nonempty-Bool-Set) branches-rect-default bool-set-union))
+
 (define just-branches-rect-intersect
-  ((inst omega-tree-intersect Boolean-Rect Empty-Set) booleans boolean-rect-intersect empty-set?))
+  ((inst omega-tree-intersect Nonempty-Bool-Set Empty-Set)
+   branches-rect-default
+   (λ: ([B1 : Nonempty-Bool-Set] [B2 : Nonempty-Bool-Set])
+     (define B (bool-set-intersect B1 B2))
+     (if (empty-bool-set? B) empty-set B))
+   empty-set?))
+
+(define just-branches-rect-subseteq?
+  ((inst omega-tree-subseteq? Nonempty-Bool-Set) branches-rect-default bool-set-subseteq?))
 
 (: branches-rect-node
    (case->
-    (Boolean-Rect Branches-Rect Branches-Rect -> Branches-Rect)
-    (Boolean-Rect Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect)))
+    (Nonempty-Bool-Set Branches-Rect Branches-Rect -> Branches-Rect)
+    (Nonempty-Bool-Set Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect)))
 (define (branches-rect-node b Z1 Z2)
   (cond [(empty-set? Z1)  Z1]
         [(empty-set? Z2)  Z2]
@@ -297,8 +353,8 @@
 
 (: branches-rect-node/last
    (case->
-    (Branches-Rect Boolean-Rect Branches-Rect Branches-Rect -> Branches-Rect)
-    (Branches-Rect Boolean-Rect Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect)))
+    (Branches-Rect Nonempty-Bool-Set Branches-Rect Branches-Rect -> Branches-Rect)
+    (Branches-Rect Nonempty-Bool-Set Maybe-Branches-Rect Maybe-Branches-Rect -> Maybe-Branches-Rect)))
 (define (branches-rect-node/last Z b Z1 Z2)
   (cond [(and (eq? b (branches-rect-value Z))
               (eq? Z1 (branches-rect-fst Z))
@@ -318,6 +374,12 @@
         [(empty-set? Z2)  Z2]
         [else  (just-branches-rect-intersect Z1 Z2)]))
 
+(: branches-rect-subseteq? (Maybe-Branches-Rect Maybe-Branches-Rect -> Boolean))
+(define (branches-rect-subseteq? Z1 Z2)
+  (cond [(empty-set? Z1)  #t]
+        [(empty-set? Z2)  #f]
+        [else  (just-branches-rect-subseteq? Z1 Z2)]))
+
 ;; ===================================================================================================
 
 (define-type Branches Branches-Rect)
@@ -325,9 +387,8 @@
 (: branches-ref (Branches Omega-Index -> (U #t #f 'either)))
 (define (branches-ref z r)
   (define b (branches-rect-ref z r))
-  (cond [(eq? b booleans)  'either]
-        [(eq? b trues)     #t]
-        [else              #f]))
+  (cond [(eq? b bools)  'either]
+        [else  (eq? b trues)]))
 
 (: branches-rect-sample-point (Branches-Rect -> Branches))
 (define (branches-rect-sample-point Z) Z)

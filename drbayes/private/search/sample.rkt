@@ -53,34 +53,36 @@
        (match-define (interval-index i split) (first idxs))
        (cons (ann-interval-index i split m l) (loop (rest idxs)))])))
 
-(: interval-split (Interval Flonum -> (Values (Listof Interval) (Listof Flonum))))
+(: interval-split (Nonextremal-Interval Flonum -> (Values (Listof Nonextremal-Interval)
+                                                          (Listof Flonum))))
 (define (interval-split I p)
-  (match-define (interval a b a? b?) I)
+  (define-values (a b a? b?) (interval-fields I))
   (define c (fl* p (fl+ a b)))
   (define m1 (fl- c a))
   (define m2 (fl- b c))
   (if (and (positive? m1) (positive? m2))
-      (values (list (Interval a c a? #t) (Interval c b #f b?)) (list m1 m2))
-      (values (list I) (list 1.0))))
+      (values (list (Nonextremal-Interval a c a? #t)
+                    (Nonextremal-Interval c b #f b?))
+              (list m1 m2))
+      (values (list I)
+              (list 1.0))))
 
 ;; ===================================================================================================
 
 (define-type Refiner (Omega-Rect Branches-Rect -> (Values Maybe-Omega-Rect Maybe-Branches-Rect)))
 
 (: preimage-refiner (Rand-Computation Nonempty-Set -> Refiner))
-(define ((preimage-refiner e-comp K) Ω Z)
-  (define e-meaning (e-comp Ω Z null-rect))
-  (cond
-    [(empty-meaning? e-meaning)  (values empty-set empty-set)]
-    [else
-     (match-define (rand-computation-meaning Ze Ke e-pre) e-meaning)
-     (let*-values ([(Z)  (branches-rect-intersect Z Ze)]
-                   [(K)  (set-intersect K Ke)]
-                   [(Ω Z Γ)  (run-rand-preimage e-pre Z K)])
-       (cond [(not (or (empty-set? Γ) (null-rect? Γ)))
-              (raise-result-error 'preimage-refiner "(U Empty-Set Null-Rect)" Γ)]
-             [(or (empty-set? Ω) (empty-set? Z))  (values empty-set empty-set)]
-             [else  (values Ω Z)]))]))
+(define ((preimage-refiner e-comp B) Ω Z)
+  (define e-pre (e-comp (nonempty-domain-set Ω Z nulls)))
+  (match-define (rand-preimage (domain-set Ωin Zin Ain) (domain-set Ωout Zout Aout) f) e-pre)
+  (let ([Ω  (omega-rect-intersect Ωin Ωout)]
+        [Z  (branches-rect-intersect Zin Zout)])
+    (define Γ (domain-set Ω Z Ain))
+    (define K (domain-set Ω Z (set-intersect Aout B)))
+    (match-let ([(domain-set Ω Z N)  (run-rand-preimage-fun f Γ K)])
+      (cond [(not (or (empty-set? N) (nulls? N)))
+             (raise-result-error 'preimage-refiner "(U Empty-Set Null-Set)" N)]
+            [else  (values Ω Z)]))))
 
 (: refinement-sample* (Omega-Rect Branches-Rect Indexes Refiner Natural
                                   -> (Listof omega-rect-sample)))
@@ -150,7 +152,7 @@
 (define (build-search-tree/if Ω Z idx idxs refine)
   (match-define (ann-if-indexes i t-idxs f-idxs) idx)
   
-  (: make-node (Boolean-Rect (Promise Ann-Indexes) -> Omega-Search-Tree))
+  (: make-node (Nonempty-Bool-Set (Promise Ann-Indexes) -> Omega-Search-Tree))
   (define (make-node b b-idxs)
     (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z i b))])
       (cond [(or (empty-set? Ω) (empty-set? Z))  (search-leaf empty-set 0.0)]
@@ -166,8 +168,8 @@
                       'nondeterministic
                       'branches)]))
 
-(: proportional-split (Omega-Rect Branches-Rect Refiner Omega-Index Interval
-                               -> (Values (Listof Interval) (Listof Flonum))))
+(: proportional-split (Omega-Rect Branches-Rect Refiner Omega-Index Nonextremal-Interval
+                               -> (Values (Listof Nonextremal-Interval) (Listof Flonum))))
 (define (proportional-split Ω Z refine i I)
   (define-values (Is ls) (interval-split I 0.5))
   (match Is
@@ -211,7 +213,7 @@
                  (define idx (ann-interval-index i split (- m 1) min-length))
                  (build-search-tree Ω Z (cons idx idxs) refine)]))]
        [else
-        (: make-node (Interval -> (Promise Omega-Search-Tree)))
+        (: make-node (Nonextremal-Interval -> (Promise Omega-Search-Tree)))
         (define (make-node I)
           (delay
             (let-values ([(Ω Z)  (refine (omega-rect-set Ω i I) Z)])
@@ -248,7 +250,7 @@
         [else
          (define-values (b new-idxs q)
            (cond [((random) . < . 0.5)  (values trues (t-idxs) 0.5)]
-                 [else  (values falses (f-idxs) 0.5)]))
+                 [else                  (values falses (f-idxs) 0.5)]))
          (let-values ([(Ω Z)  (refine Ω (branches-rect-set Z i b))])
            (refinement-sample Ω Z m (* p q) (append new-idxs idxs) refine))]))
 
@@ -257,9 +259,9 @@
 (define (refinement-sample/ivl Ω Z m p idx idxs refine)
   (match-define (interval-index i split) idx)
   (define I (omega-rect-ref Ω i))
-  (define x (interval*-sample-point I))
-  (define J (Interval x x #t #t))
-  (define q (interval*-measure I))
+  (define x (real-set-sample-point I))
+  (define J (Nonextremal-Interval x x #t #t))
+  (define q (real-set-measure I))
   (let-values ([(Ω Z)  (refine (omega-rect-set Ω i J) Z)])
     (refinement-sample Ω Z (* m q) p idxs refine)))
 

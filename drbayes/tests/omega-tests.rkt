@@ -1,84 +1,46 @@
 #lang typed/racket
 
-(require (except-in "../private/set/omega.rkt"
-                    Omega-Hash
-                    omega-hash-ref
-                    omega-hash-set))
+(require typed/rackunit
+         math/distributions
+         "../private/set.rkt"
+         "rackunit-utils.rkt"
+         "random-real-set.rkt")
 
-;; ===================================================================================================
-;; Randomized bisimulation tests for reffing and setting omega trees
+(printf "starting...~n")
 
-(define-predicate zero-or-one? (U 0 1))
+(define unit-endpoint-dist (discrete-dist '(0.0 0.1 0.2 0.3 0.5 0.7 0.8 0.9 1.0)))
 
-(define-type (Omega-Hash A) (HashTable Omega-Index A))
-
-(define: empty-omega-hash : (Omega-Hash Integer)  (make-immutable-hash empty))
-
-(: omega-tree->omega-hash ((Omega-Tree Integer) -> (Omega-Hash Integer)))
-(define (omega-tree->omega-hash t)
-  (make-immutable-hash
-   (let: loop : (Listof (Pair Omega-Index Integer)) ([t : (Omega-Tree Integer)  t]
-                                                   [idx : Omega-Index  empty]
-                                                   [kvs : (Listof (Pair Omega-Index Integer))  empty])
-     (cond [(omega-leaf? t)  kvs]
-           [else
-            (define v (Omega-Node-value t))
-            (let ([kvs  (loop (Omega-Node-fst t) (cons 0 idx) kvs)])
-              (cond [(equal? v 0)  (loop (Omega-Node-snd t) (cons 1 idx) kvs)]
-                    [else  (loop (Omega-Node-snd t)
-                                 (cons 1 idx)
-                                 (cons (cons (reverse idx) v) kvs))]))]))))
-
-(: omega-hash-ref ((Omega-Hash Integer) Omega-Index -> Integer))
-(define (omega-hash-ref h k)
-  (hash-ref h k (λ () 0)))
-
-(: omega-hash-set ((Omega-Hash Integer) Omega-Index Integer -> (Omega-Hash Integer)))
-(define (omega-hash-set h k i)
-  (cond [(= i 0)  (hash-remove h k)]
-        [else  (hash-set h k i)]))
-
-(: random-omega-idx (-> Omega-Index))
-(define (random-omega-idx)
-  (build-list (random 3) (λ (_) (assert (random 2) zero-or-one?))))
-
-(: bisimulation-step ((Omega-Hash Integer) (Omega-Tree Integer) -> (Values (Omega-Hash Integer)
-                                                                           (Omega-Tree Integer))))
-(define (bisimulation-step h t)
-  (define r (random))
-  (cond [(r . < . 0.4)
-         (define k (random-omega-idx))
-         (define i (random 4))
-         (define new-h (omega-hash-set h k i))
-         (define new-t ((omega-tree-set 0) t k i))
-         (unless (equal? new-h (omega-tree->omega-hash new-t))
-           (error 'bisimulation-step "operation set ~v ~v failed with ~v and ~v" k i h t))
-         (values new-h new-t)]
-        [(r . < . 0.8)
-         (define k (random-omega-idx))
-         (define i0 (omega-hash-ref h k))
-         (define i1 ((omega-tree-ref 0) t k))
-         (unless (= i0 i1)
-           (error 'bisimulation-step "operation ref ~v failed with ~v and ~v" k h t))
-         (define new-h (omega-hash-set h k 0))
-         (define new-t ((omega-tree-set 0) t k 0))
-         (unless (equal? new-h (omega-tree->omega-hash new-t))
-           (error 'bisimulation-step "operation set ~v 0 failed with ~v and ~v" k h t))
-         (values new-h new-t)]
+(: random-omega-rect (-> (U Empty-Set Omega-Rect)))
+(define (random-omega-rect)
+  (cond [((random) . < . 0.1)  empty-set]
         [else
-         (define k (random-omega-idx))
-         (define i ((omega-tree-ref 0) t k))
-         (define new-t ((omega-tree-set 0) t k i))
-         (unless (eq? t new-t)
-           (error 'bisimulation-step "eq? check failed with t = ~v and k = ~v" t k))
-         (values h new-t)]))
+         (let loop ([n 4])
+           (define r (random))
+           (cond [(or (r . < . 0.4) (zero? n))  omega-leaf]
+                 [else
+                  (let reject ()
+                    (define I (random-real-set unit-endpoint-dist))
+                    (cond [(or (empty-real-set? I) (full-real-set? I))  (reject)]
+                          [else  
+                           (omega-rect-node I (loop (- n 1)) (loop (- n 1)))]))]))]))
 
-(: bisimulate (Natural -> (Values (Omega-Hash Integer) (Omega-Tree Integer))))
-(define (bisimulate n)
-  (let: loop ([n n] [h empty-omega-hash] [t : (Omega-Tree Integer)  omega-leaf])
-    (cond [(= n 0)  (values h t)]
-          [else  (let-values ([(h t)  (bisimulation-step h t)])
-                   (loop (- n 1) h t))])))
-
-;; Test passes when no errors are raised
-(time (call-with-values (λ () (bisimulate 100000)) void))
+(time
+ (for: ([_  (in-range 100000)])
+   (check-bounded-lattice
+    equal?
+    omega-rect-subseteq?
+    omega-rect-join
+    omega-rect-intersect
+    empty-set
+    omega-leaf
+    random-omega-rect)
+   #;
+   ((inst check-membership-lattice Maybe-Omega-Rect Omega)
+    equal?
+    empty-set?
+    omega-rect-member?
+    omega-rect-subseteq?
+    omega-rect-join
+    omega-rect-intersect
+    random-omega-rect
+    omega-rect-sample-point)))

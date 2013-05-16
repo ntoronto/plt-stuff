@@ -55,7 +55,7 @@
     [(search-node? t)
      (match-define (search-node cs qs choice name) t)
      (when search-stats? (increment-search-stat name))
-     (cond [(eq? choice 'probabilistic)
+     (cond [#t #;(eq? choice 'probabilistic)
             (define i (sample-index qs))
             (define c (maybe-force (list-ref cs i)))
             (define q (list-ref qs i))

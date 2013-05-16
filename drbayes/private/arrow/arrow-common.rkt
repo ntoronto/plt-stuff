@@ -6,6 +6,7 @@
          "../untyped-utils.rkt")
 
 (define-singleton-type Empty-Meaning empty-meaning)
+(define-singleton-type Empty-Preimage empty-preimage)
 
 (define rand-cache-preimages? #t)
 (define rand-cache-computations? #f)

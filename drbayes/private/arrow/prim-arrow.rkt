@@ -1,30 +1,36 @@
 #lang typed/racket/base
 
-(require racket/match
+(require (for-syntax racket/base)
+         racket/match
          racket/list
          racket/promise
          (only-in racket/math pi)
          math/flonum
          math/distributions
          "../set.rkt"
+         "../untyped-utils.rkt"
          "arrow-common.rkt"
          "directed-rounding-flops.rkt")
 
 (provide (all-defined-out))
 
+(define check-prim-preimage-arguments? #t)
+
 ;; ===================================================================================================
 ;; Primitive expressions
 
 (define-type Prim-Forward-Fun (Value -> Maybe-Value))
-(define-type Prim-Preimage-Fun (Nonempty-Set -> Set))
-(define-type Prim-Image-Fun (Nonempty-Set -> Set))
+(define-type Prim-Preimage-Fun (Nonempty-Set Nonempty-Set -> Set))
+(define-type Prim-Image-Fun (Nonempty-Set Nonempty-Set -> Set))
 
-(define-type Prim-Computation-Meaning (U Empty-Meaning prim-computation-meaning))
-(define-type Prim-Computation (Nonempty-Set -> Prim-Computation-Meaning))
+(define-type Prim-Preimage (U Empty-Preimage nonempty-prim-preimage))
 
-(struct: prim-computation-meaning ([K : Nonempty-Set]
-                                   [preimage : Prim-Preimage-Fun])
+(struct: nonempty-prim-preimage ([domain : Nonempty-Set]
+                                 [range : Nonempty-Set]
+                                 [fun : Prim-Preimage-Fun])
   #:transparent)
+
+(define-type Prim-Computation (Nonempty-Set -> Prim-Preimage))
 
 (struct: prim-expression ([fun : (-> prim-expression-meaning)])
   #:transparent)
@@ -40,22 +46,65 @@
 (define (run-prim-expression e)
   ((prim-expression-fun e)))
 
-(: run-prim-forward (Prim-Forward-Fun Maybe-Value -> Maybe-Value))
-(define (run-prim-forward f γ)
+(: run-prim-forward-fun (Prim-Forward-Fun Maybe-Value -> Maybe-Value))
+(define (run-prim-forward-fun f γ)
   (cond [(bottom? γ)  γ]
         [else  (f γ)]))
 
-(: run-prim-preimage (Prim-Preimage-Fun Set -> Set))
-(define (run-prim-preimage pre K)
-  (if (empty-set? K) empty-set (pre K)))
+(: run-prim-preimage-fun (Prim-Preimage-Fun Set Set -> Set))
+(define (run-prim-preimage-fun f Γ K)
+  (cond [(or (empty-set? Γ) (empty-set? K))  empty-set]
+        [else  (f Γ K)]))
+
+(: run-prim-preimage (Prim-Preimage Set Set -> Set))
+(define (run-prim-preimage f-pre Γ K)
+  (cond [(or (empty-preimage? f-pre) (empty-set? Γ) (empty-set? K))  empty-set]
+        [else
+         (match-define (prim-preimage Γf Kf f) f-pre)
+         (cond [(and check-prim-preimage-arguments? (not (set-subseteq? Γ Γf)))
+                (raise-argument-error 'run-prim-preimage (format "subset of ~e" Γf) 1 f-pre Γ K)]
+               [(and check-prim-preimage-arguments? (not (set-subseteq? K Kf)))
+                (raise-argument-error 'run-prim-preimage (format "subset of ~e" Kf) 2 f-pre Γ K)]
+               [else
+                (f Γ K)])]))
+
+(: run-prim-image-fun (Prim-Image-Fun Set Set -> Set))
+(define run-prim-image-fun run-prim-preimage-fun)
+
+(: run-prim-computation (Prim-Computation Set -> Prim-Preimage))
+(define (run-prim-computation comp Γ)
+  (cond [(empty-set? Γ)  empty-preimage]
+        [else  (comp Γ)]))
+
+(: make-prim-preimage (Set Set Prim-Preimage-Fun -> Prim-Preimage))
+(define (make-prim-preimage Γ K f)
+  (cond [(or (empty-set? Γ) (empty-set? K))  empty-preimage]
+        [else  (nonempty-prim-preimage Γ K f)]))
+
+(: empty-prim-preimage-fun Prim-Preimage-Fun)
+(define (empty-prim-preimage-fun Γ K) empty-set)
+
+(define-match-expander prim-preimage
+  (λ (stx)
+    (syntax-case stx ()
+      [(_ Γ K f)  (syntax/loc stx
+                    (or (nonempty-prim-preimage Γ K f)
+                        (and (? empty-preimage?)
+                             (app (λ (_) empty-set) Γ)
+                             (app (λ (_) empty-set) K)
+                             (app (λ (_) empty-prim-preimage-fun) f))
+                        (and (app (λ: ([_ : Prim-Preimage]) empty-set) Γ)
+                             (app (λ (_) empty-set) K)
+                             (app (λ (_) empty-prim-preimage-fun) f))))]))
+  (make-head-form #'make-prim-preimage))
 
 ;; ===================================================================================================
 ;; Caching wrappers
-
-(: prim-preimage (Set Set Prim-Preimage-Fun -> Prim-Preimage-Fun))
+#|
+(: prim-preimage (Nonempty-Set Nonempty-Set Prim-Preimage-Fun -> Prim-Preimage-Fun))
 ;; Wraps a Prim-Preimage-Fun with code that ensures the argument is a subset of the range; also
 ;; caches return values
-(define ((prim-preimage Γ K pre) Ksub)
+(define (prim-preimage Γ K pre)
   (let ([Ksub  (set-intersect K Ksub)])
     (cond
       [(empty-set? Ksub)
@@ -94,6 +143,7 @@
          (let ([cached-m  (comp Γ)])
            (set! last-m cached-m)
            cached-m)]))))
+|#
 
 ;; ===================================================================================================
 ;; Basic primitives
@@ -104,7 +154,7 @@
 (define (bottom/fwd γ) (bottom (delay "fail")))
 
 (: bottom/comp Prim-Computation)
-(define (bottom/comp Γ) empty-meaning)
+(define (bottom/comp Γ) empty-preimage)
 
 (define bottom/arr
   (prim-expression (λ () (prim-expression-meaning bottom/fwd bottom/comp))))
@@ -115,30 +165,25 @@
 (define (id/fwd γ) γ)
 
 (: id/pre Prim-Preimage-Fun)
-(define (id/pre K) K)
+(define (id/pre Γ K) (set-intersect Γ K))
 
-(: id/comp (-> Prim-Computation))
-(define (id/comp)
-  (cached-prim-computation
-   universe
-   (λ (Γ) (prim-computation-meaning Γ (prim-preimage Γ Γ id/pre)))))
+(: id/comp Prim-Computation)
+(define (id/comp Γ) (nonempty-prim-preimage Γ Γ id/pre))
 
 (define id/arr
-  (prim-expression (λ () (prim-expression-meaning id/fwd (id/comp)))))
+  (prim-expression (λ () (prim-expression-meaning id/fwd id/comp))))
 
 ;; Constant functions
 
 (: c/fwd (Value -> Prim-Forward-Fun))
-(define ((c/fwd x) γ) x)
+(define ((c/fwd x) γ) (if (bottom? γ) γ x))
 
-(: c/pre (Nonempty-Set -> Prim-Preimage-Fun))
-(define ((c/pre Γ) K) Γ)
+(: c/pre Prim-Preimage-Fun)
+(define (c/pre Γ K) (if (empty-set? K) K Γ))
 
 (: c/comp (Nonempty-Set Nonempty-Set -> Prim-Computation))
-(define (c/comp domain X)
-  (cached-prim-computation
-   domain
-   (λ (Γ) (prim-computation-meaning X (prim-preimage Γ X (c/pre Γ))))))
+(define ((c/comp domain X) Γ)
+  (prim-preimage (set-intersect Γ domain) X c/pre))
 
 (: c/arr (case-> (Value -> prim-expression)
                  (Value Nonempty-Set -> prim-expression)))
@@ -147,21 +192,15 @@
   (define X (value->singleton x))
   (prim-expression (λ () (prim-expression-meaning fwd (c/comp domain X)))))
 
-
 ;; Late booleans, used only for testing
 ;; Used as an if condition, they forcing refinement sampling to always choose a branch
 
 (: late-boolean/fwd (Flonum -> Prim-Forward-Fun))
 (define ((late-boolean/fwd p) γ) (if ((random) . < . p) #t #f))
 
-(: late-boolean/pre (Nonempty-Set -> Prim-Preimage-Fun))
-(define ((late-boolean/pre Γ) K) Γ)
-
 (: late-boolean/comp Prim-Computation)
-(define late-boolean/comp
-  (cached-prim-computation
-   universe
-   (λ (Γ) (prim-computation-meaning booleans (prim-preimage Γ booleans (late-boolean/pre Γ))))))
+(define (late-boolean/comp Γ)
+  (prim-preimage Γ bools (λ (Γ K) Γ)))
 
 (: late-boolean/arr (Flonum -> prim-expression))
 (define (late-boolean/arr p)
@@ -172,33 +211,17 @@
 
 (: prim-rcompose/fwd (Prim-Forward-Fun Prim-Forward-Fun -> Prim-Forward-Fun))
 (define ((prim-rcompose/fwd f-fwd g-fwd) γ)
-  (let* ([kf  (f-fwd γ)]
-         [kg  (run-prim-forward g-fwd kf)])
-    kg))
+  (run-prim-forward-fun g-fwd (run-prim-forward-fun f-fwd γ)))
 
-(: prim-rcompose/pre (Prim-Preimage-Fun Prim-Preimage-Fun -> Prim-Preimage-Fun))
-(define ((prim-rcompose/pre f-pre g-pre) Kg)
-  (let* ([Kf  (g-pre Kg)]
-         [Γf  (run-prim-preimage f-pre Kf)])
-    Γf))
+(: prim-rcompose/pre (Prim-Preimage Prim-Preimage Set -> Prim-Preimage-Fun))
+(define ((prim-rcompose/pre f-pre g-pre Γg) Γ K)
+  (run-prim-preimage f-pre Γ (run-prim-preimage g-pre Γg K)))
 
 (: prim-rcompose/comp (Prim-Computation Prim-Computation -> Prim-Computation))
-(define (prim-rcompose/comp f-comp g-comp)
-  (cached-prim-computation
-   universe
-   (λ (Γf)
-     (define f-meaning (f-comp Γf))
-     (cond
-       [(empty-meaning? f-meaning)  empty-meaning]
-       [else
-        (match-define (prim-computation-meaning Γg f-pre) f-meaning)
-        (define g-meaning (g-comp Γg))
-        (cond
-          [(empty-meaning? g-meaning)  empty-meaning]
-          [else
-           (match-define (prim-computation-meaning Kg g-pre) g-meaning)
-           (define pre (prim-preimage Γf Kg (prim-rcompose/pre f-pre g-pre)))
-           (prim-computation-meaning Kg pre)])]))))
+(define ((prim-rcompose/comp f-comp g-comp) Γ)
+  (match-define (and f-pre (prim-preimage Γf Kf f)) (f-comp Γ))
+  (match-define (and g-pre (prim-preimage Γg Kg g)) (run-prim-computation g-comp Kf))
+  (prim-preimage Γf Kg (prim-rcompose/pre f-pre g-pre Γg)))
 
 (: prim-rcompose/arr (prim-expression prim-expression -> prim-expression))
 (define (prim-rcompose/arr f-expr g-expr)
@@ -220,27 +243,17 @@
                (cond [(bottom? k2)  k2]
                      [else  (cons k1 k2)])]))
 
-(: prim-pair/pre (Prim-Preimage-Fun Prim-Preimage-Fun -> Prim-Preimage-Fun))
-(define ((prim-pair/pre pre1 pre2) K)
-  (let ([Γ1  (run-prim-preimage pre1 (set-pair-ref K 'fst))]
-        [Γ2  (run-prim-preimage pre2 (set-pair-ref K 'snd))])
-    (set-intersect Γ1 Γ2)))
+(: prim-pair/pre (Prim-Preimage Prim-Preimage -> Prim-Preimage-Fun))
+(define ((prim-pair/pre pre1 pre2) Γ K)
+  (define K1 (set-pair-ref K 'fst))
+  (define K2 (set-pair-ref K 'snd))
+  (run-prim-preimage pre1 (run-prim-preimage pre2 Γ K2) K1))
 
 (: prim-pair/comp (Prim-Computation Prim-Computation -> Prim-Computation))
-(define (prim-pair/comp comp1 comp2)
-  (cached-prim-computation
-   universe
-   (λ (Γ)
-     (define meaning1 (comp1 Γ))
-     (define meaning2 (if (empty-meaning? meaning1) empty-meaning (comp2 Γ)))
-     (cond
-       [(empty-meaning? meaning2)  empty-meaning]
-       [else
-        (match-define (prim-computation-meaning K1 pre1) meaning1)
-        (match-define (prim-computation-meaning K2 pre2) meaning2)
-        (define K (set-pair K1 K2))
-        (define pre (prim-preimage Γ K (prim-pair/pre pre1 pre2)))
-        (prim-computation-meaning K pre)]))))
+(define ((prim-pair/comp comp1 comp2) Γ)
+  (match-define (and pre1 (prim-preimage Γ1 K1 f1)) (comp1 Γ))
+  (match-define (and pre2 (prim-preimage Γ2 K2 f2)) (run-prim-computation comp2 Γ1))
+  (prim-preimage Γ2 (set-pair K1 K2) (prim-pair/pre pre1 pre2)))
 
 (: prim-pair/arr (prim-expression prim-expression -> prim-expression))
 (define (prim-pair/arr expr1 expr2)
@@ -250,29 +263,6 @@
      (match-define (prim-expression-meaning fwd2 comp2) (run-prim-expression expr2))
      (prim-expression-meaning (prim-pair/fwd fwd1 fwd2)
                               (prim-pair/comp comp1 comp2)))))
-
-;; ===================================================================================================
-;; Pair ref
-
-(: ref/fwd (Pair-Index -> Prim-Forward-Fun))
-(define ((ref/fwd j) γ) (value-pair-ref γ j))
-
-(: ref/pre (Nonempty-Set Pair-Index -> Prim-Preimage-Fun))
-(define ((ref/pre Γ j) K) (set-pair-set Γ j K))
-
-(: ref/comp (Pair-Index -> Prim-Computation))
-(define (ref/comp j)
-  (cached-prim-computation
-   all-pairs
-   (λ (Γ)
-     (define K (set-pair-ref Γ j))
-     (cond [(empty-set? K)  empty-meaning]
-           [else  (define pre (prim-preimage Γ K (ref/pre Γ j)))
-                  (prim-computation-meaning K pre)]))))
-
-(: ref/arr (Pair-Index -> prim-expression))
-(define (ref/arr j)
-  (prim-expression (λ () (prim-expression-meaning (ref/fwd j) (ref/comp j)))))
 
 ;; ===================================================================================================
 ;; Strict conditional
@@ -285,61 +275,24 @@
         [(eq? kc #f)  (f-fwd γ)]
         [else  (bottom (delay (format "prim-if: expected Boolean condition; given ~e" kc)))]))
 
-(: prim-if-one/pre (Nonempty-Set Prim-Preimage-Fun -> Prim-Preimage-Fun))
-(define ((prim-if-one/pre orig-K pre) K)
-  (run-prim-preimage pre (set-intersect orig-K K)))
-
-(: prim-if-both/pre (Nonempty-Set Nonempty-Set Prim-Preimage-Fun Prim-Preimage-Fun
-                                  -> Prim-Preimage-Fun))
-(define ((prim-if-both/pre Kt Kf t-pre f-pre) K)
-  (set-join (run-prim-preimage t-pre (set-intersect Kt K))
-            (run-prim-preimage f-pre (set-intersect Kf K))))
+(: prim-if/pre (Prim-Preimage Prim-Preimage -> Prim-Preimage))
+(define (prim-if/pre t-pre f-pre)
+  (match-define (prim-preimage Γt Kt t) t-pre)
+  (match-define (prim-preimage Γf Kf f) f-pre)
+  (prim-preimage
+   (set-union Γt Γf)
+   (set-union Kt Kf)
+   (λ (Γ K)
+     (set-union (run-prim-preimage t-pre (set-intersect Γ Γt) (set-intersect K Kt))
+                (run-prim-preimage f-pre (set-intersect Γ Γf) (set-intersect K Kf))))))
 
 (: prim-if/comp (Prim-Computation Prim-Computation Prim-Computation -> Prim-Computation))
-(define (prim-if/comp c-comp t-comp f-comp)
-  (cached-prim-computation
-   universe
-   (λ (Γ)
-     (define c-meaning (c-comp Γ))
-     (cond
-       [(empty-meaning? c-meaning)  empty-meaning]
-       [else
-        (match-define (prim-computation-meaning Kc c-pre) c-meaning)
-        (define Γt (if (set-member? Kc #t) (c-pre trues) empty-set))
-        (define Γf (if (set-member? Kc #f) (c-pre falses) empty-set))
-        
-        (define meaning
-          (cond
-            [(and (empty-set? Γt) (empty-set? Γf))  empty-meaning]
-            [(empty-set? Γf)
-             (define t-meaning (t-comp Γt))
-             (cond [(empty-meaning? t-meaning)  empty-meaning]
-                   [else  (match-define (prim-computation-meaning Kt t-pre) t-meaning)
-                          (prim-computation-meaning Kt (prim-if-one/pre Kt t-pre))])]
-            [(empty-set? Γt)
-             (define f-meaning (f-comp Γf))
-             (cond [(empty-meaning? f-meaning)  empty-meaning]
-                   [else  (match-define (prim-computation-meaning Kf f-pre) f-meaning)
-                          (prim-computation-meaning Kf (prim-if-one/pre Kf f-pre))])]
-            [else
-             (define t-meaning (t-comp Γt))
-             (define f-meaning (f-comp Γf))
-             (cond [(and (empty-meaning? t-meaning) (empty-meaning? f-meaning))  empty-meaning]
-                   [(empty-meaning? f-meaning)
-                    (match-define (prim-computation-meaning Kt t-pre) t-meaning)
-                    (prim-computation-meaning Kt (prim-if-one/pre Kt t-pre))]
-                   [(empty-meaning? t-meaning)
-                    (match-define (prim-computation-meaning Kf f-pre) f-meaning)
-                    (prim-computation-meaning Kf (prim-if-one/pre Kf f-pre))]
-                   [else
-                    (match-define (prim-computation-meaning Kt t-pre) t-meaning)
-                    (match-define (prim-computation-meaning Kf f-pre) f-meaning)
-                    (prim-computation-meaning (set-join Kt Kf)
-                                              (prim-if-both/pre Kt Kf t-pre f-pre))])]))
-        
-        (cond [(empty-meaning? meaning)  empty-meaning]
-              [else  (match-define (prim-computation-meaning K pre) meaning)
-                     (prim-computation-meaning K (prim-preimage (pre universe) K pre))])]))))
+(define ((prim-if/comp c-comp t-comp f-comp) Γ)
+  (match-define (and c-pre (prim-preimage Γc Kc c)) (c-comp Γ))
+  (define Γt (if (set-member? Kc #t) (run-prim-preimage c-pre Γc trues)  empty-set))
+  (define Γf (if (set-member? Kc #f) (run-prim-preimage c-pre Γc falses) empty-set))
+  (prim-if/pre (run-prim-computation t-comp Γt)
+               (run-prim-computation f-comp Γf)))
 
 (: prim-if/arr (prim-expression prim-expression prim-expression -> prim-expression))
 (define (prim-if/arr c-expr t-expr f-expr)
@@ -352,52 +305,69 @@
                               (prim-if/comp c-comp t-comp f-comp)))))
 
 ;; ===================================================================================================
+;; Pair ref
+
+(: ref/fwd (Pair-Index -> Prim-Forward-Fun))
+(define ((ref/fwd j) γ)
+  (if (bottom? γ) γ (value-pair-ref γ j)))
+
+(: ref/pre (Pair-Index -> Prim-Preimage-Fun))
+(define ((ref/pre j) Γ K)
+  (set-intersect Γ (universal-pair-set j K)))
+
+(: ref/comp (Pair-Index -> Prim-Computation))
+(define ((ref/comp j) Γ)
+  (prim-preimage Γ (set-pair-ref Γ j) (ref/pre j)))
+
+(: ref/arr (Pair-Index -> prim-expression))
+(define (ref/arr j)
+  (prim-expression (λ () (prim-expression-meaning (ref/fwd j) (ref/comp j)))))
+
+;; ===================================================================================================
 ;; Monotone R -> R functions
 
-(: monotone/fwd (Symbol Interval* Interval* (Flonum -> Flonum) -> Prim-Forward-Fun))
+(: monotone/fwd (Symbol Nonempty-Real-Set Nonempty-Real-Set (Flonum -> Flonum) -> Prim-Forward-Fun))
 (define ((monotone/fwd name f-domain f-range f) γ)
-  (cond [(or (not (flonum? γ)) (not (interval*-member? f-domain γ)))
+  (cond [(or (not (flonum? γ)) (not (real-set-member? f-domain γ)))
          (bottom (delay (format "~a: expected argument in ~a; given ~e" name f-domain γ)))]
         [else
          (define k (f γ))
-         (cond [(not (interval*-member? f-range k))
+         (cond [(not (real-set-member? f-range k))
                 (bottom (delay (format "~a: expected result in ~a; produced ~e" name f-range k)))]
                [else  k])]))
 
-(: monotone-apply (Boolean (Flonum -> Flonum) (Flonum -> Flonum) Interval -> Maybe-Interval))
+(: monotone-apply (Boolean (Flonum -> Flonum) (Flonum -> Flonum) Nonempty-Interval -> Interval))
 (define (monotone-apply inc? f/rndd f/rndu X)
-  (match-define (interval a b a? b?) X)
+  (define-values (a b a? b?) (interval-fields X))
   (cond [inc?  (interval (f/rndd a) (f/rndu b) a? b?)]
         [else  (interval (f/rndd b) (f/rndu a) b? a?)]))
 
-(: monotone/img (Nonempty-Set Boolean (Flonum -> Flonum) (Flonum -> Flonum) -> Prim-Image-Fun))
-(define ((monotone/img K inc? f/rndd f/rndu) Γ)
-  (set-intersect
-    K (interval*-map (λ (Γ) (monotone-apply inc? f/rndd f/rndu Γ))
-                     (assert Γ interval*?))))
+(: monotone/img (Boolean (Flonum -> Flonum) (Flonum -> Flonum) -> Prim-Image-Fun))
+(define ((monotone/img inc? f/rndd f/rndu) Γ K)
+  (define Kf (real-set-map (λ (Γ) (monotone-apply inc? f/rndd f/rndu Γ))
+                           (set-take-reals Γ)))
+  (cond [(empty-real-set? Kf)  empty-set]
+        [else  (set-intersect K Kf)]))
 
-(: monotone/pre (Nonempty-Set Boolean (Flonum -> Flonum) (Flonum -> Flonum) -> Prim-Preimage-Fun))
-(define ((monotone/pre Γ inc? g/rndd g/rndu) K)
-  (set-intersect
-   Γ (interval*-map (λ (K) (monotone-apply inc? g/rndd g/rndu K))
-                    (assert K interval*?))))
+(: monotone/pre (Boolean (Flonum -> Flonum) (Flonum -> Flonum) -> Prim-Preimage-Fun))
+(define ((monotone/pre inc? g/rndd g/rndu) Γ K)
+  (define Γf (real-set-map (λ (K) (monotone-apply inc? g/rndd g/rndu K))
+                           (set-take-reals K)))
+  (cond [(empty-real-set? Γf)  empty-set]
+        [else  (set-intersect Γ Γf)]))
 
-(: monotone/comp (Interval* Interval* Boolean
-                            (Flonum -> Flonum)
-                            (Flonum -> Flonum) (Flonum -> Flonum)
-                            (Flonum -> Flonum) (Flonum -> Flonum)
-                            -> Prim-Computation))
-(define (monotone/comp f-domain f-range inc? f f/rndd f/rndu g/rndd g/rndu)
-  (define img (monotone/img f-range inc? f/rndd f/rndu))
-  (cached-prim-computation
-   f-domain
-   (λ (Γ)
-     (define K (img Γ))
-     (cond [(empty-set? K)  empty-meaning]
-           [else  (define pre (prim-preimage Γ K (monotone/pre Γ inc? g/rndd g/rndu)))
-                  (prim-computation-meaning K pre)]))))
+(: monotone/comp (Nonempty-Real-Set Nonempty-Real-Set Boolean
+                                    (Flonum -> Flonum)
+                                    (Flonum -> Flonum) (Flonum -> Flonum)
+                                    (Flonum -> Flonum) (Flonum -> Flonum)
+                                    -> Prim-Computation))
+(define (monotone/comp Γf Kf inc? f f/rndd f/rndu g/rndd g/rndu)
+  (define img (monotone/img inc? f/rndd f/rndu))
+  (define pre (monotone/pre inc? g/rndd g/rndu))
+  (λ (Γ) (let ([Γ  (set-intersect Γ Γf)])
+           (prim-preimage Γ (run-prim-image-fun img Γ Kf) pre))))
 
-(: monotone/arr (Symbol Interval* Interval* Boolean
+(: monotone/arr (Symbol Nonempty-Real-Set Nonempty-Real-Set Boolean
                         (Flonum -> Flonum)
                         (Flonum -> Flonum) (Flonum -> Flonum)
                         (Flonum -> Flonum) (Flonum -> Flonum)
@@ -411,101 +381,102 @@
 ;; ===================================================================================================
 ;; Monotone R x R -> R functions
 
-(: monotone2d/fwd (Symbol Pair-Rect Interval* (Flonum Flonum -> Flonum) -> Prim-Forward-Fun))
-(define ((monotone2d/fwd name f-domain f-range f) γ)
-  (cond [(not (set-member? f-domain γ))
-         (bottom (delay (format "~a: expected argument in ~a; given ~e" name f-domain γ)))]
+(: monotone2d/fwd (Symbol Bot-Basic Nonempty-Real-Set (Flonum Flonum -> Flonum) -> Prim-Forward-Fun))
+(define ((monotone2d/fwd name Γf Kf f) γ)
+  (cond [(or (not (pair? γ)) (not (set-member? Γf γ)))
+         (bottom (delay (format "~a: expected argument in ~a; given ~e" name Γf γ)))]
         [else
          (match-define (cons (? flonum? x) (? flonum? y)) γ)
          (define k (f x y))
-         (cond [(not (interval*-member? f-range k))
-                (bottom (delay (format "~a: expected result in ~a; produced ~e" name f-range k)))]
+         (cond [(not (real-set-member? Kf k))
+                (bottom (delay (format "~a: expected result in ~a; produced ~e" name Kf k)))]
                [else  k])]))
 
-(: monotone2d-apply (Boolean Boolean
-                             (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
-                             Interval Interval -> Maybe-Interval))
+(: monotone2d-apply (Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                             Nonempty-Interval Nonempty-Interval -> Interval))
 (define (monotone2d-apply xinc? yinc? f/rndd f/rndu X Y)
-  (let-values ([(xa xb xa? xb?)  (match-let ([(interval xa xb xa? xb?)  X])
+  (let-values ([(xa xb xa? xb?)  (let-values ([(xa xb xa? xb?)  (interval-fields X)])
                                    (cond [xinc?  (values xa xb xa? xb?)]
                                          [else   (values xb xa xb? xa?)]))]
-               [(ya yb ya? yb?)  (match-let ([(interval ya yb ya? yb?)  Y])
+               [(ya yb ya? yb?)  (let-values ([(ya yb ya? yb?)  (interval-fields Y)])
                                    (cond [yinc?  (values ya yb ya? yb?)]
                                          [else   (values yb ya yb? ya?)]))])
     (interval (f/rndd xa ya) (f/rndu xb yb) (and xa? ya?) (and xb? yb?))))
 
-(: monotone2d/img (Nonempty-Set Boolean Boolean
-                                (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
-                                -> Prim-Image-Fun))
-(define ((monotone2d/img K xinc? yinc? f/rndd f/rndu) Γ)
-  (match-define (pair-rect Γx Γy) Γ)
-  (let ([Γx  (assert Γx interval*?)]
-        [Γy  (assert Γy interval*?)])
-    (set-intersect
-     K (interval*-map
-        (λ (Γx) (interval*-map
-                 (λ (Γy) (monotone2d-apply xinc? yinc? f/rndd f/rndu Γx Γy))
-                 Γy))
-        Γx))))
+(define set-pair-map (pair-set-map empty-set set-union))
 
-(: monotone2d/pre (Nonempty-Set
-                   Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
-                   Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
-                   -> Prim-Preimage-Fun))
-(define (monotone2d/pre Γ gz? gy? g/rndd g/rndu hz? hx? h/rndd h/rndu)
-  (match-define (pair-rect orig-Γx orig-Γy) Γ)
-  (define Γx (assert orig-Γx interval*?))
-  (define Γy (assert orig-Γy interval*?))
-  (λ (orig-K)
-    (define K (assert orig-K interval*?))
-    (define X
-      (interval*-map
-       (λ (K) (interval*-map
-               (λ (Γy) (monotone2d-apply gz? gy? g/rndd g/rndu K Γy))
-               Γy))
-       K))
-    (define Y
-      (interval*-map
-       (λ (K) (interval*-map
-               (λ (Γx) (monotone2d-apply hz? hx? h/rndd h/rndu K Γx))
-               Γx))
-       K))
-    (set-intersect Γ (set-pair X Y))))
+(: monotone2d/img (Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                           -> Prim-Image-Fun))
+(define ((monotone2d/img xinc? yinc? f/rndd f/rndu) Γ K)
+  (set-intersect
+   (set-pair-map
+    (λ: ([Γx : Nonempty-Set] [Γy : Nonempty-Set])
+      (let ([Γx  (set-take-reals Γx)]
+            [Γy  (set-take-reals Γy)])
+        (define Kf
+          (real-set-map
+           (λ (Γx) (real-set-map (λ (Γy) (monotone2d-apply xinc? yinc? f/rndd f/rndu Γx Γy)) Γy))
+           Γx))
+        (if (empty-real-set? Kf) empty-set Kf)))
+    (set-take-pairs Γ))
+   K))
 
-(: monotone2d/comp (Pair-Rect Interval*
+(: monotone2d/pre (Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                           Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
+                           -> Prim-Preimage-Fun))
+(define ((monotone2d/pre gz? gy? g/rndd g/rndu hz? hx? h/rndd h/rndu) Γ K)
+  (set-intersect
+   (set-pair-map
+    (λ: ([Γx : Nonempty-Set] [Γy : Nonempty-Set])
+      (let ([Γx  (set-take-reals Γx)]
+            [Γy  (set-take-reals Γy)]
+            [K   (set-take-reals K)])
+        (define X
+          (real-set-map
+           (λ (K) (real-set-map
+                   (λ (Γy) (monotone2d-apply gz? gy? g/rndd g/rndu K Γy))
+                   Γy))
+           K))
+        (define Y
+          (real-set-map
+           (λ (K) (real-set-map
+                   (λ (Γx) (monotone2d-apply hz? hx? h/rndd h/rndu K Γx))
+                   Γx))
+           K))
+        (cond [(or (empty-real-set? X) (empty-real-set? Y))  empty-set]
+              [else  (set-pair X Y)])))
+    (set-take-pairs Γ))
+   Γ))
+
+(: monotone2d/comp (Bot-Basic Nonempty-Real-Set
                               Boolean Boolean (Flonum Flonum -> Flonum)
                               (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                               Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                               Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                               -> Prim-Computation))
-(define (monotone2d/comp f-domain f-range
+(define (monotone2d/comp Γf Kf
                          fx? fy? f f/rndd f/rndu
                          gz? gy? g/rndd g/rndu
                          hz? hx? h/rndd h/rndu)
-  (define img (monotone2d/img f-range fx? fy? f/rndd f/rndu))
-  (cached-prim-computation
-   f-domain
-   (λ (Γ)
-     (define K (img Γ))
-     (cond [(empty-set? K)  empty-meaning]
-           [else  (define pre (prim-preimage Γ K (monotone2d/pre Γ
-                                                                 gz? gy? g/rndd g/rndu
-                                                                 hz? hx? h/rndd h/rndu)))
-                  (prim-computation-meaning K pre)]))))
+  (define img (monotone2d/img fx? fy? f/rndd f/rndu))
+  (define pre (monotone2d/pre gz? gy? g/rndd g/rndu hz? hx? h/rndd h/rndu))
+  (λ (Γ) (let ([Γ  (set-intersect Γ Γf)])
+           (prim-preimage Γ (run-prim-image-fun img Γ (bot-basic Kf)) pre))))
 
-(: monotone2d/arr (Symbol Pair-Rect Interval*
+(: monotone2d/arr (Symbol Nonempty-Real-Set Nonempty-Real-Set Nonempty-Real-Set
                           Boolean Boolean (Flonum Flonum -> Flonum)
                           (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                           Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                           Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                           -> prim-expression))
-(define (monotone2d/arr name f-domain f-range
+(define (monotone2d/arr name Γf1 Γf2 Kf
                         fx? fy? f f/rndd f/rndu
                         gz? gy? g/rndd g/rndu
                         hz? hx? h/rndd h/rndu)
+  (define Γf (set-pair (bot-basic Γf1) (bot-basic Γf2)))
   (prim-expression
-   (λ () (prim-expression-meaning (monotone2d/fwd name f-domain f-range f)
-                                  (monotone2d/comp f-domain f-range
+   (λ () (prim-expression-meaning (monotone2d/fwd name Γf Kf f)
+                                  (monotone2d/comp Γf Kf
                                                    fx? fy? f f/rndd f/rndu
                                                    gz? gy? g/rndd g/rndu
                                                    hz? hx? h/rndd h/rndu)))))
@@ -516,28 +487,19 @@
 (: predicate/fwd ((Value -> Boolean) -> Prim-Forward-Fun))
 (define ((predicate/fwd pred?) γ) (pred? γ))
 
-(: predicate-range (Set Set -> (U Empty-Set Boolean-Rect)))
-(define (predicate-range Γt Γf)
-  (booleans->boolean-rect (not (empty-set? Γt)) (not (empty-set? Γf))))
-
 (: predicate/pre (Set Set -> Prim-Preimage-Fun))
-(define ((predicate/pre Γt Γf) B)
-  (cond [(eq? B booleans)  (set-join Γt Γf)]
-        [(eq? B trues)     Γt]
-        [(eq? B falses)    Γf]
-        [else              empty-set]))
+(define ((predicate/pre Γt Γf) Γ K)
+  (let ([Γt  (if (set-member? K #t) (set-intersect Γ Γt) empty-set)]
+        [Γf  (if (set-member? K #f) (set-intersect Γ Γf) empty-set)])
+    (set-union Γt Γf)))
 
 (: predicate/comp (Nonempty-Set Nonempty-Set -> Prim-Computation))
-(define (predicate/comp Γt Γf)
-  (cached-prim-computation
-   (set-join Γt Γf)
-   (λ (Γ)
-     (let ([Γt  (set-intersect Γ Γt)]
-           [Γf  (set-intersect Γ Γf)])
-       (define K (predicate-range Γt Γf))
-       (cond [(empty-set? K)  empty-meaning]
-             [else  (define pre (prim-preimage Γ K (predicate/pre Γt Γf)))
-                    (prim-computation-meaning K pre)])))))
+(define ((predicate/comp Γt Γf) Γ)
+  (let ([Γt  (set-intersect Γ Γt)]
+        [Γf  (set-intersect Γ Γf)])
+    (define Γ (set-union Γt Γf))
+    (define K (bot-basic (booleans->bool-set (not (empty-set? Γt)) (not (empty-set? Γf)))))
+    (prim-preimage Γ K (predicate/pre Γt Γf))))
 
 (: predicate/arr ((Value -> Boolean) Nonempty-Set Nonempty-Set -> prim-expression))
 (define (predicate/arr pred? Γt Γf)
@@ -548,62 +510,57 @@
 ;; ===================================================================================================
 ;; Tagged values
 
-(: tag?/arr (Set-Tag -> prim-expression))
+(: tag?/arr (Tag -> prim-expression))
 (define (tag?/arr tag)
-  (predicate/arr (λ: ([γ : Value]) (eq? tag (value-tag γ)))
-                 (bot-set tag universe)
-                 (top-set tag empty-set)))
+  (predicate/arr (λ: ([γ : Value])
+                   (and (tagged-value? γ) (eq? tag (tagged-value-tag γ))))
+                 (bot-tagged tag universe)
+                 (top-tagged tag empty-set)))
 
 ;; ---------------------------------------------------------------------------------------------------
 
-(: tag/fwd (Set-Tag -> Prim-Forward-Fun))
-(define ((tag/fwd tag) γ) (tagged tag γ))
+(: tag/fwd (Tag -> Prim-Forward-Fun))
+(define ((tag/fwd tag) γ) (tagged-value tag γ))
 
-(: tag/pre (Set-Tag -> Prim-Preimage-Fun))
-(define ((tag/pre tag) K) (set-untag K tag))
+(: tag/pre (Tag -> Prim-Preimage-Fun))
+(define ((tag/pre tag) Γ K) (set-intersect Γ (set-untag K tag)))
 
-(: tag/comp (Set-Tag -> Prim-Computation))
-(define (tag/comp tag)
-  (cached-prim-computation
-   universe
-   (λ (Γ)
-     (define K (set-tag Γ tag))
-     (define pre (prim-preimage Γ K (tag/pre tag)))
-     (prim-computation-meaning K pre))))
+(: tag/comp (Tag -> Prim-Computation))
+(define ((tag/comp tag) Γ)
+  (define K (set-tag Γ tag))
+  (prim-preimage Γ K (tag/pre tag)))
 
-(: tag/arr (Set-Tag -> prim-expression))
+(: tag/arr (Tag -> prim-expression))
 (define (tag/arr tag)
   (prim-expression (λ () (prim-expression-meaning (tag/fwd tag) (tag/comp tag)))))
 
 ;; ---------------------------------------------------------------------------------------------------
 
-(: untag/fwd (Set-Tag -> Prim-Forward-Fun))
+(: untag/fwd (Tag -> Prim-Forward-Fun))
 (define ((untag/fwd tag) γ)
-  (if (and (tagged? γ) (eq? tag (get-tag γ)))
-      (get-val γ)
+  (if (and (tagged-value? γ) (eq? tag (tagged-value-tag γ)))
+      (tagged-value-value γ)
       (bottom (delay (format "expected ~e; given ~e" tag γ)))))
 
-(: untag/comp (Set-Tag -> Prim-Computation))
-(define (untag/comp tag)
-  (cached-prim-computation
-   universe
-   (λ (Γ)
-     (define K (set-untag Γ tag))
-     (cond [(empty-set? K)  empty-meaning]
-           [else  (define pre (prim-preimage Γ K (λ (B) (set-tag B tag))))
-                  (prim-computation-meaning K pre)]))))
+(: untag/pre (Tag -> Prim-Preimage-Fun))
+(define ((untag/pre tag) Γ K) (set-intersect Γ (set-tag K tag)))
 
-(: untag/arr (Set-Tag -> prim-expression))
+(: untag/comp (Tag -> Prim-Computation))
+(define ((untag/comp tag) Γ)
+  (define K (set-untag Γ tag))
+  (prim-preimage Γ K (untag/pre tag)))
+
+(: untag/arr (Tag -> prim-expression))
 (define (untag/arr tag)
   (prim-expression (λ () (prim-expression-meaning (untag/fwd tag) (untag/comp tag)))))
 
 ;; ===================================================================================================
 ;; Data type predicates
 
-(define real?/arr (predicate/arr flonum? real-interval not-reals))
-(define null?/arr (predicate/arr null? null-rect not-null-set))
-(define pair?/arr (predicate/arr pair? all-pairs not-pairs))
-(define boolean?/arr (predicate/arr boolean? booleans not-booleans))
+(define real?/arr (predicate/arr flonum? reals not-reals))
+(define null?/arr (predicate/arr null? nulls not-nulls))
+(define pair?/arr (predicate/arr pair? pairs not-pairs))
+(define boolean?/arr (predicate/arr boolean? bools not-bools))
 
 ;; ===================================================================================================
 ;; Monotone R -> R functions
@@ -611,7 +568,8 @@
 (: scale/arr (Flonum -> prim-expression))
 (define (scale/arr y)
   (cond [(fl= y 0.0)  (c/arr 0.0)]
-        [else  (monotone/arr 'scale/arr real-interval real-interval (y . fl> . 0.0)
+        [else  (monotone/arr 'scale/arr
+                             reals reals (y . fl> . 0.0)
                              (λ: ([x : Flonum]) (fl* x y))
                              (λ: ([x : Flonum]) (fl*/rndd x y))
                              (λ: ([x : Flonum]) (fl*/rndu x y))
@@ -620,7 +578,8 @@
 
 (: translate/arr (Flonum -> prim-expression))
 (define (translate/arr y)
-  (monotone/arr 'translate/arr real-interval real-interval #t
+  (monotone/arr 'translate/arr
+                reals reals #t
                 (λ: ([x : Flonum]) (fl+ x y))
                 (λ: ([x : Flonum]) (fl+/rndd x y))
                 (λ: ([x : Flonum]) (fl+/rndu x y))
@@ -643,11 +602,11 @@
 (define (flneg-sqrt/rndu x) (flneg (flsqrt/rndd x)))
 
 (define neg/arr (monotone/arr 'neg/arr
-                              real-interval real-interval #f
+                              reals reals #f
                               flneg flneg flneg flneg flneg))
 
 (define exp/arr (monotone/arr 'exp/arr
-                              real-interval nonnegative-interval #t
+                              reals nonnegative-interval #t
                               flexp
                               flexp/rndd
                               flexp/rndu
@@ -655,7 +614,7 @@
                               fllog/rndu))
 
 (define log/arr (monotone/arr 'log/arr
-                              nonnegative-interval real-interval #t
+                              nonnegative-interval reals #t
                               fllog
                               fllog/rndd
                               fllog/rndu
@@ -672,7 +631,9 @@
 
 (define asin/arr
   (monotone/arr 'asin/arr
-                (Interval -1.0 1.0 #t #t) (Interval -pi/2/rndd pi/2/rndu #t #t) #t
+                (Nonextremal-Interval -1.0 1.0 #t #t)
+                (Nonextremal-Interval -pi/2/rndd pi/2/rndu #t #t)
+                #t
                 flasin
                 flasin/rndd
                 flasin/rndu
@@ -681,7 +642,9 @@
 
 (define acos/arr
   (monotone/arr 'acos/arr
-                (Interval -1.0 1.0 #t #t) (Interval 0.0 pi/rndu #t #t) #f
+                (Nonextremal-Interval -1.0 1.0 #t #t)
+                (Nonextremal-Interval 0.0 pi/rndu #t #t)
+                #f
                 flacos
                 flacos/rndd
                 flacos/rndu
@@ -690,7 +653,9 @@
 
 (define mono-sin/arr
   (monotone/arr 'mono-sin/arr
-                (Interval -pi/2/rndd pi/2/rndu #t #t) (Interval -1.0 1.0 #t #t) #t
+                (Nonextremal-Interval -pi/2/rndd pi/2/rndu #t #t)
+                (Nonextremal-Interval -1.0 1.0 #t #t)
+                #t
                 flsin
                 flsin/rndd
                 flsin/rndu
@@ -699,7 +664,9 @@
 
 (define mono-cos/arr
   (monotone/arr 'mono-cos/arr
-                (Interval 0.0 pi/rndu #t #t) (Interval -1.0 1.0 #t #t) #f
+                (Nonextremal-Interval 0.0 pi/rndu #t #t)
+                (Nonextremal-Interval -1.0 1.0 #t #t)
+                #f
                 flcos
                 flcos/rndd
                 flcos/rndu
@@ -738,10 +705,10 @@
                 flneg-sqrt/rndd
                 flneg-sqrt/rndu))
 
-(: inverse-cdf/arr (Symbol Interval (Flonum -> Flonum) Index (Flonum -> Flonum) Index
+(: inverse-cdf/arr (Symbol Nonempty-Interval (Flonum -> Flonum) Index (Flonum -> Flonum) Index
                            -> prim-expression))
 (define (inverse-cdf/arr name range inv-cdf inv-ulp-error cdf ulp-error)
-  (match-define (interval a b _a? _b?) range)
+  (define-values (a b _a? _b?) (interval-fields range))
   (define-values (inv-cdf/rndd inv-cdf/rndu)
     (make-unary-flops/fake-rnd inv-cdf inv-ulp-error inv-ulp-error a b))
   (define-values (cdf/rndd cdf/rndu)
@@ -757,7 +724,7 @@
 (define (cauchy-cdf x)
   (flcauchy-cdf 0.0 1.0 x #f #f))
 
-(define cauchy/arr (inverse-cdf/arr 'cauchy/arr real-interval cauchy-inv-cdf 2 cauchy-cdf 2))
+(define cauchy/arr (inverse-cdf/arr 'cauchy/arr reals cauchy-inv-cdf 2 cauchy-cdf 2))
 
 
 (: normal-inv-cdf (Flonum -> Flonum))
@@ -768,16 +735,14 @@
 (define (normal-cdf x)
   (flnormal-cdf 0.0 1.0 x #f #f))
 
-(define normal/arr (inverse-cdf/arr 'normal/arr real-interval normal-inv-cdf 4 normal-cdf 4))
+(define normal/arr (inverse-cdf/arr 'normal/arr reals normal-inv-cdf 4 normal-cdf 4))
 
 ;; ===================================================================================================
 ;; Monotone R x R -> R functions
 
-(define real-pair (pair-rect real-interval real-interval))
-
 (define +/arr
   (monotone2d/arr '+/arr
-                  real-pair real-interval
+                  reals reals reals
                   #t #t fl+ fl+/rndd fl+/rndu
                   #t #f fl-/rndd fl-/rndu
                   #t #f fl-/rndd fl-/rndu))
@@ -790,35 +755,35 @@
 
 (define -/arr
   (monotone2d/arr '-/arr
-                  real-pair real-interval
+                  reals reals reals
                   #t #f fl- fl-/rndd fl-/rndu
                   #t #t fl+/rndd fl+/rndu
                   #f #t neg-fl-/rndd neg-fl-/rndu))
 
 (define pos-pos-mul/arr
   (monotone2d/arr '*/arr
-                  (pair-rect nonnegative-interval nonnegative-interval) nonnegative-interval
+                  nonnegative-interval nonnegative-interval nonnegative-interval
                   #t #t fl* fl*/rndd fl*/rndu
                   #t #f fl//rndd fl//rndu
                   #t #f fl//rndd fl//rndu))
 
 (define pos-neg-mul/arr
   (monotone2d/arr '*/arr
-                  (pair-rect nonnegative-interval negative-interval) nonpositive-interval
+                  nonnegative-interval negative-interval nonpositive-interval
                   #f #t fl* fl*/rndd fl*/rndu
                   #f #t fl//rndd fl//rndu
                   #t #t fl//rndd fl//rndu))
 
 (define neg-pos-mul/arr
   (monotone2d/arr '*/arr
-                  (pair-rect negative-interval nonnegative-interval) nonpositive-interval
+                  negative-interval nonnegative-interval nonpositive-interval
                   #t #f fl* fl*/rndd fl*/rndu
                   #t #t fl//rndd fl//rndu
                   #f #t fl//rndd fl//rndu))
 
 (define neg-neg-mul/arr
   (monotone2d/arr '*/arr
-                  (pair-rect negative-interval negative-interval) positive-interval
+                  negative-interval negative-interval positive-interval
                   #f #f fl* fl*/rndd fl*/rndu
                   #f #f fl//rndd fl//rndu
                   #f #f fl//rndd fl//rndu))
@@ -831,28 +796,28 @@
 
 (define pos-pos-div/arr
   (monotone2d/arr '//arr
-                  (pair-rect positive-interval positive-interval) positive-interval
+                  positive-interval positive-interval positive-interval
                   #t #f fl/ fl//rndd fl//rndu
                   #t #t fl*/rndd fl*/rndu
                   #f #t recip-fl//rndd recip-fl//rndu))
 
 (define pos-neg-div/arr
   (monotone2d/arr '//arr
-                  (pair-rect positive-interval negative-interval) negative-interval
+                  positive-interval negative-interval negative-interval
                   #f #f fl/ fl//rndd fl//rndu
                   #f #f fl*/rndd fl*/rndu
                   #f #f recip-fl//rndd recip-fl//rndu))
 
 (define neg-pos-div/arr
   (monotone2d/arr '//arr
-                  (pair-rect negative-interval positive-interval) negative-interval
+                  negative-interval positive-interval negative-interval
                   #t #t fl/ fl//rndd fl//rndu
                   #t #f fl*/rndd fl*/rndu
                   #t #f recip-fl//rndd recip-fl//rndu))
 
 (define neg-neg-div/arr
   (monotone2d/arr '//arr
-                  (pair-rect negative-interval negative-interval) positive-interval
+                  negative-interval negative-interval positive-interval
                   #f #t fl/ fl//rndd fl//rndu
                   #f #t fl*/rndd fl*/rndu
                   #t #t recip-fl//rndd recip-fl//rndu))
@@ -860,11 +825,13 @@
 ;; ===================================================================================================
 ;; Real predicates
 
-(: real-predicate/arr (Symbol (Flonum -> Boolean) Interval* Interval* -> prim-expression))
+(: real-predicate/arr (Symbol (Flonum -> Boolean) Nonempty-Real-Set Nonempty-Real-Set
+                              -> prim-expression))
 (define (real-predicate/arr name p? Γt Γf)
   (predicate/arr (λ: ([γ : Value])
                    (if (flonum? γ) (p? γ) (raise-argument-error name "Flonum" γ)))
-                 Γt Γf))
+                 (bot-basic Γt)
+                 (bot-basic Γf)))
 
 (define negative?/arr
   (real-predicate/arr 'negative?/arr (λ: ([x : Flonum]) (x . fl< . 0.0))
@@ -950,6 +917,8 @@ Sine and cosine arrows are direct translations of the following Racket functions
   (prim-if/arr negative?/arr
                (prim-rcompose/arr (prim-rcompose/arr neg/arr partial-pos-sin/arr) neg/arr)
                partial-pos-sin/arr))
+
+(define real-pair (set-pair reals reals))
 
 ;; Multiplication
 (define */arr

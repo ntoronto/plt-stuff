@@ -34,4 +34,18 @@
                 
                 (define-type T Type)
                 (define t (Type))
+                (define t? Type?))))]
+    [(_ T Parent t)
+     (with-syntax* ([Type  (format-id #'here "~a" #'T)]
+                    [Type?  (format-id #'here "~a?" #'T)]
+                    [t?  (format-id stx "~a?" #'t)])
+       (syntax/loc stx
+         (begin (struct: Type Parent ()
+                  #:transparent
+                  #:property prop:custom-print-quotable 'never
+                  #:property prop:custom-write
+                  (λ (_ port write?) (fprintf port "~a" 't)))
+                
+                (define-type T Type)
+                (define t (Type))
                 (define t? Type?))))]))

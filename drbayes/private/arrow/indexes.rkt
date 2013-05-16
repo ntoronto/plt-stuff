@@ -5,7 +5,7 @@
          racket/list
          "../set/omega.rkt"
          "../set/extremal-set.rkt"
-         "../set/interval.rkt")
+         "../set/real-set.rkt")
 
 (provide (all-defined-out))
 
@@ -16,27 +16,29 @@
 (define interval-min-length (make-parameter 1e-14))
 
 (define-type Interval-Splitter
-  (Interval -> (Values (Listof Interval) (Listof Positive-Flonum))))
+  (Nonextremal-Interval -> (Values (Listof Nonextremal-Interval) (Listof Positive-Flonum))))
 
 (define-type Indexes (Listof (U interval-index if-indexes)))
 (struct: interval-index ([index : Omega-Index] [split : (U #f Interval-Splitter)]) #:transparent)
 (struct: if-indexes ([index : Omega-Index] [true : (-> Indexes)] [false : (-> Indexes)])
   #:transparent)
 
-(: intersect-and-filter ((Listof Interval) Interval -> (Values (Listof Interval)
-                                                               (Listof Positive-Flonum))))
+(: intersect-and-filter ((Listof Nonextremal-Interval) Nonextremal-Interval
+                                                       -> (Values (Listof Nonextremal-Interval)
+                                                                  (Listof Positive-Flonum))))
 (define (intersect-and-filter Is A)
-  (let: loop ([Is Is] [new-Is : (Listof Interval)  empty] [ps : (Listof Positive-Flonum)  empty])
+  (let: loop ([Is Is] [new-Is : (Listof Nonextremal-Interval)  empty]
+                      [ps : (Listof Positive-Flonum)  empty])
     (cond [(empty? Is)  (values (reverse new-Is) (reverse ps))]
           [else
            (define I (interval-intersect (first Is) A))
-           (cond [(empty-set? I)  (loop (rest Is) new-Is ps)]
+           (cond [(empty-real-set? I)  (loop (rest Is) new-Is ps)]
                  [else
                   (define p (interval-measure I))
                   (cond [(p . <= . 0.0)  (loop (rest Is) new-Is ps)]
                         [else  (loop (rest Is) (cons I new-Is) (cons p ps))])])])))
 
-(: make-constant-splitter ((Listof Interval) -> Interval-Splitter))
+(: make-constant-splitter ((Listof Nonextremal-Interval) -> Interval-Splitter))
 (define (make-constant-splitter Is)
   (let-values ([(Is _)  (intersect-and-filter Is unit-interval)])
     (λ (A) (intersect-and-filter Is A))))

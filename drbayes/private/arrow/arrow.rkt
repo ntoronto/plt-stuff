@@ -16,14 +16,20 @@
 (define ((prim-forward-fun->rand f) ω z γ) (f γ))
 
 (: prim-preimage-fun->rand (Prim-Preimage-Fun -> Rand-Preimage-Fun))
-(define ((prim-preimage-fun->rand pre) Z K) (values omega-rect branches-rect (pre K)))
+(define ((prim-preimage-fun->rand pre) Γ K)
+  (match-define (nonempty-domain-set Ωin  Zin  Ain)  Γ)
+  (match-define (nonempty-domain-set Ωout Zout Aout) K)
+  (domain-set (omega-rect-intersect Ωin Ωout)
+              (branches-rect-intersect Zin Zout)
+              (pre Ain Aout)))
 
 (: prim-computation->rand (Prim-Computation -> Rand-Computation))
-(define ((prim-computation->rand comp) _Ω _Z Γ)
-  (define meaning (comp Γ))
-  (cond [(empty-meaning? meaning)  empty-meaning]
-        [else  (match-define (prim-computation-meaning K pre) meaning)
-               (rand-computation-meaning branches-rect K (prim-preimage-fun->rand pre))]))
+(define ((prim-computation->rand comp) Γ)
+  (match-define (nonempty-domain-set Ω Z A) Γ)
+  (match-define (prim-preimage Ain Aout f) (comp A))
+  (rand-preimage (domain-set Ω Z Ain)
+                 (domain-set Ω Z Aout)
+                 (prim-preimage-fun->rand f)))
 
 (: prim-expression->rand (prim-expression -> rand-expression))
 (define (prim-expression->rand e)
@@ -62,7 +68,8 @@
 (: lazy-if/arr (Expression Expression Expression -> Expression))
 (define (lazy-if/arr c-expr t-expr f-expr)
   (rand-rcompose/arr (->rand (pair/arr c-expr id/arr))
-                     (rand-switch/arr (->rand t-expr) (->rand f-expr))))
+                     (rand-switch/arr (->rand (rcompose/arr (ref/arr 'snd) t-expr))
+                                      (->rand (rcompose/arr (ref/arr 'snd) f-expr)))))
 
 (: strict-if/arr (case-> (prim-expression prim-expression prim-expression -> prim-expression)
                          (Expression Expression Expression -> Expression)))
@@ -82,43 +89,47 @@
 (define ((boolean/fwd r p) ω z γ)
   ((omega-ref ω r) . < . p))
 
-(: boolean/pre (Omega-Rect Nonempty-Set Maybe-Interval* Maybe-Interval* -> Rand-Preimage-Fun))
-(define (boolean/pre Ω Γ It If)
-  (define Ω1 (omega-rect-fst Ω))
-  (define Ω2 (omega-rect-snd Ω))
-  (λ (Z K)
-    (define I (cond [(eq? K booleans)  (interval*-union It If)]
-                    [(eq? K trues)     It]
-                    [(eq? K falses)    If]
-                    [else              empty-set]))
-    (cond [(interval*? I)  (values (omega-rect-node I Ω1 Ω2) Z Γ)]
-          [else            (values empty-set empty-set empty-set)])))
+(: boolean/pre (Omega-Index Nonfull-Real-Set Nonfull-Real-Set -> Rand-Preimage-Fun))
+(define ((boolean/pre idx It If) Γ K)
+  (match-define (nonempty-domain-set Ωin  Zin  Ain)  Γ)
+  (match-define (nonempty-domain-set Ωout Zout Aout) K)
+  (define t? (set-member? Aout #t))
+  (define f? (set-member? Aout #f))
+  (define I (cond [(and t? f?)  (real-set-intersect unit-interval (real-set-union It If))]
+                  [t?  It]
+                  [f?  If]
+                  [else  empty-real-set]))
+  (cond [(empty-real-set? I)  empty-set]
+        [else
+         (domain-set (omega-rect-intersect Ωin (omega-rect-set Ωout idx I))
+                     (branches-rect-intersect Zin Zout)
+                     Ain)]))
 
-(: boolean/comp (Interval Interval -> Rand-Computation))
-(define (boolean/comp It If)
-  (cached-rand-computation
-   (λ (Ω Z Γ)
-     (define I (omega-rect-value Ω))
-     (let ([It  (interval*-intersect I It)]
-           [If  (interval*-intersect I If)])
-       (define K (booleans->boolean-rect (not (empty-set? It)) (not (empty-set? If))))
-       (cond [(empty-set? K)  empty-meaning]
-             [else  (define pre (rand-preimage Ω Γ Z K (boolean/pre Ω Γ It If)))
-                    (rand-computation-meaning Z K pre)])))))
+(: boolean/comp (Omega-Index Nonextremal-Interval Nonextremal-Interval -> Rand-Computation))
+(define ((boolean/comp idx It If) Γ)
+  (match-define (nonempty-domain-set Ωin Zin Ain) Γ)
+  (define I (omega-rect-ref Ωin idx))
+  (let ([It  (real-set-intersect I It)]
+        [If  (real-set-intersect I If)])
+    (define Aout (booleans->bool-set (not (empty-real-set? It))
+                                     (not (empty-real-set? If))))
+    (define K (cond [(empty-bool-set? Aout)  empty-set]
+                    [else  (domain-set Ωin Zin Aout)]))
+    (rand-preimage Γ K (boolean/pre idx It If))))
 
 (: boolean/arr (Flonum -> Expression))
 (define (boolean/arr p)
   (cond
     [(and (p . > . 0.0) (p . < . 1.0))
-     (define It (Interval 0.0 p #t #f))
-     (define If (Interval p 1.0 #t #t))
+     (define It (Nonextremal-Interval 0.0 p #t #f))
+     (define If (Nonextremal-Interval p 1.0 #t #t))
      (define split (make-constant-splitter (list It If)))
      (rand-expression
       (λ (r)
         (define idx (reverse r))
         (rand-expression-meaning (list (interval-index idx split))
                                  (boolean/fwd idx p)
-                                 (boolean/comp It If))))]
+                                 (boolean/comp idx It If))))]
     [(= p 0.0)  (c/arr #f)]
     [(= p 1.0)  (c/arr #t)]
     [else  (raise-argument-error 'boolean "probability" p)]))

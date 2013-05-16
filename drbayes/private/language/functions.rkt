@@ -14,10 +14,11 @@
     (cond [(or (null? x) (boolean? x))  x]
           [(pair? x)  (cons (loop (car x)) (loop (cdr x)))]
           [(real? x)  (real->double-flonum x)]
-          [(tagged? x)   (define tag (get-tag x))
-                         (if (symbol? tag)
-                             (tagged tag (loop (get-val x)))
-                             (fail v))]
+          [(tagged-value? x)
+           (define tag (tagged-value-tag x))
+           (if (symbol? tag)
+               (tagged-value tag (loop (tagged-value-value x)))
+               (fail v))]
           [else  (fail v)])))
 
 (: const (case-> (Any -> Value)
@@ -95,15 +96,15 @@
       (raise-argument-error 'partial-cos "Real in [-π,π]" orig-x)))
 
 (define tag?
-  (λ: ([v : Value] [t : Set-Tag])
-    (and (tagged? v) (eq? t (get-tag v)))))
+  (λ: ([v : Value] [t : Tag])
+    (and (tagged-value? v) (eq? t (tagged-value-tag v)))))
 
-(: tag (Value Set-Tag -> Value))
+(: tag (Value Tag -> Value))
 (define (tag v t)
-  (tagged t v))
+  (tagged-value t v))
 
-(: untag (Value Set-Tag -> Value))
+(: untag (Value Tag -> Value))
 (define (untag v t)
   (if (tag? v t)
-      (get-val v)
+      (tagged-value-value v)
       (raise-argument-error 'untag (symbol->string t) v)))

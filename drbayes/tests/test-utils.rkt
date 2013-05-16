@@ -7,23 +7,11 @@
 
 (provide (all-defined-out))
 
-(require/typed
- profile
- [profile-thunk  ((-> Any) -> Void)])
-
-(define: b : Boolean #f)
-
-(define-syntax-rule (profile-expr e . args)
-  (let* ([thnk  (λ () e)]
-         [val  (if b (thnk) #f)])
-    (profile-thunk (λ () (set! val (thnk))) . args)
-    (assert val (λ: ([x : Any]) x))))
-
-(: interval*->ivls (Interval* -> (Listof ivl)))
-(define (interval*->ivls I)
-  (cond [(interval? I)  (match-define (interval a b a? b?) I)
+(: real-set->ivls (Nonempty-Real-Set -> (Listof ivl)))
+(define (real-set->ivls I)
+  (cond [(interval? I)  (define-values (a b a? b?) (interval-fields I))
                         (list (ivl a b))]
-        [else  (append* (map interval*->ivls (interval-list-elements I)))]))
+        [else  (append* (map real-set->ivls (interval-list-elements I)))]))
 
 (: maybe-pad-list (All (A) ((Listof A) Integer (-> A) -> (Listof A))))
 (define (maybe-pad-list lst n thnk)
@@ -51,7 +39,7 @@
        (list-product (map (λ: ([lst : (Listof ivl)])
                             (define n (length lst))
                             (take lst (min n 3)))
-                          (omega-rect-map Ω interval*->ivls)))))
+                          (omega-rect-map Ω real-set->ivls)))))
 
 (: omega->point (Omega -> (Listof Flonum)))
 (define (omega->point ω)
@@ -65,6 +53,6 @@
         [(pair? v)  (append (value->listof-flonum (car v))
                             (value->listof-flonum (cdr v)))]
         [(null? v)  (list)]
-        [(tagged? v)  (value->listof-flonum (get-val v))]
+        [(tagged-value? v)  (value->listof-flonum (tagged-value-value v))]
         [else  (list -1.0)]))
 
