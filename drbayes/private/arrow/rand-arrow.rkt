@@ -16,8 +16,8 @@
 
 (define-type Domain-Set (U Empty-Set nonempty-domain-set))
 
-(struct: nonempty-domain-set ([Ω : Omega-Rect]
-                              [Z : Branches-Rect]
+(struct: nonempty-domain-set ([Ω : Nonempty-Omega-Set]
+                              [Z : Nonempty-Branches-Set]
                               [A : Nonempty-Set])
   #:transparent)
 
@@ -25,21 +25,21 @@
 (define (domain-set-intersect K1 K2)
   (match-define (domain-set Ω1 Z1 A1) K1)
   (match-define (domain-set Ω2 Z2 A2) K2)
-  (domain-set (omega-rect-intersect Ω1 Ω2)
-              (branches-rect-intersect Z1 Z2)
+  (domain-set (omega-set-intersect Ω1 Ω2)
+              (branches-set-intersect Z1 Z2)
               (set-intersect A1 A2)))
 
 (: domain-set-subseteq? (Domain-Set Domain-Set -> Boolean))
 (define (domain-set-subseteq? K1 K2)
   (match-define (domain-set Ω1 Z1 A1) K1)
   (match-define (domain-set Ω2 Z2 A2) K2)
-  (and (omega-rect-subseteq? Ω1 Ω2)
-       (branches-rect-subseteq? Z1 Z2)
+  (and (omega-set-subseteq? Ω1 Ω2)
+       (branches-set-subseteq? Z1 Z2)
        (set-subseteq? A1 A2)))
 
-(: make-domain-set (Maybe-Omega-Rect Maybe-Branches-Rect Set -> Domain-Set))
+(: make-domain-set (Omega-Set Branches-Set Set -> Domain-Set))
 (define (make-domain-set Ω Z A)
-  (cond [(or (empty-set? Ω) (empty-set? Z) (empty-set? A))  empty-set]
+  (cond [(or (empty-tree-set? Ω) (empty-tree-set? Z) (empty-set? A))  empty-set]
         [else  (nonempty-domain-set Ω Z A)]))
 
 (define-match-expander domain-set
@@ -49,11 +49,11 @@
        (syntax/loc stx
          (or (nonempty-domain-set Ω Z A)
              (and (? empty-set?)
-                  (app (λ (_) empty-set) Ω)
-                  (app (λ (_) empty-set) Z)
+                  (app (λ (_) empty-tree-set) Ω)
+                  (app (λ (_) empty-tree-set) Z)
                   (app (λ (_) empty-set) A))
-             (and (app (λ: ([_ : Domain-Set]) empty-set) Ω)
-                  (app (λ (_) empty-set) Z)
+             (and (app (λ: ([_ : Domain-Set]) empty-tree-set) Ω)
+                  (app (λ (_) empty-tree-set) Z)
                   (app (λ (_) empty-set) A))))]))
   (make-head-form #'make-domain-set))
 
@@ -61,8 +61,8 @@
 (define (domain-set-pair K1 K2)
   (match-define (domain-set Ω1 Z1 A1) K1)
   (match-define (domain-set Ω2 Z2 A2) K2)
-  (domain-set (omega-rect-intersect Ω1 Ω2)
-              (branches-rect-intersect Z1 Z2)
+  (domain-set (omega-set-intersect Ω1 Ω2)
+              (branches-set-intersect Z1 Z2)
               (set-pair A1 A2)))
 
 (: domain-set-pair-ref (Domain-Set Pair-Index -> Domain-Set))
@@ -166,12 +166,12 @@
 ;; ===================================================================================================
 ;; Caching wrappers
 #|
-(: rand-preimage (Omega-Rect Nonempty-Set Branches-Rect Nonempty-Set Rand-Preimage-Fun
+(: rand-preimage (Nonempty-Omega-Set Nonempty-Set Nonempty-Branches-Set Nonempty-Set Rand-Preimage-Fun
                              -> Rand-Preimage-Fun))
 ;; Wraps a Rand-Preimage-Fun with code that ensures the argument is a subset of the range; also
 ;; caches return values
 (define ((rand-preimage Ω Γ Z K pre) Zsub Ksub)
-  (let ([Zsub  (branches-rect-intersect Z Zsub)]
+  (let ([Zsub  (branches-set-intersect Z Zsub)]
         [Ksub  (set-intersect K Ksub)])
     (cond [(or (empty-set? Zsub) (empty-set? Ksub))
            (values empty-set empty-set empty-set)]
@@ -191,15 +191,15 @@
 
 (: cached-rand-computation (Rand-Computation -> Rand-Computation))
 (define (cached-rand-computation comp)
-  (define: last-Ω : (U #f Omega-Rect)  #f)
-  (define: last-Z : (U #f Branches-Rect) #f)
+  (define: last-Ω : (U #f Nonempty-Omega-Set)  #f)
+  (define: last-Z : (U #f Nonempty-Branches-Set) #f)
   (define: last-Γ : (U #f Nonempty-Set)  #f)
   (define: last-m : (U #f Rand-Computation-Meaning)  #f)
   (λ (Ω Z Γ)
     (define cached-m last-m)
     (cond
-      [(empty-set? Ω)  empty-meaning]
-      [(empty-set? Z)  empty-meaning]
+      [(empty-tree-set? Ω)  empty-meaning]
+      [(empty-tree-set? Z)  empty-meaning]
       [(empty-set? Γ)  empty-meaning]
       [(not rand-cache-computations?)  (comp Ω Z Γ)]
       [(and (eq? Ω last-Ω) (eq? Z last-Z) (eq? Γ last-Γ) cached-m)
@@ -317,29 +317,37 @@
 (: rand-switch/fwd (Omega-Index (-> Rand-Forward-Fun) (-> Rand-Forward-Fun) -> Rand-Forward-Fun))
 (define ((rand-switch/fwd idx t-fwd f-fwd) ω z γ)
   (match-let ([(cons b γ)  γ])
-    (define zb (branches-ref z idx))
-    (cond [(not (boolean? b))  (bottom (delay (format "if: expected Boolean condition; given ~e" b)))]
-          [(and (eq? b #t) (or (eq? zb #t) (eq? zb 'either)))  ((t-fwd) ω z (cons #t γ))]
-          [(and (eq? b #f) (or (eq? zb #f) (eq? zb 'either)))  ((f-fwd) ω z (cons #f γ))]
-          [else  (bottom (delay (format "if: missed branch at index ~a" idx)))])))
+    (cond
+      [(not (boolean? b))  (bottom (delay (format "if: expected Boolean condition; given ~e" b)))]
+      [else
+       (define zb (branches-ref! z idx b))
+       (cond
+         [(and (eq? b #t) (or (eq? zb #t) (eq? zb 'either)))  ((t-fwd) ω z (cons #t γ))]
+         [(and (eq? b #f) (or (eq? zb #f) (eq? zb 'either)))  ((f-fwd) ω z (cons #f γ))]
+         [else  (bottom (delay (format "if: missed branch at index ~a" idx)))])])))
 
 (: rand-switch/comp (Omega-Index (-> Rand-Computation) (-> Rand-Computation) -> Rand-Computation))
 (define ((rand-switch/comp idx t-comp f-comp) Γ)
   (match-define (nonempty-domain-set Ω Z A) Γ)
-  (match (set-intersect A (set-pair (branches-rect-ref Z idx) universe))
-    [(and A (pair-rect Ab Atf))
-     (define t? (set-member? Ab #t))
-     (define f? (set-member? Ab #f))
-     (cond
-       [(and t? f?)
-        (define Γ (nonempty-domain-set Ω Z A))
-        (define K (nonempty-domain-set Ω Z universe))
-        (rand-preimage Γ K (λ (Γ K) Γ))]
-       [t?  ((t-comp) (nonempty-domain-set Ω (branches-rect-set Z idx trues) (set-pair trues Atf)))]
-       [f?  ((f-comp) (nonempty-domain-set Ω (branches-rect-set Z idx falses) (set-pair falses Atf)))]
-       [else  empty-preimage])]
-    [_
-     empty-preimage]))
+  (let* ([A  (set-intersect A (set-pair (bot-basic (branches-set-ref Z idx)) universe))]
+         [Ab  (set-pair-ref A 'fst)]
+         [Atf  (set-pair-ref A 'snd)])
+    (cond [(and (not-empty-set? A) (not-empty-set? Ab) (not-empty-set? Atf))
+           (define t? (set-member? Ab #t))
+           (define f? (set-member? Ab #f))
+           (cond
+             [(and t? f?)
+              (define Γ (nonempty-domain-set Ω Z A))
+              (define K (nonempty-domain-set Ω Z universe))
+              (rand-preimage Γ K (λ (Γ K) Γ))]
+             [t?  (let ([Γ  (domain-set Ω (branches-set-restrict Z idx trues)
+                                        (set-pair trues Atf))])
+                    (if (empty-set? Γ) empty-preimage ((t-comp) Γ)))]
+             [f?  (let ([Γ  (domain-set Ω (branches-set-restrict Z idx falses)
+                                        (set-pair falses Atf))])
+                    (if (empty-set? Γ) empty-preimage ((f-comp) Γ)))]
+             [else  empty-preimage])]
+          [else  empty-preimage])))
 
 (: rand-switch/arr (rand-expression rand-expression -> rand-expression))
 (define (rand-switch/arr t-expr f-expr)
@@ -372,14 +380,14 @@
   (match-define (nonempty-domain-set Ωout Zout Aout) K)
   (let ([Aout  (real-set-intersect unit-interval (set-take-reals Aout))])
     (cond [(empty-real-set? Aout)  empty-set]
-          [else  (domain-set (omega-rect-intersect Ωin (omega-rect-set Ωout idx Aout))
-                             (branches-rect-intersect Zin Zout)
+          [else  (domain-set (omega-set-intersect Ωin (omega-set-restrict Ωout idx Aout))
+                             (branches-set-intersect Zin Zout)
                              Ain)])))
 
 (: random/comp (Omega-Index -> Rand-Computation))
 (define ((random/comp idx) Γ)
   (match-define (nonempty-domain-set Ω Z A) Γ)
-  (define K (nonempty-domain-set Ω Z (omega-rect-ref Ω idx)))
+  (define K (nonempty-domain-set Ω Z (bot-basic (omega-set-ref Ω idx))))
   (rand-preimage Γ K (random/pre idx)))
 
 (: random/arr rand-expression)

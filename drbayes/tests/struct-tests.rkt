@@ -193,9 +193,9 @@
   (drbayes (trace-light (list (start-p)) (uniform-vec))))
 
 (define H
-  
-  (set-list reals reals reals)
   #;
+  (set-list reals reals reals)
+  
   (set-list (real-set 0.49 0.51)
             (real-set -0.001 0.001)
             (real-set 0.49 0.51)))
@@ -216,26 +216,6 @@
         [else  (preimage-refiner f-comp K)]))
 
 (define-values (traces ws)
-  
-  (let ()
-    (values (build-list 50 (λ: ([i : Integer])
-                              (printf "i = ~v~n" i)
-                              (let: loop : (Listof (List Flonum Flonum Flonum)) ()
-                                (with-handlers ([exn?  (λ (_) (loop))])
-                                  (define ps
-                                    (cast (trace-light (list (start-p)) (uniform-vec))
-                                          (Listof (List Flonum Flonum Flonum))))
-                                  ;(printf "~v~n" (first ps))
-                                  (if (and ((length ps) . > . 2)
-                                           (set-member? (set-list (real-set 0.45 0.55)
-                                                                  (real-set -0.001 0.001)
-                                                                  (real-set 0.45 0.55)
-                                                                  )
-                                                        (first ps)))
-                                      ps
-                                      (loop))))))
-            (build-list 50 (λ (_) 1.0))))
-  #;
   (let ()
     (define pws
       (time

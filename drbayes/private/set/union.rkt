@@ -9,7 +9,6 @@
          "real-set.rkt"
          "bool-set.rkt"
          "null-set.rkt"
-         "pair-set.rkt"
          "extremal-set.rkt"
          "../utils.rkt"
          "../untyped-utils.rkt")
@@ -38,14 +37,29 @@
 ;; Set types
 
 (define-type Nonextremal-Set
-  (Rec N (U (Nonextremal-Basic* N) Full-Basic  ; i.e. Bot-Basic
-            Top-Basic
-            Bot-Tagged Top-Tagged
-            Bot-Union Top-Union)))
+  (U Bot-Basic Top-Basic
+     Bot-Tagged Top-Tagged
+     Bot-Union Top-Union))
 
 (define-type Nonempty-Set (U Nonextremal-Set Universe))
 (define-type  Nonfull-Set (U Nonextremal-Set Empty-Set))
 (define-type          Set (U Nonextremal-Set Universe Empty-Set))
+
+;; ===================================================================================================
+;; Pairs
+
+(struct: Base-Pair-Set Base-Bot-Basic () #:transparent)
+(define pair-set? Base-Pair-Set?)
+
+(define-singleton-type Empty-Pair-Set Base-Pair-Set empty-pair-set)
+(define-singleton-type Full-Pair-Set Base-Pair-Set pairs)
+
+(struct: Nonextremal-Pair-Set Base-Pair-Set ([fst : Nonempty-Set] [snd : Nonempty-Set])
+  #:transparent)
+
+(define-type Nonfull-Pair-Set (U Nonextremal-Pair-Set Empty-Pair-Set))
+(define-type Nonempty-Pair-Set (U Nonextremal-Pair-Set Full-Pair-Set))
+(define-type Pair-Set (U Nonextremal-Pair-Set Full-Pair-Set Empty-Pair-Set))
 
 ;; ===================================================================================================
 ;; Basic sets
@@ -53,35 +67,23 @@
 (define-type  Full-Basic (U  Full-Real-Set  Full-Bool-Set  Full-Null-Set  Full-Pair-Set))
 (define-type Empty-Basic (U Empty-Real-Set Empty-Bool-Set Empty-Null-Set Empty-Pair-Set))
 
-(define-type (Nonextremal-Basic* N)
+(define-type Nonextremal-Basic
   (U Nonextremal-Real-Set
      Nonextremal-Bool-Set
      ;Nonextremal-Null-Set  ; there aren't any nonextremal null sets
-     (Nonextremal-Pair-Set N Universe)))
+     Nonextremal-Pair-Set))
 
-(define-type Nonextremal-Basic (Nonextremal-Basic* Nonextremal-Set))
 (define-type Nonempty-Basic (U Nonextremal-Basic  Full-Basic))
 (define-type  Nonfull-Basic (U Nonextremal-Basic Empty-Basic))
 (define-type          Basic (U Nonextremal-Basic  Full-Basic Empty-Basic))
 
-(define-match-expander pair-rect
-  (syntax-rules ()
-    [(_ A1 A2)  (and (? Nonextremal-Pair-Rect?)
-                     (app (inst Nonextremal-Pair-Rect-fst Nonextremal-Set Universe) A1)
-                     (app (inst Nonextremal-Pair-Rect-snd Nonextremal-Set Universe) A2))])
-  (make-head-form #'(inst Nonextremal-Pair-Rect Nonextremal-Set Universe)))
+(: empty-basic? (Any -> Boolean : Empty-Basic))
+(define (empty-basic? A)
+  (or (empty-real-set? A) (empty-bool-set? A) (empty-null-set? A) (empty-pair-set? A)))
 
-(define-syntax pair-rect?
-  (make-rename-transformer #'Nonextremal-Pair-Rect?))
-
-(define-syntax pair-rect-list
-  (make-head-form #'(inst Nonextremal-Pair-Rect-List Nonextremal-Set Universe)))
-
-(define-syntax pair-rect-list?
-  (make-rename-transformer #'Nonextremal-Pair-Rect-List?))
-
-(define-syntax pair-rect-list-elements
-  (make-head-form #'(inst Nonextremal-Pair-Rect-List-elements Nonextremal-Set Universe)))
+(: full-basic? (Any -> Boolean : Full-Basic))
+(define (full-basic? A)
+  (or (reals? A) (bools? A) (nulls? A) (pairs? A)))
 
 ;; ===================================================================================================
 ;; Top and bottom basic sets
@@ -95,39 +97,6 @@
 
 (define-syntax top-basic-set (make-rename-transformer #'Top-Basic-set))
 (define-syntax top-basic? (make-rename-transformer #'Top-Basic?))
-
-#|
-(: print-bot-basic (Bot-Basic Output-Port (U #t #f 0 1) -> Any))
-(define (print-bot-basic A port mode)
-  (let ([A  (bot-basic-set A)])
-    (cond
-      ;; Nonempty-Real-Set
-      [(full-real-set? A)  (write-string "reals" port)]
-      [(Nonextremal-Interval? A)
-       (match-define (Nonextremal-Interval a b a? b?) A)
-       (cond [(and a? b?)  (pretty-print-constructor 'real-set (list a b) port mode)]
-             [else  (pretty-print-constructor 'real-set (list a b a? b?) port mode)])]
-      [(interval-list? A)
-       (define As (map Bot-Basic (interval-list-elements A)))
-       (pretty-print-constructor 'set-union As port mode)]
-      ;; Nonempty-Bool-Set
-      [(full-bool-set? A)   (write-string "bools" port)]
-      [(true-bool-set? A)   (write-string "trues" port)]
-      [(false-bool-set? A)  (write-string "falses" port)]
-      ;; Full-Null-Set
-      [(full-null-set? A)  (write-string "nulls" port)]
-      ;; Nonempty-Pair-Set
-      [(full-pair-set? A)  (write-string "pairs" port)]
-      [(pair-rect? A)
-       (match-define (pair-rect A1 A2) A)
-       (pretty-print-constructor 'set-pair (list A1 A2) port mode)]
-      [(pair-rect-list? A)
-       (define As (map Bot-Basic (pair-rect-list-elements A)))
-       (pretty-print-constructor 'set-union As port mode)]
-      ;; Shouldn't happen
-      [else
-       (pretty-print-constructor 'bot-basic (list A) port mode)])))
-|#
 
 (: print-top-basic (Top-Basic Output-Port (U #t #f 0 1) -> Any))
 (define (print-top-basic A port mode)
@@ -156,21 +125,17 @@
 (: bot-basic (case-> (Bot-Basic -> Bot-Basic)
                      (Basic -> (U Bot-Basic Empty-Set))))
 (define (bot-basic A)
-  (if (or (empty-real-set? A) (empty-bool-set? A) (empty-null-set? A) (empty-pair-set? A))
-      empty-set
-      A))
+  (if (empty-basic? A) empty-set A))
 
 (: top-basic (case-> (Nonfull-Basic -> Top-Basic)
                      (Basic -> (U Top-Basic Universe))))
 (define (top-basic A)
-  (if (or (reals? A) (bools? A) (nulls? A) (pairs? A))
-      universe
-      (Top-Basic A)))
+  (if (full-basic? A) universe (Top-Basic A)))
 
-(define not-reals (top-basic empty-real-set))
-(define not-bools (top-basic empty-bool-set))
-(define not-nulls (top-basic empty-null-set))
-(define not-pairs (top-basic empty-pair-set))
+(define not-reals (Top-Basic empty-real-set))
+(define not-bools (Top-Basic empty-bool-set))
+(define not-nulls (Top-Basic empty-null-set))
+(define not-pairs (Top-Basic empty-pair-set))
 
 ;; ===================================================================================================
 ;; Tagged sets
@@ -241,12 +206,14 @@
 (struct: Bot-Union Base-Bot-Set ([hash : Bot-Union-Hash])
   #:transparent
   #:property prop:custom-print-quotable 'never
-  #:property prop:custom-write print-bot-union)
+  ;#:property prop:custom-write print-bot-union
+  )
 
 (struct: Top-Union Base-Top-Set ([hash : Top-Union-Hash])
   #:transparent
   #:property prop:custom-print-quotable 'never
-  #:property prop:custom-write print-top-union)
+  ;#:property prop:custom-write print-top-union
+  )
 
 (define-syntax bot-union? (make-rename-transformer #'Bot-Union?))
 (define-syntax top-union? (make-rename-transformer #'Top-Union?))
@@ -254,14 +221,14 @@
 (: bot-union (Bot-Entry Bot-Entry Bot-Entry * -> Bot-Union))
 (define (bot-union A0 A1 . As)
   (cond [(empty? As)  (Bot-Union ((inst hasheq2 Tag Bot-Entry) (bot-tag A0) A0 (bot-tag A1) A1))]
-        [else  (Bot-Union (make-immutable-hash
+        [else  (Bot-Union (make-immutable-hasheq
                            (map (λ: ([A : Bot-Entry]) (cons (bot-tag A) A))
                                 (list* A0 A1 As))))]))
 
 (: top-union (Top-Entry Top-Entry Top-Entry * -> Top-Union))
 (define (top-union A0 A1 . As)
   (cond [(empty? As)  (Top-Union ((inst hasheq2 Tag Top-Entry) (top-tag A0) A0 (top-tag A1) A1))]
-        [else  (Top-Union (make-immutable-hash
+        [else  (Top-Union (make-immutable-hasheq
                            (map (λ: ([A : Top-Entry]) (cons (top-tag A) A))
                                 (list* A0 A1 As))))]))
 

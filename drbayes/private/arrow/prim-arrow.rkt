@@ -280,11 +280,11 @@
   (match-define (prim-preimage Γt Kt t) t-pre)
   (match-define (prim-preimage Γf Kf f) f-pre)
   (prim-preimage
-   (set-union Γt Γf)
-   (set-union Kt Kf)
+   (set-join Γt Γf)
+   (set-join Kt Kf)
    (λ (Γ K)
-     (set-union (run-prim-preimage t-pre (set-intersect Γ Γt) (set-intersect K Kt))
-                (run-prim-preimage f-pre (set-intersect Γ Γf) (set-intersect K Kf))))))
+     (set-join (run-prim-preimage t-pre (set-intersect Γ Γt) (set-intersect K Kt))
+               (run-prim-preimage f-pre (set-intersect Γ Γf) (set-intersect K Kf))))))
 
 (: prim-if/comp (Prim-Computation Prim-Computation Prim-Computation -> Prim-Computation))
 (define ((prim-if/comp c-comp t-comp f-comp) Γ)
@@ -313,7 +313,7 @@
 
 (: ref/pre (Pair-Index -> Prim-Preimage-Fun))
 (define ((ref/pre j) Γ K)
-  (set-intersect Γ (universal-pair-set j K)))
+  (set-pair-restrict Γ j K))
 
 (: ref/comp (Pair-Index -> Prim-Computation))
 (define ((ref/comp j) Γ)
@@ -403,50 +403,37 @@
                                          [else   (values yb ya yb? ya?)]))])
     (interval (f/rndd xa ya) (f/rndu xb yb) (and xa? ya?) (and xb? yb?))))
 
-(define set-pair-map (pair-set-map empty-set set-union))
-
 (: monotone2d/img (Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                            -> Prim-Image-Fun))
 (define ((monotone2d/img xinc? yinc? f/rndd f/rndu) Γ K)
-  (set-intersect
-   (set-pair-map
-    (λ: ([Γx : Nonempty-Set] [Γy : Nonempty-Set])
-      (let ([Γx  (set-take-reals Γx)]
-            [Γy  (set-take-reals Γy)])
-        (define Kf
-          (real-set-map
-           (λ (Γx) (real-set-map (λ (Γy) (monotone2d-apply xinc? yinc? f/rndd f/rndu Γx Γy)) Γy))
-           Γx))
-        (if (empty-real-set? Kf) empty-set Kf)))
-    (set-take-pairs Γ))
-   K))
+  (let* ([Γx  (set-take-reals (set-pair-ref Γ 'fst))]
+         [Γy  (set-take-reals (set-pair-ref Γ 'snd))])
+    (define Kf
+      (real-set-map
+       (λ (Γx) (real-set-map (λ (Γy) (monotone2d-apply xinc? yinc? f/rndd f/rndu Γx Γy)) Γy))
+       Γx))
+    (set-intersect K (bot-basic Kf))))
 
 (: monotone2d/pre (Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                            Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                            -> Prim-Preimage-Fun))
 (define ((monotone2d/pre gz? gy? g/rndd g/rndu hz? hx? h/rndd h/rndu) Γ K)
-  (set-intersect
-   (set-pair-map
-    (λ: ([Γx : Nonempty-Set] [Γy : Nonempty-Set])
-      (let ([Γx  (set-take-reals Γx)]
-            [Γy  (set-take-reals Γy)]
-            [K   (set-take-reals K)])
-        (define X
-          (real-set-map
-           (λ (K) (real-set-map
-                   (λ (Γy) (monotone2d-apply gz? gy? g/rndd g/rndu K Γy))
-                   Γy))
-           K))
-        (define Y
-          (real-set-map
-           (λ (K) (real-set-map
-                   (λ (Γx) (monotone2d-apply hz? hx? h/rndd h/rndu K Γx))
-                   Γx))
-           K))
-        (cond [(or (empty-real-set? X) (empty-real-set? Y))  empty-set]
-              [else  (set-pair X Y)])))
-    (set-take-pairs Γ))
-   Γ))
+  (let* ([K  (set-take-reals K)]
+         [Γx  (set-take-reals (set-pair-ref Γ 'fst))]
+         [Γy  (set-take-reals (set-pair-ref Γ 'snd))])
+    (define X
+      (real-set-map
+       (λ (K) (real-set-map
+               (λ (Γy) (monotone2d-apply gz? gy? g/rndd g/rndu K Γy))
+               Γy))
+       K))
+    (define Y
+      (real-set-map
+       (λ (K) (real-set-map
+               (λ (Γx) (monotone2d-apply hz? hx? h/rndd h/rndu K Γx))
+               Γx))
+       K))
+    (set-intersect Γ (set-pair (bot-basic X) (bot-basic Y)))))
 
 (: monotone2d/comp (Bot-Basic Nonempty-Real-Set
                               Boolean Boolean (Flonum Flonum -> Flonum)
@@ -491,13 +478,13 @@
 (define ((predicate/pre Γt Γf) Γ K)
   (let ([Γt  (if (set-member? K #t) (set-intersect Γ Γt) empty-set)]
         [Γf  (if (set-member? K #f) (set-intersect Γ Γf) empty-set)])
-    (set-union Γt Γf)))
+    (set-join Γt Γf)))
 
 (: predicate/comp (Nonempty-Set Nonempty-Set -> Prim-Computation))
 (define ((predicate/comp Γt Γf) Γ)
   (let ([Γt  (set-intersect Γ Γt)]
         [Γf  (set-intersect Γ Γf)])
-    (define Γ (set-union Γt Γf))
+    (define Γ (set-join Γt Γf))
     (define K (bot-basic (booleans->bool-set (not (empty-set? Γt)) (not (empty-set? Γf)))))
     (prim-preimage Γ K (predicate/pre Γt Γf))))
 

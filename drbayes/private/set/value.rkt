@@ -7,7 +7,6 @@
          "real-set.rkt"
          "bool-set.rkt"
          "null-set.rkt"
-         "pair-set.rkt"
          "extremal-set.rkt"
          "union.rkt")
 
@@ -70,9 +69,8 @@
 
 (: pair->singleton ((Pair Value Value) -> Bot-Basic))
 (define (pair->singleton x)
-  ((inst Nonextremal-Pair-Rect Nonextremal-Set Universe)
-   (value->singleton (car x))
-   (value->singleton (cdr x))))
+  (Nonextremal-Pair-Set (value->singleton (car x))
+                        (value->singleton (cdr x))))
 
 (: tagged-value->singleton (tagged-value -> Bot-Tagged))
 (define (tagged-value->singleton v)

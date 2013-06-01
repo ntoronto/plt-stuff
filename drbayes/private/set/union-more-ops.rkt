@@ -6,7 +6,6 @@
          "real-set.rkt"
          "null-set.rkt"
          "bool-set.rkt"
-         "pair-set.rkt"
          "extremal-set.rkt"
          "union.rkt"
          "value.rkt"
@@ -15,12 +14,10 @@
 
 (provide (all-defined-out))
 
-(: set-subseteq? (Set Set -> Boolean))
-(define (set-subseteq? A B)
-  (empty-set? (set-subtract A B)))
-
 (: set-equal? (Set Set -> Boolean))
 (define (set-equal? A B)
+  (equal? A B)
+  #;
   (and (set-subseteq? A B) (set-subseteq? B A)))
 
 ;; ===================================================================================================
@@ -39,15 +36,11 @@
      (define A (interval a b a? b?))
      (if (empty-real-set? A) empty-set A)]))
 
-(: set-pair
-   (case->
-    (Nonempty-Set Nonempty-Set -> (U (Nonextremal-Pair-Rect Nonempty-Set Universe) Full-Pair-Set))
-    (Set Set -> (U (Nonextremal-Pair-Rect Nonempty-Set Universe) Full-Pair-Set Empty-Set))))
+(: set-pair (case-> (Nonempty-Set Nonempty-Set -> Nonempty-Pair-Set)
+                    (Set Set -> (U Empty-Set Nonempty-Pair-Set))))
 (define (set-pair A B)
-  (cond [(and (universe? A) (universe? B))   pairs]
-        [(empty-set? A)  empty-set]
-        [(empty-set? B)  empty-set]
-        [else  ((inst Nonextremal-Pair-Rect Nonempty-Set Universe) A B)]))
+  (define C (pair-set A B))
+  (if (empty-pair-set? C) empty-set C))
 
 (: set-list (case-> (Nonempty-Set * -> Nonempty-Set)
                     (Set * -> Set)))
@@ -60,7 +53,6 @@
   (let loop ([A A] [As As])
     (cond [(empty? As)  A]
           [else  (set-pair A (loop (first As) (rest As)))])))
-
 
 ;; ===================================================================================================
 ;; Tagging and untagging
@@ -80,41 +72,6 @@
         [(top-basic? A)   universe]
         [(top-tagged? A)  (if (eq? tag (top-tagged-tag A)) (top-tagged-set A) universe)]
         [else             (set-untag (top-union-ref A tag) tag)]))
-
-#|
-(: basic-untag-empty (Tag -> Empty-Basic))
-(define (basic-untag-empty tag)
-  (cond [(eq? tag real-tag)  empty-real-set]
-        [(eq? tag bool-tag)  empty-bool-set]
-        [(eq? tag null-tag)  empty-null-set]
-        [(eq? tag pair-tag)  empty-pair-set]
-        [else  (raise-argument-error 'basic-untag "basic Tag" tag)]))
-
-(: basic-untag-full (Tag -> Full-Basic))
-(define (basic-untag-full tag)
-  (cond [(eq? tag real-tag)  reals]
-        [(eq? tag bool-tag)  bools]
-        [(eq? tag null-tag)  nulls]
-        [(eq? tag pair-tag)  pairs]
-        [else  (raise-argument-error 'basic-untag "basic Tag" tag)]))
-
-(: basic-untag (Set Tag -> Basic))
-(define (basic-untag A tag)
-  (cond [(empty-set? A)   (basic-untag-empty tag)]
-        [(universe? A)    (basic-untag-full tag)]
-        [(bot-set? A)
-         (cond [(bot-basic? A)   (if (eq? tag (basic-tag A))
-                                     A
-                                     (basic-untag-empty tag))]
-               [(bot-tagged? A)  (basic-untag-empty tag)]
-               [else             (basic-untag (bot-union-ref A tag) tag)])]
-        [else
-         (cond [(top-basic? A)   (if (eq? tag (top-basic-tag A))
-                                     (top-basic-set A)
-                                     (basic-untag-full tag))]
-               [(top-tagged? A)  (basic-untag-full tag)]
-               [else             (basic-untag (top-union-ref A tag) tag)])]))
-|#
 
 (define-syntax-rule (make-set-take-basic pred? tag empty full)
   (λ (A)
@@ -140,7 +97,7 @@
 (: set-take-nulls (Set -> Null-Set))
 (define set-take-nulls (make-set-take-basic null-set? null-tag empty-null-set nulls))
 
-(: set-take-pairs (Set -> (Pair-Set Nonempty-Set Universe)))
+(: set-take-pairs (Set -> Pair-Set))
 (define set-take-pairs (make-set-take-basic pair-set? pair-tag empty-pair-set pairs))
 
 ;; ===================================================================================================
@@ -149,24 +106,25 @@
 (: set-pair-ref (Set Pair-Index -> Set))
 (define (set-pair-ref A j)
   (let ([A  (set-take-pairs A)])
-    (cond [(pair-rect? A)  (pair-rect-ref A j)]
-          [(pair-rect-list? A)
-           (define As (pair-rect-list-elements A))
-           (for/fold ([B  (pair-rect-ref (first As) j)]) ([A  (in-list (rest As))])
-             (set-union B (pair-rect-ref A j)))]
-          [else  empty-set])))
+    (cond [(empty-pair-set? A)  empty-set]
+          [else
+           (define-values (A1 A2) (cond [(pairs? A)  (values universe universe)]
+                                        [else  (match-define (Nonextremal-Pair-Set A1 A2) A)
+                                               (values A1 A2)]))
+           (cond [(eq? j 'fst)  A1]
+                 [(eq? j 'snd)  A2]
+                 [(zero? j)     A1]
+                 [else  (set-pair-ref A2 (- j 1))])])))
 
-(: pair-rect-ref (Basic Pair-Index -> Set))
-(define (pair-rect-ref A j)
-  (match-define (pair-rect A1 A2) A)
-  (cond [(eq? j 'fst)  A1]
-        [(eq? j 'snd)  A2]
-        [(zero? j)  A1]
-        [else  (set-pair-ref A2 (- j 1))]))
-
-(: universal-pair-set (Pair-Index Nonempty-Set -> Nonempty-Set))
-(define (universal-pair-set j A)
-  (cond [(eq? j 'fst)  (set-pair A universe)]
-        [(eq? j 'snd)  (set-pair universe A)]
-        [(zero? j)     (set-pair A universe)]
-        [else  (set-pair universe (universal-pair-set (- j 1) A))]))
+(: set-pair-restrict (Set Pair-Index Set -> Set))
+(define (set-pair-restrict A j B)
+  (let ([A  (set-take-pairs A)])
+    (cond [(or (empty-pair-set? A) (empty-set? B))  empty-set]
+          [else
+           (define-values (A1 A2) (cond [(pairs? A)  (values universe universe)]
+                                        [else  (match-define (Nonextremal-Pair-Set A1 A2) A)
+                                               (values A1 A2)]))
+           (cond [(eq? j 'fst)  (set-pair (set-intersect A1 B) A2)]
+                 [(eq? j 'snd)  (set-pair A1 (set-intersect A2 B))]
+                 [(zero? j)     (set-pair (set-intersect A1 B) A2)]
+                 [else  (set-pair A1 (set-pair-restrict A2 (- j 1) B))])])))

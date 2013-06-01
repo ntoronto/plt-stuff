@@ -6,7 +6,6 @@
          "../private/set/real-set.rkt"
          "../private/set/bool-set.rkt"
          "../private/set/null-set.rkt"
-         "../private/set/pair-set.rkt"
          "../private/set/extremal-set.rkt"
          "../private/set/union.rkt"
          "../private/set/value.rkt"
@@ -159,11 +158,9 @@
         [(falses? A)  #f]
         [(nulls? A)  null]
         [(pairs? A)  (cons (random-universe-member) (random-universe-member))]
-        [(pair-rect? A)
-         (match-define (pair-rect A1 A2) A)
-         (cons (random-set-member A1) (random-set-member A2))]
         [else
-         (random-basic-member (random-element (pair-rect-list-elements A)))]))
+         (match-define (Nonextremal-Pair-Set A1 A2) A)
+         (cons (random-set-member A1) (random-set-member A2))]))
 
 (: random-bot-basic-member (Bot-Basic -> Value))
 (define (random-bot-basic-member A)
@@ -180,8 +177,6 @@
   (random-set-member (random-element As)))
 
 (define tags (list real-tag bool-tag null-tag pair-tag a-tag b-tag))
-
-(define-predicate empty-basic? Empty-Basic)
 
 (: random-top-basic-member (Top-Basic -> Value))
 (define (random-top-basic-member A)
@@ -236,20 +231,19 @@
 
 (time
  (for: ([_  (in-range 100000)])
-   (check-set-algebra set-equal?
-                      set-member?
-                      set-subseteq?
-                      empty-set
-                      universe
-                      set-subtract
-                      set-union
-                      set-intersect
-                      random-set
-                      random-set-member)
-   (check-bounded-lattice set-equal?
-                          set-subseteq?
-                          set-union
-                          set-intersect
-                          empty-set
-                          universe
-                          random-set)))
+   (check-membership-lattice
+    empty-set?
+    set-member?
+    set-subseteq?
+    set-join
+    set-intersect
+    random-set
+    random-set-member)
+   (check-bounded-lattice
+    set-equal?
+    set-subseteq?
+    set-join
+    set-intersect
+    empty-set
+    universe
+    random-set)))

@@ -2,116 +2,110 @@
 
 (require "../private/set/pair-set.rkt"
          "../private/set/real-set.rkt"
+         "../private/set/bool-set.rkt"
+         "../private/untyped-utils.rkt"
          "../private/utils.rkt"
          "rackunit-utils.rkt"
          "random-real-set.rkt"
+         "random-bool-set.rkt"
          "profile.rkt")
 
 (printf "starting...~n")
 
-;; Using `inst' makes type checking very fast; but without it, inferring the type parameters takes a
-;; long, long time (may be exponential or looping forever)
+(struct: Value ([fst : Flonum] [snd : Boolean]) #:transparent)
+(struct: Nonextremal-Rect ([fst : Nonempty-Real-Set] [snd : Nonempty-Bool-Set]) #:transparent)
 
-(define real-set-sig
-  ((inst set-sig Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
-   real-set-member?
-   reals?
-   empty-real-set?
-   reals
-   empty-real-set
-   real-set-complement
-   real-set-subtract
-   real-set-intersect
-   real-set-union
-   ))
+(define-singleton-type Empty-Rect empty-rect)
+(define-singleton-type Full-Rect full-rect)
 
-(define-type Nonextremal-Real-Pair-Set (Pair-Set Nonextremal-Real-Set Full-Real-Set))
-(define-type Nonfull-Real-Pair-Set (U Nonextremal-Real-Pair-Set Empty-Pair-Set))
-(define-type Nonempty-Real-Pair-Set (U Nonextremal-Real-Pair-Set Full-Pair-Set))
-(define-type Real-Pair-Set (U Nonextremal-Real-Pair-Set Full-Pair-Set Empty-Pair-Set))
+(define-type Nonfull-Rect (U Nonextremal-Rect Empty-Rect))
+(define-type Nonempty-Rect (U Nonextremal-Rect Full-Rect))
+(define-type Rect (U Nonextremal-Rect Full-Rect Empty-Rect))
 
-(define pair-set
-  (make-pair-set Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum real-set-sig))
+(define-syntax real-set-sig
+  (set-sig
+   #'(Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
+   #'real-set-member?
+   #'reals?
+   #'empty-real-set?
+   #'reals
+   #'empty-real-set
+   #'real-set-intersect
+   #'real-set-union
+   #'real-set-subseteq?))
 
-(define pair-set-complement
-  ((inst make-pair-set-complement Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
-   real-set-sig))
+(define-syntax bool-set-sig
+  (set-sig
+   #'(Nonextremal-Bool-Set Full-Bool-Set Empty-Bool-Set Boolean)
+   #'bool-set-member?
+   #'bools?
+   #'empty-bool-set?
+   #'bools
+   #'empty-bool-set
+   #'bool-set-intersect
+   #'bool-set-union
+   #'bool-set-subseteq?))
 
-(define pair-set-subtract
-  ((inst make-pair-set-subtract Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
-   real-set-sig))
+(define-syntax self-sig
+  (set-sig
+   #'(Nonextremal-Rect Full-Rect Empty-Rect Value)
+   #'rect-member?
+   #'full-rect?
+   #'empty-rect?
+   #'full-rect
+   #'empty-rect
+   #'rect-intersect
+   #'rect-join
+   #'rect-subseteq?))
 
-(define pair-set-intersect
-  ((inst make-pair-set-intersect Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
-   real-set-sig))
+(define-syntax sig
+  (rect-sig
+   (syntax-local-value #'self-sig)
+   (syntax-local-value #'real-set-sig)
+   (syntax-local-value #'bool-set-sig)
+   #'Nonextremal-Rect #'Nonextremal-Rect-fst #'Nonextremal-Rect-snd
+   #'Value #'Value-fst #'Value-snd))
 
-(define pair-set-union
-  ((inst make-pair-set-union Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
-   real-set-sig))
+(define-rect-constructor rect sig)
+(define-rect-ops rect sig)
 
-(define pair-set-subseteq?
-  ((inst make-pair-set-subseteq? Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
-   real-set-sig))
+(: rect-equal? (Rect Rect -> Boolean))
+(define (rect-equal? A B)
+  (and (rect-subseteq? A B) (rect-subseteq? B A)))
 
-(define pair-set-member?
-  ((inst make-pair-set-member? Nonextremal-Real-Set Full-Real-Set Empty-Real-Set Flonum)
-   real-set-sig))
-
-(: pair-set-equal? (Real-Pair-Set Real-Pair-Set -> Boolean))
-(define (pair-set-equal? A B)
-  (and (pair-set-subseteq? A B) (pair-set-subseteq? B A)))
-
-(: pair-rect-measure ((Nonextremal-Pair-Rect Nonextremal-Real-Set Full-Real-Set) -> Flonum))
-(define (pair-rect-measure A)
-  (match-define (Nonextremal-Pair-Rect A1 A2) A)
-  (* (real-set-measure A1) (real-set-measure A2)))
-
-(: random-pair-set (-> Real-Pair-Set))
-(define (random-pair-set)
+(: random-rect (-> Rect))
+(define (random-rect)
   (define r (random))
-  (cond [(r . < . 0.1)  pairs]
-        [(r . < . 0.2)  empty-pair-set]
+  (cond [(r . < . 0.1)  full-rect]
+        [(r . < . 0.2)  empty-rect]
         [else
          (let loop ()
-           (define A (pair-set (random-real-set)
-                               (random-real-set)))
-           (if (or (pairs? A) (empty-pair-set? A)) (loop) A))]))
+           (define A (rect (random-real-set) (random-bool-set)))
+           (if (or (full-rect? A) (empty-rect? A)) (loop) A))]))
 
-(: random-pair/rect ((Nonextremal-Pair-Rect Nonextremal-Real-Set Full-Real-Set)
-                     -> (Pair Flonum Flonum)))
-(define (random-pair/rect A)
-  (match-define (Nonextremal-Pair-Rect A1 A2) A)
-  (cons (random-real A1) (random-real A2)))
-
-(: random-pair (Real-Pair-Set -> (Pair Flonum Flonum)))
-(define (random-pair A)
-  (cond [(empty-pair-set? A)  (cons +nan.0 +nan.0)]
-        [(pairs? A)  (cons (random-real reals)
-                           (random-real reals))]
-        [(Nonextremal-Pair-Rect? A)
-         (random-pair/rect A)]
+(: random-value (Rect -> Value))
+(define (random-value A)
+  (cond [(empty-rect? A)  (Value +nan.0 #f)]
+        [(full-rect? A)   (Value (random-real reals) (random-bool bools))]
         [else
-         (define As (Nonextremal-Pair-Rect-List-elements A))
-         (define i (sample-index (normalize-probs/+2 (map/+2 pair-rect-measure As))))
-         (random-pair/rect (list-ref As i))]))
-
+         (match-define (Nonextremal-Rect A1 A2) A)
+         (Value (random-real A1) (random-bool A2))]))
 
 (time
  (for: ([_  (in-range 100000)])
-   (check-set-algebra pair-set-equal?
-                      pair-set-member?
-                      pair-set-subseteq?
-                      empty-pair-set
-                      pairs
-                      pair-set-subtract
-                      pair-set-union
-                      pair-set-intersect
-                      random-pair-set
-                      random-pair)
-   (check-bounded-lattice pair-set-equal?
-                          pair-set-subseteq?
-                          pair-set-union
-                          pair-set-intersect
-                          empty-pair-set
-                          pairs
-                          random-pair-set)))
+   (check-membership-lattice
+    empty-rect?
+    rect-member?
+    rect-subseteq?
+    rect-join
+    rect-intersect
+    random-rect
+    random-value)
+   (check-bounded-lattice
+    rect-equal?
+    rect-subseteq?
+    rect-join
+    rect-intersect
+    empty-rect
+    full-rect
+    random-rect)))

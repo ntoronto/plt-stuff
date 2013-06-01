@@ -1,360 +1,360 @@
-#lang typed/racket/base
+#lang racket/base
 
 #|
 TODO: Look up self-balancing quadtrees to change set ops from O(n^2) to O(n*log(n))
 |#
 
-(require racket/list
+(require (for-syntax racket/base
+                     racket/syntax)
+         racket/list
+         typed/racket/base
          "types.rkt"
          "../utils.rkt"
          "../untyped-utils.rkt")
 
-(provide (all-defined-out))
-
-(struct: Base-Pair-Set Base-Bot-Basic () #:transparent)
-(define pair-set? Base-Pair-Set?)
-
-(define-singleton-type Empty-Pair-Set Base-Pair-Set empty-pair-set)
-(define-singleton-type Full-Pair-Set Base-Pair-Set pairs)
-
-(struct: (N F) Nonextremal-Pair-Rect Base-Pair-Set
-  ([fst : (U N F)] [snd : (U N F)])
-  #:transparent)
-
-(define-type (Nonfull-Pair-Rect N F) (U (Nonextremal-Pair-Rect N F) Empty-Pair-Set))
-(define-type (Nonempty-Pair-Rect N F) (U (Nonextremal-Pair-Rect N F) Full-Pair-Set))
-(define-type (Pair-Rect N F) (U (Nonextremal-Pair-Rect N F) Full-Pair-Set Empty-Pair-Set))
-
-(struct: (N F) Nonextremal-Pair-Rect-List Base-Pair-Set
-  ([elements : (Listof+2 (Nonextremal-Pair-Rect N F))])
-  #:transparent)
-
-(define-type (Nonextremal-Pair-Set N F)
-  (U (Nonextremal-Pair-Rect N F) (Nonextremal-Pair-Rect-List N F)))
-
-(define-type (Nonfull-Pair-Set N F) (U (Nonextremal-Pair-Set N F) Empty-Pair-Set))
-(define-type (Nonempty-Pair-Set N F) (U (Nonextremal-Pair-Set N F) Full-Pair-Set))
-(define-type (Pair-Set N F) (U (Nonextremal-Pair-Set N F) Full-Pair-Set Empty-Pair-Set))
-
-(: nonfull-pair-set->list
-   (All (N F) (case-> ((Nonextremal-Pair-Set N F) -> (Listof+1 (Nonextremal-Pair-Rect N F)))
-                      ((Nonfull-Pair-Set N F) -> (Listof (Nonextremal-Pair-Rect N F))))))
-(define (nonfull-pair-set->list A)
-  (cond [(empty-pair-set? A)  '()]
-        [(Nonextremal-Pair-Rect? A)  (list A)]
-        [else  (Nonextremal-Pair-Rect-List-elements A)]))
-
-(: list->pair-set
-   (All (N F) (case-> ((Listof+1 (Nonextremal-Pair-Rect N F)) -> (Nonextremal-Pair-Set N F))
-                      ((Listof (Nonextremal-Pair-Rect N F)) -> (Nonfull-Pair-Set N F)))))
-(define (list->pair-set Cs)
-  (cond [(empty? Cs)  empty-pair-set]
-        [(empty? (rest Cs))  (first Cs)]
-        [else  (Nonextremal-Pair-Rect-List Cs)]))
+(provide (all-defined-out)
+         (for-syntax (all-defined-out)))
 
 ;; ===================================================================================================
-;; Operations on Pair-Rect
+;; Signatures for abstract set data types
 
-(struct: (N F E V) set-sig
-  ([member? : ((U N F E) V -> Boolean)]
-   [full? : (Any -> Boolean : F)]
-   [empty? : (Any -> Boolean : E)]
-   [full : F]
-   [empty : E]
-   [complement
-    : (case->
-       (N -> N)
-       ((U N E) -> (U N F))
-       ((U N F) -> (U N E))
-       ((U N F E) -> (U N F E)))]
-   [subtract
-    : (case->
-       (F N -> N)
-       (F (U N E) -> (U N F))
-       ((U N F E) (U N F) -> (U N E))
-       ((U N F E) (U N F E) -> (U N F E)))]
-   [intersect
-    : (case->
-       ((U N F E) (U N E) -> (U N E))
-       ((U N E) (U N F E) -> (U N E))
-       ((U N F E) (U N F E) -> (U N F E)))]
-   [union
-    : (case->
-       ((U N F E) (U N F) -> (U N F))
-       ((U N F) (U N F E) -> (U N F))
-       ((U N F E) (U N F E) -> (U N F E)))])
-  #:transparent)
+(begin-for-syntax
+  (struct set-sig (types member? full? empty? full empty intersect join subseteq?)
+    #:transparent)
+  
+  (struct rect-sig (set-sig
+                    fst-set-sig snd-set-sig
+                    rect rect-fst rect-snd
+                    value value-fst value-snd)
+    #:transparent)
+  )
 
-;; This has to be a syntax rule so that the occurrence checks in the body have concrete types to work
-;; with. Otherwise, TR can't exclude disjoint types in each occurrence because it doesn't know whether
-;; they're disjoint; e.g. it can't tell that if (full? A) is true then (empty? A) is false.
-(define-syntax-rule (make-pair-set N F E V ops)
-  (let: ([ops : (set-sig N F E V)  ops]
-         [full?  ((inst set-sig-full? N F E V) ops)]
-         [empty?  ((inst set-sig-empty? N F E V) ops)])
-    (ann (λ (A B)
-           (cond [(and (full? A) (full? B))   pairs]
-                 [(empty? A)  empty-pair-set]
-                 [(empty? B)  empty-pair-set]
-                 [else  ((inst Nonextremal-Pair-Rect N F) A B)]))
-         (case-> ((U N F) N -> (Nonextremal-Pair-Rect N F))
-                 (N (U N F) -> (Nonextremal-Pair-Rect N F))
-                 ((U N F) (U N F) -> (Nonempty-Pair-Rect N F))
-                 ((U N E) (U N F E) -> (Nonfull-Pair-Rect N F))
-                 ((U N F E) (U N E) -> (Nonfull-Pair-Rect N F))
-                 ((U N F E) (U N F E) -> (Pair-Rect N F))))))
+;; ---------------------------------------------------------------------------------------------------
+;; Typed binding getters for sets
 
-(: make-pair-rect-complement
-   (All (N F E V) ((set-sig N F E V)
-                   -> ((Nonextremal-Pair-Rect N F) -> (Listof+1 (Nonextremal-Pair-Rect N F))))))
-(define (make-pair-rect-complement ops)
-  (define empty? (set-sig-empty? ops))
-  (define full (set-sig-full ops))
-  (define complement (set-sig-complement ops))
-  (λ (B)
-    (define B1 (Nonextremal-Pair-Rect-fst B))
-    (define B2 (Nonextremal-Pair-Rect-snd B))
-    (define C
-      (let ([C1  (complement B1)])
-        (if (empty? C1) empty-pair-set (Nonextremal-Pair-Rect C1 full))))
-    (define D
-      (let ([D2  (complement B2)])
-        (if (empty? D2) empty-pair-set (Nonextremal-Pair-Rect B1 D2))))
-    (if (empty-pair-set? C)
-        (if (empty-pair-set? D)
-            ;; Either B1 or B2 is nonfull, but we can't prove it
-            (raise-argument-error 'pair-rect-complement "nonfull Nonextremal-Pair-Rect" B)
-            (list D))
-        (if (empty-pair-set? D) (list C) (list C D)))))
+(define-for-syntax (set-sig-member?-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: ((U N F E) V -> Boolean)
+         #,(set-sig-member? sig))))
 
-(: make-pair-rect-subtract
-   (All (N F E V) ((set-sig N F E V)
-                   -> ((Nonextremal-Pair-Rect N F) (Nonextremal-Pair-Rect N F)
-                                                   -> (Listof (Nonextremal-Pair-Rect N F))))))
-(define (make-pair-rect-subtract ops)
-  (define empty? (set-sig-empty? ops))
-  (define subtract (set-sig-subtract ops))
-  (define intersect (set-sig-intersect ops))
-  (λ (A B)
-    (define A1 (Nonextremal-Pair-Rect-fst A))
-    (define A2 (Nonextremal-Pair-Rect-snd A))
-    (define B1 (Nonextremal-Pair-Rect-fst B))
-    (define B2 (Nonextremal-Pair-Rect-snd B))
-    (define C
-      (let ([C1  (subtract A1 B1)])
-        (if (empty? C1) empty-pair-set (Nonextremal-Pair-Rect C1 A2))))
-    (define D
-      (let ([D1  (intersect A1 B1)])
-        (cond [(empty? D1)  empty-pair-set]
-              [else
-               (define D2 (subtract A2 B2))
-               (if (empty? D2) empty-pair-set (Nonextremal-Pair-Rect D1 D2))])))
-    (if (empty-pair-set? C)
-        (if (empty-pair-set? D) '() (list D))
-        (if (empty-pair-set? D) (list C) (list C D)))))
+(define-for-syntax (set-sig-full?-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: (Any -> Boolean : F)
+         #,(set-sig-full? sig))))
 
-(: make-pair-rect-intersect
-   (All (N F E V) ((set-sig N F E V)
-                   -> ((Nonextremal-Pair-Rect N F) (Nonextremal-Pair-Rect N F)
-                                                   -> (Listof (Nonextremal-Pair-Rect N F))))))
-(define (make-pair-rect-intersect ops)
-  (define empty? (set-sig-empty? ops))
-  (define intersect (set-sig-intersect ops))
-  (λ (A B)
-    (define A1 (Nonextremal-Pair-Rect-fst A))
-    (define A2 (Nonextremal-Pair-Rect-snd A))
-    (define B1 (Nonextremal-Pair-Rect-fst B))
-    (define B2 (Nonextremal-Pair-Rect-snd B))
-    (define C1 (intersect A1 B1))
-    (define C2 (intersect A2 B2))
-    (cond [(or (empty? C1) (empty? C2))  '()]
-          [else
-           (define A1? (eq? C1 A1))
-           (define A2? (eq? C2 A2))
-           (cond [(and A1? A2?)  (list A)]
-                 [else
-                  (define B1? (eq? C1 B1))
-                  (define B2? (eq? C2 B2))
-                  (cond [(and B1? B2?)  (list B)]
-                        [else
-                         (list (Nonextremal-Pair-Rect (if A1? A1 (if B1? B1 C1))
-                                                      (if A2? A2 (if B2? B2 C2))))])])])))
+(define-for-syntax (set-sig-empty?-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: (Any -> Boolean : E)
+         #,(set-sig-empty? sig))))
 
-(: make-pair-rect-member?
-   (All (N F E V) ((set-sig N F E V) -> ((Nonextremal-Pair-Rect N F) (Pair V V) -> Boolean))))
-(define (make-pair-rect-member? ops)
-  (define member? (set-sig-member? ops))
-  (λ (A x)
-    (and (member? (Nonextremal-Pair-Rect-fst A) (car x))
-         (member? (Nonextremal-Pair-Rect-snd A) (cdr x)))))
+(define-for-syntax (set-sig-full-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: F
+         #,(set-sig-full sig))))
+
+(define-for-syntax (set-sig-empty-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: E
+         #,(set-sig-empty sig))))
+
+(define-for-syntax (set-sig-intersect-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: (case-> ((U N F E) (U N E)   -> (U N E))
+                 ((U N E)   (U N F E) -> (U N E))
+                 ((U N F E) (U N F E) -> (U N F E)))
+         #,(set-sig-intersect sig))))
+
+(define-for-syntax (set-sig-join-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: (case-> ((U N F E) (U N F)   -> (U N F))
+                 ((U N F)   (U N F E) -> (U N F))
+                 ((U N F E) (U N F E) -> (U N F E)))
+         #,(set-sig-join sig))))
+
+(define-for-syntax (set-sig-subseteq?-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types sig)])
+    #`(: ((U N F E) (U N F E) -> Boolean)
+         #,(set-sig-subseteq? sig))))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Typed binding getters for rects
+
+(define-for-syntax (rect-sig-rect-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types (rect-sig-set-sig sig))]
+                [(N1 F1 E1 V1)  (set-sig-types (rect-sig-fst-set-sig sig))]
+                [(N2 F2 E2 V2)  (set-sig-types (rect-sig-snd-set-sig sig))])
+    #`(: ((U N1 F1) (U N2 F2) -> N)
+         #,(rect-sig-rect sig))))
+
+(define-for-syntax (rect-sig-rect-fst-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types (rect-sig-set-sig sig))]
+                [(N1 F1 E1 V1)  (set-sig-types (rect-sig-fst-set-sig sig))])
+    #`(: (N -> (U N1 F1))
+         #,(rect-sig-rect-fst sig))))
+
+(define-for-syntax (rect-sig-rect-snd-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types (rect-sig-set-sig sig))]
+                [(N2 F2 E2 V2)  (set-sig-types (rect-sig-snd-set-sig sig))])
+    #`(: (N -> (U N2 F2))
+         #,(rect-sig-rect-snd sig))))
+
+(define-for-syntax (rect-sig-value-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types (rect-sig-set-sig sig))]
+                [(N1 F1 E1 V1)  (set-sig-types (rect-sig-fst-set-sig sig))]
+                [(N2 F2 E2 V2)  (set-sig-types (rect-sig-snd-set-sig sig))])
+    #`(: (V1 V2 -> V)
+         #,(rect-sig-value sig))))
+
+(define-for-syntax (rect-sig-value-fst-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types (rect-sig-set-sig sig))]
+                [(N1 F1 E1 V1)  (set-sig-types (rect-sig-fst-set-sig sig))])
+    #`(: (V -> V1)
+         #,(rect-sig-value-fst sig))))
+
+(define-for-syntax (rect-sig-value-snd-binding sig)
+  (with-syntax ([(N F E V)  (set-sig-types (rect-sig-set-sig sig))]
+                [(N2 F2 E2 V2)  (set-sig-types (rect-sig-snd-set-sig sig))])
+    #`(: (V -> V2)
+         #,(rect-sig-value-snd sig))))
 
 ;; ===================================================================================================
-;; Complement and difference
+;; Rectangle operations
 
-(: make-rect-list-subtract1
-   (All (N F E V) ((set-sig N F E V)
-                   -> ((Listof (Nonextremal-Pair-Rect N F))
-                       (Nonextremal-Pair-Rect N F)
-                       -> (Listof (Nonextremal-Pair-Rect N F))))))
-(define (make-rect-list-subtract1 ops)
-  (define pair-rect-subtract ((inst make-pair-rect-subtract N F E V) ops))
-  (λ (As B)
-    (let loop ([As As] [B B])
-      (cond [(empty? As)  empty]
-            [else  (append (pair-rect-subtract (first As) B)
-                           (loop (rest As) B))]))))
+(define-for-syntax (value-binding->syntax-binding bnd)
+  (syntax-case bnd (:)
+    [[name : T  val]
+     (syntax/loc bnd
+       [name  (make-head-form #'(ann val T))])]
+    [[name val]
+     (syntax/loc bnd
+       [name  (make-head-form #'val)])]))
 
-(: make-nonextremal-pair-set-complement
-   (All (N F E V) ((set-sig N F E V) -> ((Nonextremal-Pair-Set N F) -> (Nonfull-Pair-Set N F)))))
-(define (make-nonextremal-pair-set-complement ops)
-  (define pair-rect-complement ((inst make-pair-rect-complement N F E V) ops))
-  (define rect-list-subtract1 ((inst make-rect-list-subtract1 N F E V) ops))
-  (λ (B)
-    (define Bs (nonfull-pair-set->list B))
-    (define As (pair-rect-complement (first Bs)))
-    (list->pair-set
-     (for/fold: ([As : (Listof (Nonextremal-Pair-Rect N F))  As]) ([B  (in-list (rest Bs))])
-       (rect-list-subtract1 As B)))))
+(define-syntax (let/cbn: stx)
+  (syntax-case stx ()
+    [(_ (bnds ...) . body)
+     (with-syntax ([(bnds ...)  (map value-binding->syntax-binding
+                                     (syntax->list #'(bnds ...)))])
+       (syntax/loc stx
+         (let-syntax (bnds ...) . body)))]))
 
-(: make-pair-set-complement
-   (All (N F E V) ((set-sig N F E V)
-                   -> (case->
-                       ((Nonextremal-Pair-Set N F) -> (Nonextremal-Pair-Set N F))
-                       ((Nonfull-Pair-Set N F) -> (Nonempty-Pair-Set N F))
-                       ((Nonempty-Pair-Set N F) -> (Nonfull-Pair-Set N F))
-                       ((Pair-Set N F) -> (Pair-Set N F))))))
-(define (make-pair-set-complement ops)
-  (define nonextremal-pair-set-complement ((inst make-nonextremal-pair-set-complement N F E V) ops))
-  (λ (B)
-    (cond [(empty-pair-set? B)  pairs]
-          [(pairs? B)   empty-pair-set]
-          [else
-           (define C (nonextremal-pair-set-complement B))
-           (cond [(empty-pair-set? C)
-                  (raise-argument-error 'pair-set-complement "nonfull Nonextremal-Pair-Set" B)]
-                 [else  C])])))
+(define-for-syntax (make-maker make*)
+  (λ (sig)
+    (define-values (expr type) (make* sig))
+    #`(ann #,expr #,type)))
 
-(: make-pair-set-subtract
-   (All (N F E V) ((set-sig N F E V)
-                   -> (case->
-                       (Full-Pair-Set (Nonextremal-Pair-Set N F) -> (Nonextremal-Pair-Set N F))
-                       (Full-Pair-Set (Nonfull-Pair-Set N F) -> (Nonempty-Pair-Set N F))
-                       ((Pair-Set N F) (Nonempty-Pair-Set N F) -> (Nonfull-Pair-Set N F))
-                       ((Pair-Set N F) (Pair-Set N F) -> (Pair-Set N F))))))
-(define (make-pair-set-subtract ops)
-  (define pair-set-complement ((inst make-pair-set-complement N F E V) ops))
-  (define rect-list-subtract1 ((inst make-rect-list-subtract1 N F E V) ops))
-  (λ (A B)
-    (cond [(pairs? A)  (pair-set-complement B)]
-          [(empty-pair-set? B)  A]
-          [(empty-pair-set? A)  A]
-          [(pairs? B)  empty-pair-set]
-          [else
-           (define As (nonfull-pair-set->list A))
-           (define Bs (nonfull-pair-set->list B))
-           (list->pair-set
-            (for/fold: ([As : (Listof (Nonextremal-Pair-Rect N F))  As]) ([B  (in-list Bs)])
-              (rect-list-subtract1 As B)))])))
+;; ---------------------------------------------------------------------------------------------------
+;; Construction
 
-;; ===================================================================================================
+(define-for-syntax (make-rect* sig)
+  (define self-sig (rect-sig-set-sig sig))
+  (define fst-sig (rect-sig-fst-set-sig sig))
+  (define snd-sig (rect-sig-snd-set-sig sig))
+  (with-syntax ([(N F E V)  (set-sig-types self-sig)]
+                [(N1 F1 E1 V1)  (set-sig-types fst-sig)]
+                [(N2 F2 E2 V2)  (set-sig-types snd-sig)])
+    (values
+     #`(let/cbn:
+        ([full . #,(set-sig-full-binding self-sig)]
+         [empty . #,(set-sig-empty-binding self-sig)]
+         [rect . #,(rect-sig-rect-binding sig)]
+         [fst-full? . #,(set-sig-full?-binding fst-sig)]
+         [fst-empty? . #,(set-sig-empty?-binding fst-sig)]
+         [snd-full? . #,(set-sig-full?-binding snd-sig)]
+         [snd-empty? . #,(set-sig-empty?-binding snd-sig)])
+        (λ (A B)
+          (cond [(and (fst-full? A) (snd-full? B))   full]
+                [(fst-empty? A)  empty]
+                [(snd-empty? B)  empty]
+                [else  (rect A B)])))
+     #`(case-> ((U N1 F1) N2 -> N)
+               (N1 (U N2 F2) -> N)
+               ((U N1 F1) (U N2 F2) -> (U N F))
+               ((U N1 E1) (U N2 F2 E2) -> (U N E))
+               ((U N1 F1 E1) (U N2 E2) -> (U N E))
+               ((U N1 F1 E1) (U N2 F2 E2) -> (U N F E))))))
+
+(define-for-syntax make-rect (make-maker make-rect*))
+
+;; ---------------------------------------------------------------------------------------------------
 ;; Intersection
 
-(: make-rect-list-intersect1
-   (All (N F E V) ((set-sig N F E V)
-                   -> ((Listof (Nonextremal-Pair-Rect N F))
-                       (Nonextremal-Pair-Rect N F)
-                       -> (Listof (Nonextremal-Pair-Rect N F))))))
-(define (make-rect-list-intersect1 ops)
-  (define pair-rect-intersect ((inst make-pair-rect-intersect N F E V) ops))
-  (λ (As B)
-    (let loop ([As As] [B B])
-      (cond [(empty? As)  empty]
-            [else  (append (pair-rect-intersect (first As) B)
-                           (loop (rest As) B))]))))
+(define-for-syntax (make-rect-intersect* sig)
+  (define self-sig (rect-sig-set-sig sig))
+  (define fst-sig (rect-sig-fst-set-sig sig))
+  (define snd-sig (rect-sig-snd-set-sig sig))
+  (with-syntax ([(N F E V)  (set-sig-types self-sig)])
+    (values
+     #`(let/cbn:
+        ([full? . #,(set-sig-full?-binding self-sig)]
+         [full . #,(set-sig-full-binding self-sig)]
+         [empty? . #,(set-sig-empty?-binding self-sig)]
+         [empty . #,(set-sig-empty-binding self-sig)]
+         [rect . #,(rect-sig-rect-binding sig)]
+         [rect-fst . #,(rect-sig-rect-fst-binding sig)]
+         [rect-snd . #,(rect-sig-rect-snd-binding sig)]
+         [fst-intersect . #,(set-sig-intersect-binding fst-sig)]
+         [fst-empty? . #,(set-sig-empty?-binding fst-sig)]
+         [snd-intersect . #,(set-sig-intersect-binding snd-sig)]
+         [snd-empty? . #,(set-sig-empty?-binding snd-sig)])
+        (λ (A B)
+          (cond [(full? A)   B]
+                [(full? B)   A]
+                [(eq? A B)   A]
+                [(empty? A)  empty]
+                [(empty? B)  empty]
+                [else
+                 (define A1 (rect-fst A))
+                 (define A2 (rect-snd A))
+                 (define B1 (rect-fst B))
+                 (define B2 (rect-snd B))
+                 (define C1 (fst-intersect A1 B1))
+                 (cond [(fst-empty? C1)  empty]
+                       [else
+                        (define C2 (snd-intersect A2 B2))
+                        (cond [(snd-empty? C2)  empty]
+                              [(and (eq? C1 A1) (eq? C2 A2))  A]
+                              [(and (eq? C1 B1) (eq? C2 B2))  B]
+                              [else  (rect (if (eq? C1 A1) A1 (if (eq? C1 B1) B1 C1))
+                                           (if (eq? C2 A2) A2 (if (eq? C2 B2) B2 C2)))])])])))
+     #`(case-> ((U N F E) (U N E)   -> (U N E))
+               ((U N E)   (U N F E) -> (U N E))
+               ((U N F E) (U N F E) -> (U N F E))))))
 
-(: make-pair-set-intersect
-   (All (N F E V) ((set-sig N F E V)
-                   -> (case-> ((Pair-Set N F) (Nonfull-Pair-Set N F) -> (Nonfull-Pair-Set N F))
-                              ((Nonfull-Pair-Set N F) (Pair-Set N F) -> (Nonfull-Pair-Set N F))
-                              ((Pair-Set N F) (Pair-Set N F) -> (Pair-Set N F))))))
-(define (make-pair-set-intersect ops)
-  (define rect-list-intersect1 ((inst make-rect-list-intersect1 N F E V) ops))
-  (λ (A B)
-    (cond [(empty-pair-set? A)  A]
-          [(empty-pair-set? B)  B]
-          [(pairs? A)  B]
-          [(pairs? B)  A]
-          [else
-           (define As (nonfull-pair-set->list A))
-           (define Bs (nonfull-pair-set->list B))
-           (list->pair-set
-            (append*
-             (for/list: : (Listof (Listof (Nonextremal-Pair-Rect N F))) ([B  (in-list Bs)])
-               (rect-list-intersect1 As B))))])))
+(define-for-syntax make-rect-intersect (make-maker make-rect-intersect*))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Join
+
+(define-for-syntax (make-rect-join* sig)
+  (define self-sig (rect-sig-set-sig sig))
+  (define fst-sig (rect-sig-fst-set-sig sig))
+  (define snd-sig (rect-sig-snd-set-sig sig))
+  (with-syntax ([(N F E V)  (set-sig-types self-sig)])
+    (values
+     #`(let/cbn:
+        ([full? . #,(set-sig-full?-binding self-sig)]
+         [full . #,(set-sig-full-binding self-sig)]
+         [empty? . #,(set-sig-empty?-binding self-sig)]
+         [empty . #,(set-sig-empty-binding self-sig)]
+         [rect . #,(rect-sig-rect-binding sig)]
+         [rect-fst . #,(rect-sig-rect-fst-binding sig)]
+         [rect-snd . #,(rect-sig-rect-snd-binding sig)]
+         [fst-join . #,(set-sig-join-binding fst-sig)]
+         [fst-full? . #,(set-sig-full?-binding fst-sig)]
+         [snd-join . #,(set-sig-join-binding snd-sig)]
+         [snd-full? . #,(set-sig-full?-binding snd-sig)])
+        (λ (A B)
+          (cond [(empty? A)  B]
+                [(empty? B)  A]
+                [(eq? A B)   A]
+                [(full? A)  full]
+                [(full? B)  full]
+                [else
+                 (define A1 (rect-fst A))
+                 (define A2 (rect-snd A))
+                 (define B1 (rect-fst B))
+                 (define B2 (rect-snd B))
+                 (define C1 (fst-join A1 B1))
+                 (define C2 (snd-join A2 B2))
+                 (cond [(and (fst-full? C1) (snd-full? C2))  full]
+                       [(and (eq? C1 A1) (eq? C2 A2))  A]
+                       [(and (eq? C1 B1) (eq? C2 B2))  B]
+                       [else  (rect (if (eq? C1 A1) A1 (if (eq? C1 B1) B1 C1))
+                                    (if (eq? C2 A2) A2 (if (eq? C2 B2) B2 C2)))])])))
+     #`(case-> ((U N F E) (U N F)   -> (U N F))
+               ((U N F)   (U N F E) -> (U N F))
+               ((U N F E) (U N F E) -> (U N F E))))))
+
+(define-for-syntax make-rect-join (make-maker make-rect-join*))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Membership
+
+(define-for-syntax (make-rect-member?* sig)
+  (define self-sig (rect-sig-set-sig sig))
+  (define fst-sig (rect-sig-fst-set-sig sig))
+  (define snd-sig (rect-sig-snd-set-sig sig))
+  (with-syntax ([(N F E V)  (set-sig-types self-sig)])
+    (values
+     #`(let/cbn:
+        ([full? . #,(set-sig-full?-binding self-sig)]
+         [empty? . #,(set-sig-empty?-binding self-sig)]
+         [rect-fst . #,(rect-sig-rect-fst-binding sig)]
+         [rect-snd . #,(rect-sig-rect-snd-binding sig)]
+         [fst-member? . #,(set-sig-member?-binding fst-sig)]
+         [snd-member? . #,(set-sig-member?-binding snd-sig)]
+         [fst . #,(rect-sig-value-fst-binding sig)]
+         [snd . #,(rect-sig-value-snd-binding sig)])
+        (λ (A x)
+          (cond [(full? A)  #t]
+                [(empty? A)  #f]
+                [else  (and (fst-member? (rect-fst A) (fst x))
+                            (snd-member? (rect-snd A) (snd x)))])))
+     #`((U N F E) V -> Boolean))))
+
+(define-for-syntax make-rect-member? (make-maker make-rect-member?*))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Subset or equal
+
+(define-for-syntax (make-rect-subseteq?* sig)
+  (define self-sig (rect-sig-set-sig sig))
+  (define fst-sig (rect-sig-fst-set-sig sig))
+  (define snd-sig (rect-sig-snd-set-sig sig))
+  (with-syntax ([(N F E V)  (set-sig-types self-sig)])
+    (values
+     #`(let/cbn:
+        ([full? . #,(set-sig-full?-binding self-sig)]
+         [empty? . #,(set-sig-empty?-binding self-sig)]
+         [rect-fst . #,(rect-sig-rect-fst-binding sig)]
+         [rect-snd . #,(rect-sig-rect-snd-binding sig)]
+         [fst-subseteq? . #,(set-sig-subseteq?-binding fst-sig)]
+         [snd-subseteq? . #,(set-sig-subseteq?-binding snd-sig)])
+        (λ (A B)
+          (cond [(eq? A B)  #t]
+                [(empty? A)  #t]
+                [(empty? B)  #f]
+                [(full? B)   #t]
+                [(full? A)   #f]
+                [else  (and (fst-subseteq? (rect-fst A) (rect-fst B))
+                            (snd-subseteq? (rect-snd A) (rect-snd B)))])))
+     #`((U N F E) (U N F E) -> Boolean))))
+
+(define-for-syntax make-rect-subseteq? (make-maker make-rect-subseteq?*))
 
 ;; ===================================================================================================
-;; Union
+;; Instantiation
 
-(: make-pair-set-union
-   (All (N F E V) ((set-sig N F E V)
-                   -> (case-> ((Pair-Set N F) (Nonempty-Pair-Set N F) -> (Nonempty-Pair-Set N F))
-                              ((Nonempty-Pair-Set N F) (Pair-Set N F) -> (Nonempty-Pair-Set N F))
-                              ((Pair-Set N F) (Pair-Set N F) -> (Pair-Set N F))))))
-(define (make-pair-set-union ops)
-  (define pair-set-subtract ((inst make-pair-set-subtract N F E V) ops))
-  (define pair-set-complement ((inst make-pair-set-complement N F E V) ops))
-  (define nonextremal-pair-set-complement ((inst make-nonextremal-pair-set-complement N F E V) ops))
-  (λ (A B)
-    (cond [(empty-pair-set? A)  B]
-          [(empty-pair-set? B)  A]
-          [(pairs? A)  A]
-          [(pairs? B)  B]
-          [else  (pair-set-complement (pair-set-subtract (pair-set-complement A) B))]
-          #;; May return an apparently nonextremal set that is actually full
-          [else
-           (list->pair-set
-            ;; Asserting because `append' doesn't preserve nonemptiness
-            (assert (append (nonfull-pair-set->list (pair-set-subtract A B))
-                            (nonfull-pair-set->list B))
-                    pair?))])))
+(define-syntax (define-rect-constructor stx)
+  (syntax-case stx ()
+    [(_ name sig)
+     (let-values ([(expr type)  (make-rect* (syntax-local-value #'sig))])
+       (quasisyntax/loc stx
+         (begin (: name #,type)
+                (define name #,expr))))]))
 
-;; ===================================================================================================
-;; Predicates
-
-(: make-pair-set-subseteq?
-   (All (N F E V) ((set-sig N F E V) -> ((Pair-Set N F) (Pair-Set N F) -> Boolean))))
-(define (make-pair-set-subseteq? ops)
-  (define pair-set-subtract ((inst make-pair-set-subtract N F E V) ops))
-  (λ (A B)
-    (empty-pair-set? (pair-set-subtract A B))))
-
-(: make-pair-set-member?
-   (All (N F E V) ((set-sig N F E V) -> ((Pair-Set N F) (Pair V V) -> Boolean))))
-(define (make-pair-set-member? ops)
-  (define pair-rect-member? ((inst make-pair-rect-member? N F E V) ops))
-  (λ (A x)
-    (cond [(empty-pair-set? A)  #f]
-          [(pairs? A)   #t]
-          [else
-           (ormap (λ: ([A : (Nonextremal-Pair-Rect N F)])
-                    (pair-rect-member? A x))
-                  (nonfull-pair-set->list A))])))
-
-;; ===================================================================================================
-;; Mapping
-
-(: make-pair-set-map
-   (All (N F E V) ((set-sig N F E V)
-                   -> (All (S) (S (S S -> S) -> (((U N F) (U N F) -> S) (Pair-Set N F) -> S))))))
-(define (make-pair-set-map ops)
-  (define full ((inst set-sig-full N F E V) ops))
-  (λ (empty union)
-    (λ (f A)
-      (cond [(empty-pair-set? A)  empty]
-            [(pairs? A)   (f full full)]
-            [else
-             (define As (map (λ: ([A : (Nonextremal-Pair-Rect N F)])
-                               (f (Nonextremal-Pair-Rect-fst A)
-                                  (Nonextremal-Pair-Rect-snd A)))
-                             (nonfull-pair-set->list A)))
-             (foldr union empty As)]))))
+(define-syntax (define-rect-ops stx)
+  (syntax-case stx ()
+    [(_ rect sig)
+     (let ([sig  (syntax-local-value #'sig)])
+       (with-syntax ([member?    (format-id stx "~a-~a" #'rect 'member?)]
+                     [intersect  (format-id stx "~a-~a" #'rect 'intersect)]
+                     [join       (format-id stx "~a-~a" #'rect 'join)]
+                     [subseteq?  (format-id stx "~a-~a" #'rect 'subseteq?)])
+         (let-values ([(member?-expr    member?-type)    (make-rect-member?* sig)]
+                      [(intersect-expr  intersect-type)  (make-rect-intersect* sig)]
+                      [(join-expr       join-type)       (make-rect-join* sig)]
+                      [(subseteq?-expr  subseteq?-type)  (make-rect-subseteq?* sig)])
+           (quasisyntax/loc stx
+             (begin
+               (: member? #,member?-type)
+               (define member? #,member?-expr)
+               
+               (: intersect #,intersect-type)
+               (define intersect #,intersect-expr)
+               
+               (: join #,join-type)
+               (define join #,join-expr)
+               
+               (: subseteq? #,subseteq?-type)
+               (define subseteq? #,subseteq?-expr))))))]))

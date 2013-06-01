@@ -1,6 +1,7 @@
 #lang typed/racket/base
 
 (require racket/match
+         racket/promise
          racket/list
          plot/typed
          "../main.rkt")
@@ -32,19 +33,16 @@
   (cond [(empty? xss)  (list empty)]
         [else  (cons-product (first xss) (list-product (rest xss)))]))
 
-(: omega-rect->plot-rects (Omega-Rect -> (Listof (Listof ivl))))
+(: omega-rect->plot-rects (Nonempty-Omega-Set -> (Listof (Listof ivl))))
 (define (omega-rect->plot-rects Ω)
   (map (λ: ([lst : (Listof ivl)])
          (maybe-pad-list lst 3 (λ () (ivl 0 1))))
-       (list-product (map (λ: ([lst : (Listof ivl)])
-                            (define n (length lst))
-                            (take lst (min n 3)))
-                          (omega-rect-map Ω real-set->ivls)))))
+       (list-product (map (λ: ([lst : (Listof ivl)]) (take lst (min (length lst) 3)))
+                          (map real-set->ivls (omega-set->list Ω))))))
 
 (: omega->point (Omega -> (Listof Flonum)))
 (define (omega->point ω)
-  (define lst (omega-map ω (λ: ([x : Flonum]) x)))
-  (maybe-pad-list lst 3 random))
+  (maybe-pad-list (omega->list ω) 3 random))
 
 (: value->listof-flonum (Maybe-Value -> (Listof Flonum)))
 (define (value->listof-flonum v)

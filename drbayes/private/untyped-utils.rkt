@@ -24,7 +24,7 @@
     [(_ T t)
      (with-syntax* ([Type  (format-id #'here "~a" #'T)]
                     [Type?  (format-id #'here "~a?" #'T)]
-                    [t?  (format-id stx "~a?" #'t)])
+                    [t?  (format-id #'t "~a?" #'t)])
        (syntax/loc stx
          (begin (struct: Type ()
                   #:transparent
@@ -38,7 +38,7 @@
     [(_ T Parent t)
      (with-syntax* ([Type  (format-id #'here "~a" #'T)]
                     [Type?  (format-id #'here "~a?" #'T)]
-                    [t?  (format-id stx "~a?" #'t)])
+                    [t?  (format-id #'t "~a?" #'t)])
        (syntax/loc stx
          (begin (struct: Type Parent ()
                   #:transparent

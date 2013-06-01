@@ -55,8 +55,8 @@
              ((prim-expression-meaning-forward (run-prim-expression e)) null)]
             [else
              ((rand-expression-meaning-forward (run-rand-expression e))
-              (omega-rect-sample-point omega-rect)
-              (branches-rect-sample-point branches-rect)
+              (omega-set-sample-point full-tree-set)
+              (branches-set-sample-point full-tree-set)
               null)]))
     (cond [(bottom? v)  (error 'drbayes (force (bottom-message v)))]
           [else  v]))

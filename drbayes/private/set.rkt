@@ -4,13 +4,13 @@
          "set/real-set.rkt"
          "set/bool-set.rkt"
          "set/null-set.rkt"
-         "set/pair-set.rkt"
          "set/extremal-set.rkt"
          "set/union.rkt"
          "set/value.rkt"
          "set/union-ops.rkt"
          "set/union-more-ops.rkt"
-         "set/omega.rkt"
+         "set/omega-value.rkt"
+         "set/omega-set.rkt"
          )
 
 (provide (all-from-out
@@ -18,11 +18,11 @@
           "set/real-set.rkt"
           "set/bool-set.rkt"
           "set/null-set.rkt"
-          "set/pair-set.rkt"
           "set/extremal-set.rkt"
           "set/union.rkt"
           "set/value.rkt"
           "set/union-ops.rkt"
           "set/union-more-ops.rkt"
-          "set/omega.rkt"
+          "set/omega-value.rkt"
+          "set/omega-set.rkt"
           ))

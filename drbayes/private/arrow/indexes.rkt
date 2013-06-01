@@ -3,7 +3,7 @@
 (require racket/flonum
          racket/match
          racket/list
-         "../set/omega.rkt"
+         "../set/omega-value.rkt"
          "../set/extremal-set.rkt"
          "../set/real-set.rkt")
 

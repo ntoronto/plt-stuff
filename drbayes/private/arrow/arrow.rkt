@@ -19,8 +19,8 @@
 (define ((prim-preimage-fun->rand pre) Γ K)
   (match-define (nonempty-domain-set Ωin  Zin  Ain)  Γ)
   (match-define (nonempty-domain-set Ωout Zout Aout) K)
-  (domain-set (omega-rect-intersect Ωin Ωout)
-              (branches-rect-intersect Zin Zout)
+  (domain-set (omega-set-intersect Ωin Ωout)
+              (branches-set-intersect Zin Zout)
               (pre Ain Aout)))
 
 (: prim-computation->rand (Prim-Computation -> Rand-Computation))
@@ -101,14 +101,14 @@
                   [else  empty-real-set]))
   (cond [(empty-real-set? I)  empty-set]
         [else
-         (domain-set (omega-rect-intersect Ωin (omega-rect-set Ωout idx I))
-                     (branches-rect-intersect Zin Zout)
+         (domain-set (omega-set-intersect Ωin (omega-set-restrict Ωout idx I))
+                     (branches-set-intersect Zin Zout)
                      Ain)]))
 
 (: boolean/comp (Omega-Index Nonextremal-Interval Nonextremal-Interval -> Rand-Computation))
 (define ((boolean/comp idx It If) Γ)
   (match-define (nonempty-domain-set Ωin Zin Ain) Γ)
-  (define I (omega-rect-ref Ωin idx))
+  (define I (omega-set-ref Ωin idx))
   (let ([It  (real-set-intersect I It)]
         [If  (real-set-intersect I If)])
     (define Aout (booleans->bool-set (not (empty-real-set? It))
