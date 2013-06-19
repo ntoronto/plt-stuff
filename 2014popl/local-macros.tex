@@ -10,6 +10,8 @@
 \usepackage{caption}
 \DeclareCaptionType{copyrightbox}
 
+\newcommand\numberthis{\addtocounter{equation}{1}\tag{\theequation}}
+
 % puts a little space between the \hrule and captions
 %\belowcaptionskip 0.25\baselineskip
 
@@ -81,9 +83,9 @@
 \renewcommand{\Re}{\mathbb{R}}
 \renewcommand{\P}{\mathbb{P}}
 
-\newcommand{\U}{\bigcup}
+\newcommand{\U}{\textstyle\bigcup}
 \renewcommand{\u}{\cup}
-\newcommand{\I}{\bigcap}
+\newcommand{\I}{\textstyle\bigcap}
 \renewcommand{\i}{\cap}
 \newcommand{\wo}{\backslash}
 \let\oldemptyset\emptyset
@@ -270,48 +272,21 @@
 
 \newenvironment{lzfcenv}[1][l]%
 {%
-	\begin{varwidth}{\textwidth}%
-	\mathversion{sans}%
-	$\begin{array}[t]{@{}#1@{}}%
+	\begin{array}[t]{@{}#1@{}}%
 }%
 {%
-	\end{array}$%
-	\mathversion{normal}%
-	\end{varwidth}%
-}
-
-\newenvironment{ilzfcenv}[1][l]%
-{%
-	\begin{varwidth}[t]{\textwidth}%
-	\mathversion{sans}%
-	$\begin{array}[t]{@{}#1@{}}%
-}%
-{%
-	\end{array}$%
-	\mathversion{normal}%
-	\end{varwidth}%
-}
-
-\newenvironment{tlzfcenv}[1][l]%
-{%
-	\begin{varwidth}[t]{\textwidth}%
-	\mathversion{sans}$\mspace{1mu}%
-}%
-{%
-	\mspace{1mu}$\mathversion{normal}%
-	\end{varwidth}%
+	\end{array}%
 }
 
 \newcommand{\tab}{\ \ \ }
 
 \newcommand{\lzfc}[2][l]{\begin{lzfcenv}[#1]#2\end{lzfcenv}}
-\newcommand{\ilzfc}[2][l]{\begin{ilzfcenv}[#1]#2\end{ilzfcenv}}
-\newcommand{\tlzfc}[2][l]{\begin{tlzfcenv}[#1]#2\end{tlzfcenv}}
+\newcommand{\tlzfc}[1]{\ensuremath{#1}}
 
-\newcommand{\lzfcsplit}[2][@{\ }]{\lzfc[r #1 l]{#2}}
+\newcommand{\lzfcsplit}[2][@{}]{\lzfc[r #1 l]{#2}}
 
-\newcommand{\ilzfclet}[2]{\ilzfc{let\ \ \ilzfc[r@{\ \objdef\ }l]{#1} \\ \ilzfc{\tab in\ \ #2}}}
-\newcommand{\ilzfccond}[2][\ \Longrightarrow\ ]{\ilzfc{cond\ \ \ilzfc[l@{\ {#1}\ }l]{#2}}}
-\newcommand{\ilzfccase}[3][\ \Longrightarrow\ ]{\ilzfc{case\ \ {#2}\\\ \ \ilzfc[l@{\ {#1}\ }l]{#3}}}
+\newcommand{\lzfclet}[2]{\lzfc{let\ \ \lzfc[r@{\ \objdef\ }l]{#1} \\ \lzfc{\tab in\ \ #2}}}
+\newcommand{\lzfccond}[2][\ \Longrightarrow\ ]{\lzfc{cond\ \ \lzfc[l@{\ {#1}\ }l]{#2}}}
+\newcommand{\lzfccase}[3][\ \Longrightarrow\ ]{\lzfc{case\ \ {#2}\\\ \ \lzfc[l@{\ {#1}\ }l]{#3}}}
 
 \newcommand{\dash}{\text{-}}
