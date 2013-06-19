@@ -1,0 +1,317 @@
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{xspace}
+\usepackage{subfig}
+\usepackage{upgreek}
+\usepackage{varwidth}
+\usepackage{verbatim}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{stmaryrd}
+\usepackage{caption}
+\DeclareCaptionType{copyrightbox}
+
+% puts a little space between the \hrule and captions
+%\belowcaptionskip 0.25\baselineskip
+
+% keywords
+\newcommand{\keyword}[1]{\textbf{#1}}
+\newcommand{\mykeyword}[1]{\textbf{\textit{#1}}}
+
+\newtheorem{axiom}{Axiom}{\bfseries}{\rmfamily}
+\newtheorem{lemma}{Lemma}{\bfseries}{\rmfamily}
+\newtheorem{theorem}{Theorem}{\bfseries}{\rmfamily}
+\newtheorem{corollary}{Corollary}{\bfseries}{\rmfamily}
+\newtheorem{definition}{Definition}{\bfseries}{\rmfamily}
+
+\newcommand\xqed[1]{%
+  \leavevmode\unskip\penalty9999 \hbox{}\nobreak\hfill
+  \quad\hbox{#1}}
+
+\newcommand{\exampleqed}{\xqed{$\diamondsuit$}}
+
+
+\newcommand{\lzfclang}{\ensuremath{\lambda_{\mathrm{ZFC}}}\xspace}
+
+%
+% Language phase 0: meta
+%
+% Mostly semantic functions and grammars, definitional extensions to first-order logic
+
+\newcommand{\metadef}{:=}
+\newcommand{\metastx}{:\equiv}
+\newcommand{\objdef}{:=}
+\newcommand{\objstx}{:\equiv}
+\newcommand{\gor}{\ |\ }
+\newcommand{\meaningof}[1]{\left\llbracket{#1}\right\rrbracket}
+\newcommand{\enc}[1]{\mathcal{F}\!\meaningof{#1}}
+\newcommand{\stx}[1]{\mathcal{S}\!\meaningof{#1}}
+%\newcommand{\metasubst}[3]{{#1}[{#2}:={#3}]}
+\newcommand{\metasubst}[3]{s\!\meaningof{{#1},{#2},{#3}}}
+\newcommand{\imp}{\Rightarrow}
+\newcommand{\rimp}{\Leftarrow}
+\DeclareMathOperator{\disjoint}{\mbox{$\not\mspace{-5mu}\i$}}
+
+\renewcommand{\dots}{...}
+\newcommand{\setb}[2]{\lbrace {#1} \ \lvert\ {#2} \rbrace}
+
+\newcommand{\justdenom}[1]{\mspace{-4mu} {} \atop {#1} \mspace{-4mu}}
+\newcommand{\djustdenom}[1]{\displaystyle{\justdenom{#1}}}
+
+
+%
+% Language phase 1: first-order logic
+%
+
+% Common notation and names
+
+\newcommand{\set}[1]{\{{#1}\}}
+\newcommand{\seq}[1]{\left({#1}\right)}
+\newcommand{\pair}[1]{\left\langle{#1}\right\rangle}
+\newcommand{\tpair}[1]{\langle{#1}\rangle}
+
+\newcommand{\band}{\wedge}
+\newcommand{\pand}{\big\wedge}
+\newcommand{\bor}{\vee}
+\newcommand{\por}{\big\vee}
+
+\newcommand{\Bool}{\mathbb{B}}
+\newcommand{\Nat}{\mathbb{N}}
+\newcommand{\Int}{\mathbb{Z}}
+\newcommand{\Rat}{\mathbb{Q}}
+\renewcommand{\Re}{\mathbb{R}}
+\renewcommand{\P}{\mathbb{P}}
+
+\newcommand{\U}{\bigcup}
+\renewcommand{\u}{\cup}
+\newcommand{\I}{\bigcap}
+\renewcommand{\i}{\cap}
+\newcommand{\wo}{\backslash}
+\let\oldemptyset\emptyset
+\renewcommand{\emptyset}{\varnothing}
+\newcommand{\powerset}{\mathcal{P}}
+
+\newcommand{\Forall}[1]{\forall\,{#1}\ldotp\,}
+\newcommand{\Exists}[1]{\exists\,{#1}\ldotp\,}
+\newcommand{\ExistsOne}[1]{\exists!\,{#1}\ldotp\,}
+\newcommand{\The}[1]{\iota\,{#1}\ldotp\,}
+
+\newcommand{\tto}{\Rightarrow}
+%\newcommand{\bijto}{\xrightarrow{\mathrm{bij}}}
+\newcommand{\bijto}{\leftrightarrow}
+\newcommand{\Ord}{\mathit{Ord}}
+
+\newcommand{\A}{\mathcal{A}}
+\newcommand{\B}{\mathcal{B}}
+\newcommand{\C}{\mathcal{C}}
+\newcommand{\E}{\mathcal{E}}
+\newcommand{\V}{\mathcal{V}}
+
+\newcommand{\pnand}{\mathit{nand}}
+\newcommand{\w}{\backslash}
+
+% Invented notation and names
+
+\newcommand{\myfun}[1]{\mathit{#1}}
+\newcommand{\encset}{\myfun{set}}
+\newcommand{\lex}{\myfun{lex}}
+\newcommand{\addset}{\myfun{put}}
+
+%\newcommand{\dto}{\Downarrow}
+% makes the horizontal spacing around the arrow nice:
+\DeclareMathOperator{\dto}{\Downarrow}
+
+\newcommand{\plusomega}{+_\lnat}
+\newcommand{\timesomega}{\times_\lnat}
+
+\newcommand{\plusint}{+_Z}
+\newcommand{\minusint}{-_Z}
+\newcommand{\timesint}{\times_Z}
+\newcommand{\equalint}{=_{\mathsf{Z}}}
+
+\newcommand{\plusz}{+_\Int}
+\newcommand{\minusz}{-_\Int}
+\newcommand{\timesz}{\times_\Int}
+
+\newcommand{\equalrat}{=_{\mathsf{Q}}}
+\newcommand{\plusq}{+_\Rat}
+\newcommand{\minusq}{-_\Rat}
+\newcommand{\timesq}{\times_\Rat}
+\newcommand{\divq}{\div_\Rat}
+
+%
+% Language phase 2: lambda_ZFC
+%
+
+\newcommand{\objlang}[1]{\mathsf{#1}}
+%\newcommand{\objlang}[1]{\mathtt{#1}}
+
+\renewcommand{\choose}{\mathcal{E}}
+%\newcommand{\Choose}[1]{\choose\,{#1}\ldotp\,}
+\newcommand{\Choose}[1]{\set{#1}\ldotp\,}
+
+\newcommand{\domain}{\objlang{domain}}
+\newcommand{\range}{\objlang{range}}
+\newcommand{\image}{\objlang{image}}
+\newcommand{\filter}{\objlang{select}}
+
+\newcommand{\lunion}[1]{{\textstyle\U}\ {#1}}
+\newcommand{\lpowerset}[1]{\powerset\ {#1}}
+\newcommand{\limage}[2]{{\objlang{image}}\ {#1}\ {#2}}
+\newcommand{\lorder}[1]{{\objlang{card}}\ {#1}}
+\newcommand{\ltake}[1]{{\objlang{take}}\ {#1}}
+\newcommand{\lemptyset}{\oldemptyset}
+\newcommand{\lnat}{\upomega}
+\newcommand{\lif}[3]{{\objlang{if}}\ {#1}\ {#2}\ {#3}}
+\newcommand{\ltrue}{\objlang{true}}
+\newcommand{\lfalse}{\objlang{false}}
+\newcommand{\lfun}{\lambda\ldotp\,}
+
+\newcommand{\fun}[1]{\lambda\mspace{2mu}{#1}\ldotp\,}
+
+\newcommand{\tvar}{t_\mathrm{var}}
+\newcommand{\tapp}{t_\mathrm{app}}
+\newcommand{\tif}{t_\mathrm{if}}
+\newcommand{\tin}{t_\in}
+\newcommand{\tunion}{t_\u}
+\newcommand{\ttake}{t_\mathrm{take}}
+\newcommand{\tpowerset}{t_\powerset}
+\newcommand{\timage}{t_\mathrm{image}}
+\newcommand{\torder}{t_\mathrm{card}}
+\newcommand{\tset}{t_\mathrm{set}}
+\newcommand{\tatom}{t_\mathrm{atom}}
+\newcommand{\tfun}{t_\lambda}
+\newcommand{\atrue}{a_\mathrm{true}}
+\newcommand{\afalse}{a_\mathrm{false}}
+\newcommand{\ttrue}{t_\mathrm{true}}
+\newcommand{\tfalse}{t_\mathrm{false}}
+
+\newcommand{\Vatom}{V_\mathrm{atom}}
+\newcommand{\Vset}{V_\mathrm{set}}
+\newcommand{\Vfun}{V_\lambda}
+\newcommand{\Evar}{E_\mathrm{var}}
+\newcommand{\Eapp}{E_\mathrm{app}}
+\newcommand{\Eset}{E_\mathrm{set}}
+\newcommand{\Eif}{E_\mathrm{if}}
+\newcommand{\Ein}{E_\in}
+\newcommand{\Eunion}{E_\u}
+\newcommand{\Epowerset}{E_\powerset}
+\newcommand{\Eimage}{E_\mathrm{image}}
+\newcommand{\Eorder}{E_\mathrm{card}}
+
+\newcommand{\fst}{\myfun{fst}}
+\newcommand{\snd}{\myfun{snd}}
+
+\newcommand{\jand}{\;\;\,}
+
+\def\mycodehook{\ttcodehook\small}
+\let\schemecodehook\mycodehook
+
+
+\DeclareMathVersion{sans}
+\SetSymbolFont{operators}{sans}{T1}{\sfdefault}{m}{n}
+\SetSymbolFont{letters}{sans}{T1}{\sfdefault}{m}{n}
+\SetMathAlphabet\mathbf{sans}{T1}{\sfdefault}{bx}{n}
+\SetMathAlphabet\mathsf{sans}{T1}{\sfdefault}{m}{n}
+\SetMathAlphabet\mathit{sans}{T1}{\rmdefault}{m}{it}
+
+\DeclareSymbolFont{greekletters}{OML}{cmss}{m}{n}
+\DeclareMathSymbol{\Gamma}  {\mathord}{greekletters}{"00}
+\DeclareMathSymbol{\Delta}  {\mathord}{greekletters}{"01}
+\DeclareMathSymbol{\Theta}  {\mathord}{greekletters}{"02}
+\DeclareMathSymbol{\Lambda} {\mathord}{greekletters}{"03}
+\DeclareMathSymbol{\Xi}     {\mathord}{greekletters}{"04}
+\DeclareMathSymbol{\Pi}     {\mathord}{greekletters}{"05}
+\DeclareMathSymbol{\Sigma}  {\mathord}{greekletters}{"06}
+\DeclareMathSymbol{\Upsilon}{\mathord}{greekletters}{"07}
+\DeclareMathSymbol{\Phi}    {\mathord}{greekletters}{"08}
+\DeclareMathSymbol{\Psi}    {\mathord}{greekletters}{"09}
+\DeclareMathSymbol{\Omega}  {\mathord}{greekletters}{"0A}
+
+\DeclareMathSymbol{\alpha}{\mathord}{greekletters}{"0B}
+\DeclareMathSymbol{\beta}{\mathord}{greekletters}{"0C}
+\DeclareMathSymbol{\gamma}{\mathord}{greekletters}{"0D}
+\DeclareMathSymbol{\delta}{\mathord}{greekletters}{"0E}
+\DeclareMathSymbol{\epsilon}{\mathord}{greekletters}{"0F}
+\DeclareMathSymbol{\zeta}{\mathord}{greekletters}{"10}
+\DeclareMathSymbol{\eta}{\mathord}{greekletters}{"11}
+\DeclareMathSymbol{\theta}{\mathord}{greekletters}{"12}
+\DeclareMathSymbol{\iota}{\mathord}{greekletters}{"13}
+\DeclareMathSymbol{\kappa}{\mathord}{greekletters}{"14}
+\DeclareMathSymbol{\lambda}{\mathord}{greekletters}{"15}
+\DeclareMathSymbol{\mu}{\mathord}{greekletters}{"16}
+\DeclareMathSymbol{\nu}{\mathord}{greekletters}{"17}
+\DeclareMathSymbol{\xi}{\mathord}{greekletters}{"18}
+\DeclareMathSymbol{\pi}{\mathord}{greekletters}{"19}
+\DeclareMathSymbol{\rho}{\mathord}{greekletters}{"1A}
+\DeclareMathSymbol{\sigma}{\mathord}{greekletters}{"1B}
+\DeclareMathSymbol{\tau}{\mathord}{greekletters}{"1C}
+\DeclareMathSymbol{\upsilon}{\mathord}{greekletters}{"1D}
+\DeclareMathSymbol{\phi}{\mathord}{greekletters}{"1E}
+\DeclareMathSymbol{\chi}{\mathord}{greekletters}{"1F}
+\DeclareMathSymbol{\psi}{\mathord}{greekletters}{"20}
+\DeclareMathSymbol{\omega}{\mathord}{greekletters}{"21}
+\DeclareMathSymbol{\varepsilon}{\mathord}{greekletters}{"22}
+\DeclareMathSymbol{\vartheta}{\mathord}{greekletters}{"23}
+\DeclareMathSymbol{\varpi}{\mathord}{greekletters}{"24}
+\DeclareMathSymbol{\varrho}{\mathord}{greekletters}{"25}
+\DeclareMathSymbol{\varsigma}{\mathord}{greekletters}{"26}
+
+\DeclareSymbolFont{fixpunct}{T1}{\rmdefault}{m}{n}
+\DeclareSymbolFont{fixpunctoml}{OML}{\rmdefault}{m}{n}
+\DeclareMathSymbol{,}{\mathpunct}{fixpunct}{`,}
+\DeclareMathSymbol{.}{\mathord}{fixpunct}{`.}
+\DeclareMathSymbol{\ldotp}{\mathord}{fixpunct}{`.}
+\DeclareMathSymbol{@}{\mathord}{letters}{`-}
+\DeclareMathSymbol{/}{\mathpunct}{fixpunct}{`/}
+\DeclareMathSymbol{\rightharpoonup}{\mathrel}{fixpunctoml}{"2A}
+\renewcommand{\notin}{\not\in}
+
+\newcommand\mathtest[2]{\mathchoice{#1}{#2}{#2}{#2}}
+
+\newenvironment{lzfcenv}[1][l]%
+{%
+	\begin{varwidth}{\textwidth}%
+	\mathversion{sans}%
+	$\begin{array}[t]{@{}#1@{}}%
+}%
+{%
+	\end{array}$%
+	\mathversion{normal}%
+	\end{varwidth}%
+}
+
+\newenvironment{ilzfcenv}[1][l]%
+{%
+	\begin{varwidth}[t]{\textwidth}%
+	\mathversion{sans}%
+	$\begin{array}[t]{@{}#1@{}}%
+}%
+{%
+	\end{array}$%
+	\mathversion{normal}%
+	\end{varwidth}%
+}
+
+\newenvironment{tlzfcenv}[1][l]%
+{%
+	\begin{varwidth}[t]{\textwidth}%
+	\mathversion{sans}$\mspace{1mu}%
+}%
+{%
+	\mspace{1mu}$\mathversion{normal}%
+	\end{varwidth}%
+}
+
+\newcommand{\tab}{\ \ \ }
+
+\newcommand{\lzfc}[2][l]{\begin{lzfcenv}[#1]#2\end{lzfcenv}}
+\newcommand{\ilzfc}[2][l]{\begin{ilzfcenv}[#1]#2\end{ilzfcenv}}
+\newcommand{\tlzfc}[2][l]{\begin{tlzfcenv}[#1]#2\end{tlzfcenv}}
+
+\newcommand{\lzfcsplit}[2][@{\ }]{\lzfc[r #1 l]{#2}}
+
+\newcommand{\ilzfclet}[2]{\ilzfc{let\ \ \ilzfc[r@{\ \objdef\ }l]{#1} \\ \ilzfc{\tab in\ \ #2}}}
+\newcommand{\ilzfccond}[2][\ \Longrightarrow\ ]{\ilzfc{cond\ \ \ilzfc[l@{\ {#1}\ }l]{#2}}}
+\newcommand{\ilzfccase}[3][\ \Longrightarrow\ ]{\ilzfc{case\ \ {#2}\\\ \ \ilzfc[l@{\ {#1}\ }l]{#3}}}
+
+\newcommand{\dash}{\text{-}}
