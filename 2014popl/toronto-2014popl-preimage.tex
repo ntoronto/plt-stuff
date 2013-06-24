@@ -79,15 +79,15 @@
 %\titlebanner{banner above paper title}        % These are ignored unless
 %\preprintfooter{short description of paper}   % 'preprint' option specified.
 
-\title{Running Probabilistic Programs Backwards}
+\title{Running Probabilistic Programs Backward}
 %\subtitle{Subtitle Text, if any}
 
 \authorinfo{Neil Toronto \and Jay McCarthy}
            {PLT @ Brigham Young University}
            {ntoronto@racket-lang.org \and jay@byu.edu}
-\authorinfo{Chris Grant}
-           {Brigham Young University}
-           {grant@math.byu.edu}
+%\authorinfo{Chris Grant}
+%           {Brigham Young University}
+%           {grant@math.byu.edu}
 \maketitle
 
 \begin{abstract}
@@ -101,6 +101,8 @@ XXX, XXX
 
 \keywords
 XXX, XXX
+
+TODO: equivalence relation for \lzfclang terms, that at least handles divergence
 
 \section{Introduction}
 
@@ -181,6 +183,13 @@ XXX: put Englishy word thingies around the following so it's not just a wall of 
 
 \begin{equation}
 \begin{aligned}
+	&(\uplus) : Set~x \tto Set~x \tto Set~x \\
+	&A \uplus B \ := \ if~(A \i B = \emptyset)~(A \u B)~(take~\emptyset)
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+\begin{aligned}
 	&restrict : (A \tto B) \tto \powerset~A \tto (A \pto B) \\
 	&restrict~f~A' \ := \ image~(\fun{x}{(x, f~x)})~A'
 \end{aligned}
@@ -227,8 +236,17 @@ XXX: put Englishy word thingies around the following so it's not just a wall of 
 			\lzfclet{
 				A & (domain~g_1) \i (domain~g_2)
 			}{\fun{x \in A}{\pair{g_1~x,g_2~x}}}
+	\end{aligned} \\
+\nonumber \\[-6pt]
+	&\begin{aligned}
+		&(\uplus\map) : (X \pto Y) \tto (X \pto Y) \tto (X \pto Y) \\
+		&g_1 \uplus\map g_2 \ := \ 
+			\lzfclet{
+				A & (domain~g_1) \uplus (domain~g_2)
+			}{g_1 \u g_2}
 	\end{aligned}
 \end{align}
+
 
 \subsection{Ordinal Numbers and Transfinite Recursion}
 
@@ -499,6 +517,7 @@ XXX: Fig.~\ref{fig:bottom-arrow-defs} defines the bottom arrow...
 	\end{aligned}
 \end{aligned}
 \end{align*}
+\hrule
 \caption{Bottom arrow definitions.}
 \label{fig:bottom-arrow-defs}
 \end{figure*}
@@ -604,9 +623,8 @@ Fig.~\ref{fig:mapping-arrow-defs} shows the final result of deriving the mapping
 			&\tab\lzfclet{
 				g_1' & g_1~A \\
 				g_2' & lazy\map~(g_2~0)~(preimage~g_1'~\set{true}) \\
-				g_3' & lazy\map~(g_3~0)~(preimage~g_1'~\set{false}) \\
-				A' & (domain~g_2') \u (domain~g_3')
-			}{\fun{x \in A'}{if~(g_1'~x)~(g_2'~x)~(g_3'~x)}}
+				g_3' & lazy\map~(g_3~0)~(preimage~g_1'~\set{false})
+			}{g_2' \uplus\map g_3'}
 		}
 	\end{aligned} \\
 \\[-6pt]
@@ -621,6 +639,7 @@ Fig.~\ref{fig:mapping-arrow-defs} shows the final result of deriving the mapping
 	\end{aligned}
 \end{aligned}
 \end{align*}
+\hrule
 \caption{Mapping arrow definitions.}
 \label{fig:mapping-arrow-defs}
 \end{figure*}
@@ -736,16 +755,26 @@ We can therefore maintain laziness in conditional branches by applying $\arrmap~
 \end{equation}
 In terms of $lazy\map$, we have
 \begin{align*}
-	&\arrmap~(\ifbot~f_1~f_2~f_3)~A \numberthis \\
-		&\tab = \ 
-		\lzfclet{
-			g_1 & \arrmap~f_1~A \\
-			g_2 & lazy\map~(\arrmap~(f_2~0))~(preimage~g_1~\set{true}) \\
-			g_3 & lazy\map~(\arrmap~(f_3~0))~(preimage~g_1~\set{false}) \\
-			A' & (domain~g_2) \u (domain~g_3)
-		}{\fun{x \in A'}{if~(g_1~x)~(g_2~x)~(g_3~x)}}
+	&\arrmap~(\ifbot~f_1~f_2~f_3)~A \numberthis
+\\
+	&\tab = \ 
+	\lzfclet{
+		g_1 & \arrmap~f_1~A \\
+		g_2 & lazy\map~(\arrmap~(f_2~0))~(preimage~g_1~\set{true}) \\
+		g_3 & lazy\map~(\arrmap~(f_3~0))~(preimage~g_1~\set{false}) \\
+		A' & (domain~g_2) \u (domain~g_3)
+	}{\fun{x \in A'}{if~(g_1~x)~(g_2~x)~(g_3~x)}}
+\\
+	&\tab = \
+	\lzfclet{
+		g_1 & \arrmap~f_1~A \\
+		g_2 & lazy\map~(\arrmap~(f_2~0))~(preimage~g_1~\set{true}) \\
+		g_3 & lazy\map~(\arrmap~(f_3~0))~(preimage~g_1~\set{false})
+	}{g_2 \uplus\map g_3}
 \end{align*}
 For $halts@on@true_\bot$, $lazy\map~(\arrmap~(f_3~0))~A_3$ does not diverge when $A_3$ is empty.
+
+Substituting $g_1$ for $\arrmap~f_1$, $g_2~0$ for $\arrmap~(f_2~0)$, and $g_3~0$ for $\arrmap~(f_3~0)$ in the last equality gives the definition for $\ifmap$.
 
 \subsection{Super-Saver Theorems}
 
@@ -770,8 +799,9 @@ XXX: almost ready to derive the preimage arrow; unfortunately, data structures u
 On a computer, we will not often have the luxury of testing each function input to see whether it belongs in a preimage set.
 Even for finite domains, doing so is often intractable.
 
-To compute with abstract, infinite sets in the language implementation, we need to be able to work with preimages in the semantics without resorting to applying functions to points.
-We therefore introduce \mykeyword{preimage mappings}. The function space is constructed by
+To compute with abstract, infinite sets in the language implementation, we need to work with preimages in the semantics without resorting to applying functions to points.
+We therefore introduce \mykeyword{preimage mappings}, which, when applied, are like applying $preimage$ to a mapping.
+The function space is constructed by
 \begin{equation}
 	X \prepto Y \ := \ \powerset~Y \pto \powerset~X
 \end{equation}
@@ -793,33 +823,35 @@ XXX: preimage mappings are defined for the \emph{range} of a mapping, but preima
 \end{aligned}
 \end{equation}
 
-XXX: for measurable sets in a function's codomain, using $pre@ap$ to compute preimages from a preimage mapping is the same as computing them from the original mapping:
+XXX: for measurable sets in a function's codomain, using $pre@ap$ to compute preimages from a preimage mapping is the same as computing them from the original mapping, as long as the preimage mapping's domain is not restricted:
 \begin{theorem}[$pre@ap$ of measurable sets]
-Let $g \in X \pto Y$, $\B'$ a $\sigma$-algebra on $Y$, and $\B := \sigma@trace~\B'~(range~g)$.
-Then for all $B \in \B'$, $pre@ap~(pre~g~\B)~B = preimage~g~B$.
+Let
+\begin{equation}
+\begin{array}[t]{@{}r@{}l@{}}
+	&g \in X \pto Y, \text{ with $\B$ a $\sigma$-algebra on $Y$} \\
+	&Y' \text{ a set such that } range~g \subseteq Y' \subseteq Y \\
+	&\B' \text{ a $\sigma$-algebra such that } \sigma@trace~\B~Y' \subseteq \B'
+\end{array}
+\end{equation}
+Then for all $B \in \B$, $pre@ap~(pre~g~\B')~B = preimage~g~B$.
 \label{thm:pre-like-preimage}
 \end{theorem}
 \begin{proof}
-Expanding the definitions of $pre@ap$ and $pre$, and substituting $\U(domain~h) = range~g$ yields
+Expand the definitions of $pre@ap$ and $pre$, and use the facts $\U(domain~h) = Y'$ (because $Y' \subseteq Y$) and $B \i Y' \in \B'$ (by definition of $\sigma@trace$):
 \begin{equation}
 \begin{aligned}
-	pre@ap~(pre~g~\B)~B
+	pre@ap~(pre~g~\B')~B
 		&\ = \ \lzfclet{
-							h & \fun{B \in \B}{preimage~g~B}
+							h & \fun{B \in \B'}{preimage~g~B}
 						}{h~(B \i \U(domain~h))} \\
 		&\ = \ \lzfclet{
-							h & \fun{B \in \B}{preimage~g~B}
-						}{h~(B \i (range~g))}
+							h & \fun{B \in \B'}{preimage~g~B}
+						}{h~(B \i Y')} \\
+		&\ = \ preimage~g~(B \i Y')
 \end{aligned}
 \end{equation}
-By definition of $\sigma@trace$, $B \i (range~g) \in \B'$, so
-\begin{equation}
-\begin{aligned}
-	pre@ap~(pre~g~\B)~B
-		&\ = \ preimage~g~(B \i (range~g)) \\
-		&\ = \ preimage~g~B
-\end{aligned}
-\end{equation}
+Lastly, because $Y' \supseteq range~g$, for all $x \in X$, $g~x \in B \i Y'$ iff $g~x \in B$.
+Therefore $pre@ap~(pre~g~\B')~B = preimage~g~B$.
 \end{proof}
 
 \subsection{Generated Preimage Mappings}
@@ -873,48 +905,6 @@ By transfinite induction, noting that the preimage of $\emptyset$ under any func
 
 XXX: as with mappings, it helps to have basic composition and pairing functions for preimage mappings
 
-\subsection{Preimage Mapping Composition}
-
-XXX: moar wurds in this section
-
-\begin{equation}
-\begin{aligned}
-	&(\circ\pre) : (Y \prepto Z) \tto (X \prepto Y) \tto (X \prepto Z) \\
-	&h_2 \circ\pre h_1 \ := \ \fun{C \in domain~h_2} pre@ap~h_1~(h_2~C)
-\end{aligned}
-\end{equation}
-
-\begin{lemma}[Preimages under composition]
-Let $g_1 \in X \pto Y$ and $g_2 \in Y \pto Z$.
-Then for all $C \subseteq Z$, $preimage~(g_2 \circ\map g_1)~C = preimage~g_1~(preimage~g_2~C)$.
-\label{lem:preimage-under-composition}
-\end{lemma}
-
-\begin{theorem}[Preimage mapping composition]
-Let $g_1 \in X \pto Y$, $\B'$ a $\sigma$-algebra on $Y$, and $\B := \sigma@trace~\B'~(range~g_1)$.
-Let $g_2 \in Y \pto Z$, $\C'$ a $\sigma$-algebra on $Z$, and $\C := \sigma@trace~\C'~(range~g_2)$.
-Then for all $C \in \C'$, $pre@ap~((pre~g_2~\C) \circ\pre (pre~g_1~\B))~C = preimage~(g_2 \circ\map g_1)~C$.
-\end{theorem}
-\begin{proof}
-Expand definitions and apply Theorem~\ref{thm:pre-like-preimage} and Lemma~\ref{lem:preimage-under-composition}.
-\begin{align*}
-	&pre@ap~((pre~g_2~\C) \circ\pre (pre~g_1~\B))~C \\
-	&\tab = \ 
-		\lzfclet{
-			h & \fun{C \in \C} pre@ap~(pre~g_1~\B)~((pre~g_2~\C)~C)
-		}{h~(C \i \U(domain~h))} \\
-	&\tab = \ 
-		\lzfclet{
-			h & \fun{C \in \C} preimage~g_1~((pre~g_2~\C)~C)
-		}{h~(C \i \U\C)} \\
-	&\tab = \ preimage~g_1~((pre~g_2~\C)~(C \i \U\C)) \\
-	&\tab = \ preimage~g_1~(pre@ap~(pre~g_2~\C)~C) \\
-	&\tab = \ preimage~g_1~(preimage~g_2~C) \\
-	&\tab = \ preimage~(g_2 \circ\map g_1)~C
-\numberthis
-\end{align*}
-\end{proof}
-
 \subsection{Preimage Mapping Pairing}
 
 XXX: moar wurds in this section
@@ -937,19 +927,26 @@ Then for all $B_1 \subseteq Y$ and $B_2 \subseteq Z$, $preimage~\pair{g_1,g_2}\m
 \end{lemma}
 
 \begin{theorem}[Preimage mapping pairing]
-Let $g_1 \in X \pto Y$, $\B_1'$ a $\sigma$-algebra on $Y$, and $\B_1 := \sigma@trace~\B_1'~(range~g_1)$.
-Let $g_2 \in X \pto Z$, $\B_2'$ a $\sigma$-algebra on $Z$, and $\B_2 := \sigma@trace~\B_2'~(range~g_2)$.
-Then for all $B \in \B_1' \otimes \B_2'$, $pre@ap~\pair{pre~g_1~\B_1,pre~g_2~\B_2}\pre~B = preimage~\pair{g_1,g_2}\map~B$.
+Let
+\begin{equation}
+\begin{array}[t]{@{}r@{}l@{}}
+	&g_1 \in X \pto Y, \text{ with $\B_1'$ a $\sigma$-algebra on $Y$} \\
+	&\B_1 := \sigma@trace~\B_1'~(range~g_1) \\
+	&h_1 := pre~g_1~\B_1 \\
+	&g_2 \in X \pto Z, \text{ with $\B_2'$ a $\sigma$-algebra on $Z$} \\
+	&\B_2 := \sigma@trace~\B_2'~(range~g_2) \\
+	&h_2 := pre~g_2~\B_2
+\end{array}
+\end{equation}
+Then for all pair sets $B \in \B_1' \otimes \B_2'$, $pre@ap~\pair{h_1,h_2}\pre~B = preimage~\pair{g_1,g_2}\map~B$.
 \label{thm:preimage-mapping-pairing}
 \end{theorem}
 \begin{proof}
 Expand definitions, substitute $h_1$ and $h_2$, expand definition of $pre$, apply Lemma~\ref{lem:preimage-under-pairing}, rewrite in terms of $pre$, apply Theorem~\ref{thm:close-distributes-over-pre}, rewrite in terms of ``$\otimes$'', and apply Theorem~\ref{thm:pre-like-preimage}.
 \begin{align*}
-	&pre@ap~\pair{pre~g_1~\B_1, pre~g_2~\B_2}\pre~B  \\
+	&pre@ap~\pair{h_1, h_2}\pre~B  \\
 	&\tab = \ 
 		\lzfclet{
-			h_1 & pre~g_1~\B_1 \\
-			h_2 & pre~g_2~\B_2 \\
 			\B & rects~(domain~h_1)~(domain~h_2) \\
 			h & \fun{B_1 \times B_2 \in \B}{(h_1~B_1) \i (h_2~B_2)} \\
 		}{pre@ap~(pre@close~h)~B} \\
@@ -982,9 +979,134 @@ Expand definitions, substitute $h_1$ and $h_2$, expand definition of $pre$, appl
 \end{align*}
 \end{proof}
 
-\section{The Preimage Arrow}
+\subsection{Preimage Mapping Composition}
 
-XXX: intro
+XXX: moar wurds in this section
+
+\begin{equation}
+\begin{aligned}
+	&(\circ\pre) : (Y \prepto Z) \tto (X \prepto Y) \tto (X \prepto Z) \\
+	&h_2 \circ\pre h_1 \ := \ \lzfclet{\C & domain~h_2}{\fun{C \in \C}{pre@ap~h_1~(h_2~C)}}
+\end{aligned}
+\end{equation}
+
+\begin{lemma}[Preimages under composition]
+Let $g_1 \in X \pto Y$ and $g_2 \in Y \pto Z$.
+Then for all $C \subseteq Z$, $preimage~(g_2 \circ\map g_1)~C = preimage~g_1~(preimage~g_2~C)$.
+\label{lem:preimage-under-composition}
+\end{lemma}
+
+\begin{theorem}[Preimage mapping composition]
+Let
+\begin{equation}
+\begin{array}[t]{@{}r@{}l@{}}
+	&g_1 \in X \pto Y, \text{ with $\B'$ a $\sigma$-algebra on $Y$} \\
+	&\B := \sigma@trace~\B'~(range~g_1) \\
+	&h_1 := pre~g_1~\B \\
+	&g_2 \in Y \pto Z, \text{ with $\C'$ a $\sigma$-algebra on $Z$} \\
+	&\C := \sigma@trace~\C'~(range~g_2) \\
+	&h_2 := pre~g_2~\C
+\end{array}
+\end{equation}
+Then for all $C \in \C'$, $pre@ap~(h_2 \circ\pre h_1)~C = preimage~(g_2 \circ\map g_1)~C$.
+\label{thm:preimage-mapping-composition}
+\end{theorem}
+\begin{proof}
+Expand definitions, apply Theorem~\ref{thm:pre-like-preimage}, expand $h$, rewrite in terms of $pre@ap$, apply Theorem~\ref{thm:pre-like-preimage}, and apply Lemma~\ref{lem:preimage-under-composition}.
+\begin{align*}
+	&pre@ap~(h_2 \circ\pre h_1)~C \\
+	&\tab = \ 
+		\lzfclet{
+			h & \fun{C \in \C} pre@ap~(pre~g_1~\B)~((pre~g_2~\C)~C)
+		}{h~(C \i \U(domain~h))} \\
+	&\tab = \ 
+		\lzfclet{
+			h & \fun{C \in \C} preimage~g_1~((pre~g_2~\C)~C)
+		}{h~(C \i \U\C)} \\
+	&\tab = \ preimage~g_1~((pre~g_2~\C)~(C \i \U\C)) \\
+	&\tab = \ preimage~g_1~(pre@ap~(pre~g_2~\C)~C) \\
+	&\tab = \ preimage~g_1~(preimage~g_2~C) \\
+	&\tab = \ preimage~(g_2 \circ\map g_1)~C
+\numberthis
+\end{align*}
+\end{proof}
+
+\subsection{Piecewise Preimage Mappings}
+
+XXX: moar wurds in this section
+
+\begin{equation}
+\begin{aligned}
+	&(\uplus\pre) : (X \prepto Y) \tto (X \prepto Y) \tto (X \prepto Y) \\
+	&\lzfcsplit{
+		&h_1 \uplus\pre h_2 \ := \ \\
+		&\tab\lzfclet{
+				\B & (domain~h_1) \u (domain~h_2) \\
+				h & \fun{B \in \B}{(pre@ap~h_1~B) \uplus (pre@ap~h_2~B)}
+			}{pre@close~h}
+	}
+\end{aligned}
+\end{equation}
+
+\begin{lemma}[Preimages under piecewise mappings]
+Let $g_1 \in X \pto Y$ and $g_2 \in X \pto Y$ have disjoint domains.
+Then for all $B \subseteq Y$, $preimage~(g_1 \uplus\map g_2)~B = (preimage~g_1~B) \uplus (preimage~g_2~B)$.
+\label{lem:preimage-under-piecewise}
+\end{lemma}
+
+
+\begin{theorem}[Piecewise preimage mappings]
+Let $g_1 \in X \pto Y$ and $g_2 \in X \pto Y$ have disjoint domains.
+Let $\B'$ be a $\sigma$-algebra on $Y$, $\B_1 := \sigma@trace~\B'~(range~g_1)$ and $\B_2 := \sigma@trace~\B'~(range~g_2)$.
+Let $h_1 := pre~g_1~\B_1$ and $h_2 := pre~g_2~\B_2$.
+Then for all $B \in \B'$, $pre@ap~(h_1 \uplus\pre h_2)~B = preimage~(g_1 \uplus\map g_2)~B$.
+\label{thm:piecewise-preimage-mappings}
+\end{theorem}
+\begin{proof}
+Expand definitions, substitute $h_1$ and $h_2$, apply Theorem~\ref{thm:pre-like-preimage}, apply Lemma~\ref{lem:preimage-under-piecewise}, rewrite in terms of $pre$, apply Theorem~\ref{thm:close-distributes-over-pre}, and rewrite in terms of ``$\oplus$'':
+\begin{align*}
+	&pre@ap~(h_1 \uplus\pre h_2)~B
+\\
+	&\tab = \ 
+		\lzfclet{
+			\B & (domain~h_1) \u (domain~h_2) \\
+			h & \fun{B \in \B}{(pre@ap~h_1~B) \uplus (pre@ap~h_2~B)}
+		}{pre@ap~(pre@close~h)~B}
+\\
+	&\tab = \
+		\lzfclet{
+			\B & \B_1 \u \B_2 \\
+			h & \fun{B \in \B}{\lzfcsplit{&(pre@ap~(pre~g_1~\B_1)~B)\ \uplus \\ &(pre@ap~(pre~g_2~\B_2)~B)}}
+		}{pre@ap~(pre@close~h)~B}
+\\
+	&\tab = \
+		\lzfclet{
+			\B & \B_1 \u \B_2 \\
+			h & \fun{B \in \B}{\lzfcsplit{&(preimage~g_1~B)\ \uplus \\ &(preimage~g_2~B)}}
+		}{pre@ap~(pre@close~h)~B}
+\\
+	&\tab = \
+		\lzfclet{
+			\B & \B_1 \u \B_2 \\
+			h & \fun{B \in \B}{preimage~(g_1 \uplus\map g_2)~B}
+		}{pre@ap~(pre@close~h)~B}
+\\
+	&\tab = \
+		\lzfclet{
+			\B & \B_1 \u \B_2
+		}{pre@ap~(pre@close~(pre~(g_1 \uplus\map g_2)~\B))~B}
+\\
+	&\tab = \
+		\lzfclet{
+			\B & \B_1 \u \B_2
+		}{pre@ap~(pre~(g_1 \uplus\map g_2)~(\sigma@close~\B))~B}
+\end{align*}
+Finally, noting that $\sigma@trace~\B'~((range~g_1) \u (range~g_2)) \subseteq \sigma@close~(\B_1 \u \B_2)$, apply Theorem~\ref{thm:pre-like-preimage}.
+\end{proof}
+
+
+
+\section{The Universe}
 
 XXX: to define standard $\sigma$-algebras, we need a universal set $\Univ$ and a universal $\sigma$-algebra $\Un$
 
@@ -996,8 +1118,14 @@ XXX: for any subset $A \subseteq \Univ$, $\sigma$ returns the \mykeyword{standar
 \end{aligned}
 \end{equation}
 
-A preimage arrow computation is a function from a domain to a mapping from measurable output sets to measurable input sets (where the input sets are restricted to the given domain)
+XXX: requirements: $\set{true}$ and $\set{false}$ must be measurable
 
+
+\section{Deriving the Preimage Arrow}
+
+XXX: intro
+
+A preimage arrow computation is a function from a domain to a mapping from measurable output sets to measurable input sets (where the input sets are restricted to the given domain)
 
 \begin{equation}
 	X \preto Y \ ::= \ Set~X \tto (X \prepto Y)
@@ -1013,7 +1141,7 @@ where $X$ and $Y$ are subsets of $\Univ$
 
 \begin{definition}[Preimage arrow equivalence]
 Two preimage arrow computations $h_1 : X \preto Y$ and $h_2 : X \preto Y$ are equivalent, written $h_1 \eqpre h_2$, when 
-for any $\sigma$-algebra $\B$ for $Y$, $pre@ap~(h_1~A)~B = pre@ap~(h_2~A)~B$ for all $A \subseteq X$ and $B \in \B$.
+$pre@ap~(h_1~A)~B = pre@ap~(h_2~A)~B$ for all $A \subseteq X$ and $B \in \sigma~Y$.
 \end{definition}
 
 \subsection{Natural Transformation}
@@ -1035,7 +1163,7 @@ Formally, for $\arrpre$ to be a natural transformation,
 	&\begin{aligned}
 		&\arrpre~(\ifmap~g_1~g_2~g_3) \ \eqpre \ \\
 		&\tab\ifpre~(\arrpre~g_1)~(\fun{0}{\arrpre~(g_2~0)})~(\fun{0}{\arrpre~(g_3~0)})
-	\label{eqn:arrpre-distributes-over-compmap}
+	\label{eqn:arrpre-distributes-over-ifmap}
 	\end{aligned}
 \end{align}
 i.e. $\arrpre$ must distribute over mapping arrow computations.
@@ -1043,6 +1171,52 @@ i.e. $\arrpre$ must distribute over mapping arrow computations.
 Fig.~\ref{fig:preimage-arrow-defs} shows the final result of deriving the preimage arrow as a natural transformation from the mapping arrow.
 
 \begin{figure*}[t]\centering
+\begin{align*}
+\begin{aligned}
+	&\begin{aligned}
+		&X \preto Y ::= Set~X \tto (X \prepto Y)
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}
+		&\arrpre : (X \mapto Y) \tto (X \preto Y) \\
+		&\arrpre~g~A \ := \ \lzfclet{g' & g~A \\ \B & \sigma~(range~g')}{pre~g'~\B}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}
+		&\comppre : (X \preto Y) \tto (Y \preto Z) \tto (X \preto Z) \\
+		&\comppre~h_1~h_2~A \ := \ 
+			\lzfclet{
+				h_1' & h_1~A \\
+				h_2' & h_2~(\U (domain~h_1'))
+			}{h_2 \circ\pre h_1}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}
+		&\pairpre : (X \preto Y) \tto (X \preto Z) \tto (X \preto Y \times Z) \\
+		&\pairpre~h_1~h_2~A \ := \ \pair{h_1~A,h_2~A}\pre
+	\end{aligned}
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}
+	&\begin{aligned}
+		&\ifpre: (X \preto Bool) \tto (1 \tto (X \preto Y)) \tto (1 \tto (X \preto Y)) \tto (X \preto Y) \\
+		&\lzfcsplit{
+			&\ifpre~h_1~h_2~h_3~A \ := \ \\
+			&\lzfclet{
+				h_1' & h_1~A \\
+				h_2' & lazy\pre~(h_2~0)~(pre@ap~h_1'~\set{true}) \\
+				h_3' & lazy\pre~(h_3~0)~(pre@ap~h_1'~\set{false})
+			}{h_2' \uplus\pre h_3'}
+		}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}
+		&lazy\pre : (X \preto Y) \tto (X \preto Y) \\
+		&lazy\pre~h~A \ := \ if~(A = \emptyset)~(\fun{\emptyset}{\emptyset})~(h~A)
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
 \caption{Preimage arrow definitions.}
 \label{fig:preimage-arrow-defs}
 \end{figure*}
@@ -1063,22 +1237,23 @@ Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-pairmap},
 	&\tab = \ 
 		\lzfclet{
 			g' & \pair{g_1~A, g_2~A}\map \\
-			\B & \sigma~(range~g') \\
-			h & pre~g'~\B
-		}{pre@ap~h~B} \\*
+			\B & \sigma~(range~g')
+		}{pre@ap~(pre~g'~\B)~B} \\*
 	&\tab = \ preimage~\pair{g_1~A,g_2~A}\map~B
 \end{aligned}
 \end{equation}
-Next, we apply Theorem~\ref{thm:preimage-mapping-pairing} and replace $g_1$ and $g_2$ with $\arrpre~g_1$ and $\arrpre~g_2$:
+Next, we apply Theorem~\ref{thm:preimage-mapping-pairing} and rewrite in terms of $\arrpre$:
 \begin{align*}
 	&pre@ap~(\arrpre~(\pairmap~g_1~g_2)~A)~B \\
 	&\tab = \ 
 		\lzfclet{
 			g_1' & g_1~A \\
-			g_2' & g_2~A \\
 			\B_1 & \sigma~(range~g_1') \\
+			h_1 & pre~g_1'~\B_1 \\
+			g_2' & g_2~A \\
 			\B_2 & \sigma~(range~g_2') \\
-		}{pre@ap~\pair{pre~g_1'~\B_1, pre~g_2'~\B_2}\pre~B} \\
+			h_2 & pre~g_2'~\B_2
+		}{pre@ap~\pair{h_1, h_2}\pre~B} \\
 	&\tab = \
 		\lzfclet{
 			h_1 & \arrpre~g_1~A \\
@@ -1094,27 +1269,143 @@ Substituting $h_1$ for $\arrpre~g_1$ and $h_2$ for $\arrpre~g_2$ in the last equ
 \end{aligned}
 \end{equation}
 
-
 \subsection{Case: Composition}
 
-XXX: Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-compmap}, we expand definitions...
-\begin{equation}
-\begin{aligned}
-	&pre@ap~(\arrpre~(\compmap~g_1~g_2)~A)~C \\
+Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-compmap}, we expand definitions and apply Theorem~\ref{thm:pre-like-preimage}:
+\begin{align*}
+	&pre@ap~(\arrpre~(\compmap~g_1~g_2)~A)~C
+\\
 	&\tab = \ 
 		\lzfclet{
 			g_1' & g_1~A \\
 			g_2' & g_2~(range~g_1') \\
-			A' & preimage~g_1'~(domain~g_2') \\
-			g' & \fun{x \in A'}{g_2'~(g_1'~x)} \\
+			g' & g_2' \circ\map g_1' \\
 			\C & \sigma~(range~g') \\
 		}{pre@ap~(pre~g'~\C)~C}
+\\
+	&\tab = \
+		\lzfclet{
+			g_1' & g_1~A \\
+			g_2' & g_2~(range~g_1')
+		}{preimage~(g_2' \circ\map g_1')~C}
+\numberthis
+\end{align*}
+Next, we apply Theorem~\ref{thm:preimage-mapping-composition} and rewrite in terms of $\arrpre$:
+\begin{align*}
+	&pre@ap~(\arrpre~(\compmap~g_1~g_2)~A)~C
+\\
+	&\tab = \ 
+		\lzfclet{
+			g_1' & g_1~A \\
+			\B & \sigma~(range~g_1') \\
+			h_1 & pre~g_1'~\B \\
+			g_2' & g_2~(range~g_1') \\
+			\C & \sigma~(range~g_2') \\
+			h_2 & pre~g_2'~\C
+		}{pre@ap~(h_2 \circ\pre h_1)~C}
+\\
+	&\tab = \
+		\lzfclet{
+			h_1 & \arrpre~g_1~A \\
+			h_2 & \arrpre~g_2~(range~(g_1~A))
+		}{pre@ap~(h_2 \circ\pre h_1)~C}
+\\
+	&\tab = \
+		\lzfclet{
+			h_1 & \arrpre~g_1~A \\
+			h_2 & \arrpre~g_2~(\U (domain~h_1))
+		}{pre@ap~(h_2 \circ\pre h_1)~C}
+\numberthis
+\end{align*}
+Substituting $h_1$ for $\arrpre~g_1$ and $h_2$ for $\arrpre~g_2$ in the last equality gives the definition for $\comppre$:
+\begin{equation}
+\begin{aligned}
+	&\comppre : (X \preto Y) \tto (Y \preto Z) \tto (X \preto Z) \\
+	&\comppre~h_1~h_2~A \ := \ 
+		\lzfclet{
+			h_1' & h_1~A \\
+			h_2' & h_2~(\U (domain~h_1'))
+		}{h_2 \circ\pre h_1}
 \end{aligned}
 \end{equation}
 
+
 \subsection{Case: Conditional}
 
-XXX: do this
+Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-ifmap}, expanding terms, and applying Theorem~\ref{thm:pre-like-preimage} results in
+\begin{align*}
+	&pre@ap~(\arrpre~(\ifmap~g_1~g_2~g_3)~A)~B
+\\
+	&\tab = \
+		\lzfclet{
+			g_1' & g_1~A \\
+			g_2' & lazy\map~(g_2~0)~(preimage~g_1'~\set{true}) \\
+			g_3' & lazy\map~(g_3~0)~(preimage~g_1'~\set{false})
+		}{preimage~(g_2' \uplus\map g_3')~B}
+\end{align*}
+Next, we apply Theorem~\ref{thm:piecewise-preimage-mappings} and rewrite in terms of $\arrpre$:
+\begin{align*}
+	&pre@ap~(\arrpre~(\ifmap~g_1~g_2~g_3)~A)~B
+\\
+	&\tab = \ 
+		\lzfclet{
+			g_1' & g_1~A \\
+			g_2' & lazy\map~(g_2~0)~(preimage~g_1'~\set{true}) \\
+			\B_2 & \sigma~(range~g_2') \\
+			h_2 & pre~g_2~\B_2 \\
+			g_3' & lazy\map~(g_3~0)~(preimage~g_1'~\set{false}) \\
+			\B_3 & \sigma~(range~g_3') \\
+			h_3 & pre~g_3~\B_3
+		}{pre@ap~(h_2 \uplus\pre h_3)~B}
+\\
+	&\tab = \ 
+		\lzfclet{
+			g_1' & g_1~A \\
+			h_2 & \arrpre~(lazy\map~(g_2~0))~(preimage~g_1'~\set{true}) \\
+			h_3 & \arrpre~(lazy\map~(g_3~0))~(preimage~g_1'~\set{false})
+		}{pre@ap~(h_2 \uplus\pre h_3)~B}
+\\
+	&\tab = \ 
+		\lzfclet{
+			h_1 & \arrpre~g_1~A \\
+			h_2 & \arrpre~(lazy\map~(g_2~0))~(pre@ap~h_1~\set{true}) \\
+			h_3 & \arrpre~(lazy\map~(g_3~0))~(pre@ap~h_1~\set{false})
+		}{pre@ap~(h_2 \uplus\pre h_3)~B}
+\end{align*}
+Suppose we have defined $lazy\pre$ so that for any domain subset $A$,
+\begin{equation}
+	\arrpre~(lazy\map~g)~A \ = \ lazy\pre~(\arrpre~g)~A
+\label{eqn:arrpre-distributes-over-lazymap}
+\end{equation}
+(We discharge this proof obligation after defining $\ifpre$.)
+Then
+\begin{align*}
+	&pre@ap~(\arrpre~(\ifmap~g_1~g_2~g_3)~A)~B
+\\
+	&\tab = \ 
+		\lzfclet{
+			h_1 & \arrpre~g_1~A \\
+			h_2 & lazy\pre~(\arrpre~(g_2~0))~(pre@ap~h_1~\set{true}) \\
+			h_3 & lazy\pre~(\arrpre~(g_3~0))~(pre@ap~h_1~\set{false})
+		}{pre@ap~(h_2 \uplus\pre h_3)~B}
+\end{align*}
+Substituting $h_1$ for $\arrpre~g_1$, $h_2~0$ for $\arrpre~(g_2~0)$, and $h_3~0$ for $\arrpre~(g_3~0)$ in the last equality gives the definition for $\ifpre$.
+
+Lastly, starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-lazymap},
+\begin{align*}
+	&\arrpre~(lazy\map~g)~A \ = \ 
+\\
+	&\tab = \
+		\lzfclet{
+			g' & if~(A = \emptyset)~\emptyset~(g~A) \\
+			\B & \sigma~(range~g')
+		}{pre~g'~\B}
+\\
+	&\tab = \ if~(A = \emptyset)~(pre~\emptyset~(\sigma~\emptyset))~(\arrpre~g~A)
+\\
+	&\tab = \ if~(A = \emptyset)~(\fun{\emptyset}{\emptyset})~(\arrpre~g~A)
+\end{align*}
+Substituting $h$ for $\arrpre~g$ in the last equality gives the definition for $lazy\pre$.
 
 
 \subsection{Super-Saver Theorems}
@@ -1130,7 +1421,7 @@ Let $g : X \mapto Y$ and $h : X \preto Y$ such that $h \ \eqmap \ \arrpre~g$.
 Then for all $A \subseteq X$, $h~A$ diverges if and only if $g~A$ diverges.
 \end{corollary}
 
-XXX: give short reason the following is trivially true
+XXX: simple reason for this:
 \begin{corollary}
 XXX: measurability
 \end{corollary}

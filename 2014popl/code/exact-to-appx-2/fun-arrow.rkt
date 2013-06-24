@@ -23,11 +23,12 @@
         [z  (f2 x)])
     (if (or (bottom? y) (bottom? z)) bottom (cons y z))))
 
-(: fun-if (All (X Y) ((Fun-Arrow X Boolean) (Fun-Arrow X Y) (Fun-Arrow X Y) -> (Fun-Arrow X Y))))
+(: fun-if (All (X Y) ((Fun-Arrow X Boolean) (-> (Fun-Arrow X Y)) (-> (Fun-Arrow X Y))
+                                            -> (Fun-Arrow X Y))))
 (define ((fun-if c t f) x)
   (define b (c x))
-  (cond [(eq? b #t)  (t x)]
-        [(eq? b #f)  (f x)]
+  (cond [(eq? b #t)  ((t) x)]
+        [(eq? b #f)  ((f) x)]
         [else  bottom]))
 
 (: fun-id (All (X) (Fun-Arrow X X)))
@@ -50,16 +51,25 @@
 (define (fun-bottom x)
   (((inst fun-const X Bottom) bottom) x))
 
+; app : (X ~> Y)×X ~> Y
+
+(: fun-app (All (X Y) (Fun-Arrow (Pair (Fun-Arrow X Y) X) Y)))
+;(: fun-app (All (X Y) ((Pair (X -> (U Y Bottom)) X) -> (U Y Bottom))))
+(define (fun-app fx)
+  ((car fx) (cdr fx)))
+
+#|
 (: fun-lazy (All (X Y) ((-> (Fun-Arrow X Y)) -> (Fun-Arrow X Y))))
 (define ((fun-lazy f) x) ((f) x))
+|#
 
 ;; ===================================================================================================
 
 (: fun-halt-on-true (Fun-Arrow Boolean Boolean))
 (define fun-halt-on-true
   (fun-if (inst fun-id Boolean)
-          ((inst fun-const Boolean Boolean) #t)
-          (fun-lazy (λ () fun-halt-on-true))))
+          (λ () ((inst fun-const Boolean Boolean) #t))
+          (λ () fun-halt-on-true)))
 
 (fun-halt-on-true #t)
 ;; Diverges:
