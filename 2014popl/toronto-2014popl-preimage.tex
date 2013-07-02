@@ -589,6 +589,11 @@ XXX: Figure~\ref{fig:bottom-arrow-defs} defines the bottom arrow...
 
 XXX: the standard Kleisli conversion of the Maybe monad (using a $\bot$ instead of Just and Maybe), simplified; arrow laws therefore hold (XXX: check terminology)
 
+In a nonstrict or simply typed $\lambda$-calculus, $\ifbot$ can be defined using the other combinators and a function $choose : \pair{Bool,\pair{X,X}} \tto X$, whose boolean input determines which of the $\pair{X,X}$ it returns.
+However, \lzfclang is call-by-value, so we need an explicitly lazy conditional.
+We would have had to define $\ifbot$ in Section~XXX (implementation) anyway, because the preimage arrow's lift returns unimplementable functions.
+
+
 XXX: point out that $\ifbot$ receives thunks, and remind readers that $1 = \set{0}$
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -626,7 +631,7 @@ Two mapping arrow computations $g_1 : X \mapto Y$ and $g_2 : X \mapto Y$ are equ
 \end{definition}
 
 
-\subsection{Natural Transformation}
+\subsection{Distributive Laws}
 
 The clearest way to ensure that mapping arrow computations mean what we think they mean is to derive each combinator in a way that makes $\liftmap$ distribute over bottom arrow computations. Formally, we require the following distributive laws to hold:
 \begin{align}
@@ -772,9 +777,9 @@ We will use as an example the following bottom arrow computation, which returns 
 \begin{equation}
 	halts@on@true_\bot \ := \ \ifbot~id~(\fun{0}{id})~(\fun{0}{halts@on@true_\bot})
 \end{equation}
-Its natural transformation to the mapping arrow should diverge only if applied to a set containing $false$.
+Its corresponding mapping arrow computation should diverge only if applied to a set containing $false$.
 
-Starting with the left-hand-side of~\eqref{eqn:arrmap-distributes-over-if}, we expand definitions, and simplify $f$ by restricting it to a domain for which $f_1~x$ cannot be $\bot$:
+Starting with the left-hand-side of~\eqref{eqn:liftmap-distributes-over-ifbot}, we expand definitions, and simplify $f$ by restricting it to a domain for which $f_1~x$ cannot be $\bot$:
 \begin{align*}
 	&\liftmap~(\ifbot~f_1~f_2~f_3)~A \\
 	&\tab \equiv \ 
@@ -850,7 +855,7 @@ $\arrmap$, $\pairmap$ and $\compmap$ define an arrow.
 \end{corollary}
 
 \begin{corollary}
-Let $f : X \tto Y_\bot$ and $g : X \mapto Y$ such that $g \ \equiv \ \liftmap~f$.
+Let $f : X \tto Y_\bot$ and $g : X \mapto Y$ its corresponding mapping arrow computation.
 For all $A \subseteq X$, $g~A$ diverges if and only if there exists an $x \in A$ for which $f~x$ diverges.
 \end{corollary}
 
@@ -1107,7 +1112,7 @@ Two preimage arrow computations $h_1 : X \preto Y$ and $h_2 : X \preto Y$ are eq
 $h_1~A \equiv h_2~A$ for all $A \subseteq X$.
 \end{definition}
 
-\subsection{Natural Transformation}
+\subsection{Distributive Laws}
 
 XXX: ensuring $\liftpre$ distributes over mapping arrow computations is awesome...
 
@@ -1198,23 +1203,23 @@ By structural induction; cases follow.
 
 \subsection{Case: Pairing}
 
-Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-pairmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-pairing}, and rewrite in terms of $\arrpre$:
+Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-pairmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-pairing}, and rewrite in terms of $\liftpre$:
 \begin{align*}
-	&pre@ap~(\arrpre~(\pairmap~g_1~g_2)~A)~B
+	&pre@ap~(\liftpre~(\pairmap~g_1~g_2)~A)~B
 \\
 	&\tab \equiv \ pre@ap~(pre~\pair{g_1~A, g_2~A}\map)~B
 \\
 	&\tab \equiv \ pre@ap~\pair{pre~(g_1~A), pre~(g_2~A)}\pre~B
 \\
-	&\tab \equiv \ pre@ap~\pair{\arrpre~g_1~A, \arrpre~g_2~A}\pre~B
+	&\tab \equiv \ pre@ap~\pair{\liftpre~g_1~A, \liftpre~g_2~A}\pre~B
 \end{align*}
-Substituting $h_1$ for $\arrpre~g_1$ and $h_2$ for $\arrpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\pairpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:arrpre-distributes-over-pairmap} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\pairpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-pairmap} holds.
 
 \subsection{Case: Composition}
 
-Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-compmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-composition} and rewrite in terms of $\arrpre$:
+Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-compmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-composition} and rewrite in terms of $\liftpre$:
 \begin{align*}
-	&pre@ap~(\arrpre~(\compmap~g_1~g_2)~A)~C
+	&pre@ap~(\liftpre~(\compmap~g_1~g_2)~A)~C
 \\
 	&\tab \equiv \ 
 		\lzfclet{
@@ -1230,18 +1235,18 @@ Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-compmap},
 \\
 	&\tab \equiv \
 		\lzfclet{
-			h_1 & \arrpre~g_1~A \\
-			h_2 & \arrpre~g_2~(pre@range~h_1)
+			h_1 & \liftpre~g_1~A \\
+			h_2 & \liftpre~g_2~(pre@range~h_1)
 		}{pre@ap~(h_2 \circ\pre h_1)~C}
 \numberthis
 \end{align*}
-Substituting $h_1$ for $\arrpre~g_1$ and $h_2$ for $\arrpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\comppre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:arrpre-distributes-over-compmap} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\comppre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-compmap} holds.
 
 \subsection{Case: Conditional}
 
-Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-ifmap}, we expand terms, apply Theorem~\ref{thm:piecewise-preimage-mappings}, rewrite in terms of $\arrpre$, and apply Theorem~\ref{thm:pre-like-preimage} in the definitions of $h_2$ and $h_3$:
+Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-ifmap}, we expand terms, apply Theorem~\ref{thm:piecewise-preimage-mappings}, rewrite in terms of $\liftpre$, and apply Theorem~\ref{thm:pre-like-preimage} in the definitions of $h_2$ and $h_3$:
 \begin{align*}
-	&pre@ap~(\arrpre~(\ifmap~g_1~g_2~g_3)~A)~B
+	&pre@ap~(\liftpre~(\ifmap~g_1~g_2~g_3)~A)~B
 \\
 	&\tab \equiv \ 
 		\lzfclet{
@@ -1260,64 +1265,55 @@ Starting with the left-hand side of~\eqref{eqn:arrpre-distributes-over-ifmap}, w
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1' & g_1~A \\
-			h_2 & \arrpre~(lazy\map~(g_2~0))~(preimage~g_1'~\set{true}) \\
-			h_3 & \arrpre~(lazy\map~(g_3~0))~(preimage~g_1'~\set{false})
+			h_2 & \liftpre~(lazy\map~(g_2~0))~(preimage~g_1'~\set{true}) \\
+			h_3 & \liftpre~(lazy\map~(g_3~0))~(preimage~g_1'~\set{false})
 		}{pre@ap~(h_2 \uplus\pre h_3)~B}
 \\
 	&\tab \equiv \ 
 		\lzfclet{
-			h_1 & \arrpre~g_1~A \\
-			h_2 & \arrpre~(lazy\map~(g_2~0))~(pre@ap~h_1~\set{true}) \\
-			h_3 & \arrpre~(lazy\map~(g_3~0))~(pre@ap~h_1~\set{false})
+			h_1 & \liftpre~g_1~A \\
+			h_2 & \liftpre~(lazy\map~(g_2~0))~(pre@ap~h_1~\set{true}) \\
+			h_3 & \liftpre~(lazy\map~(g_3~0))~(pre@ap~h_1~\set{false})
 		}{pre@ap~(h_2 \uplus\pre h_3)~B}
 \end{align*}
 Replacing mappings with lazy preimage mappings requires removing $lazy\map$.
 First, we define $lazy\pre$ as in Figure~\ref{fig:preimage-arrow-defs}.
 It is not hard to check that
 \begin{equation}
-	\arrpre~(lazy\map~g) \ \equiv \ lazy\pre~(\arrpre~g)
+	\liftpre~(lazy\map~g) \ \equiv \ lazy\pre~(\liftpre~g)
 \label{eqn:arrpre-distributes-over-lazymap}
 \end{equation}
 In terms of $lazy\pre$, we have
 \begin{align*}
-	&pre@ap~(\arrpre~(\ifmap~g_1~g_2~g_3)~A)~B
+	&pre@ap~(\liftpre~(\ifmap~g_1~g_2~g_3)~A)~B
 \\
 	&\tab \equiv \ 
 		\lzfclet{
-			h_1 & \arrpre~g_1~A \\
-			h_2 & lazy\pre~(\arrpre~(g_2~0))~(pre@ap~h_1~\set{true}) \\
-			h_3 & lazy\pre~(\arrpre~(g_3~0))~(pre@ap~h_1~\set{false})
+			h_1 & \liftpre~g_1~A \\
+			h_2 & lazy\pre~(\liftpre~(g_2~0))~(pre@ap~h_1~\set{true}) \\
+			h_3 & lazy\pre~(\liftpre~(g_3~0))~(pre@ap~h_1~\set{false})
 		}{pre@ap~(h_2 \uplus\pre h_3)~B}
 \end{align*}
-Substituting $h_1$ for $\arrpre~g_1$, $h_2~0$ for $\arrpre~(g_2~0)$ and $h_3~0$ for $\arrpre~(g_3~0)$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\ifpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:arrpre-distributes-over-ifmap} holds.
+Substituting $h_1$ for $\liftpre~g_1$, $h_2~0$ for $\liftpre~(g_2~0)$ and $h_3~0$ for $\liftpre~(g_3~0)$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\ifpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-ifmap} holds.
 
 \subsection{Super-Saver Theorems}
 
-The following two theorems are easy consequences of the fact that $\arrpre$ is a natural transformation.
+The following two theorems are easy consequences of the fact that $\liftpre$ distributes over mapping arrow computations.
 
 \begin{corollary}
 $\arrpre$, $\pairpre$ and $\comppre$ define an arrow.
 \end{corollary}
 
 \begin{corollary}
-Let $g : X \mapto Y$ and $h : X \preto Y$ such that $h \ \equiv \ \arrpre~g$.
-For all $A \subseteq X$, $h~A$ diverges if and only if $g~A$ diverges.
+Let $g : X \mapto Y$ and $h : X \preto Y$ its corresponding preimage arrow computation.
+For all $A \subseteq X$ and $B \subseteq Y$, $pre@ap~(h~A)~B \equiv preimage~(g~A)~B$.
 \end{corollary}
 
-XXX: simple reason for this:
-\begin{corollary}
-XXX: measurability
-\end{corollary}
+\section{Computable Approximation}
 
 
 \section{Preimages of Partial Functions}
 
-\begin{equation}
-\begin{aligned}
-	&\bot\pre : X \preto \emptyset \\
-	&\bot\pre \ := \ \arrpre~(\arrmap~\fun{x}\bot)
-\end{aligned}
-\end{equation}
 
 
 %\appendix
