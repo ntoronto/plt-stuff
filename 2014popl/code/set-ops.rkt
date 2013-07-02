@@ -5,6 +5,15 @@
 ;; ===================================================================================================
 ;; Additional common set ops
 
+(: set-disjoint? (All (X) ((Setof X) (Setof X) -> Boolean)))
+(define (set-disjoint? A B)
+  (set-empty? (set-intersect A B)))
+
+(: set-disjoint-union (All (X) ((Setof X) (Setof X) -> (Setof X))))
+(define (set-disjoint-union A B)
+  (cond [(set-disjoint? A B)  (set-union A B)]
+        [else  (error 'set-disjoint-union "expected disjoint sets; given ~e and ~e" A B)]))
+
 (: set-image (All (X Y) ((X -> Y) (Setof X) -> (Setof Y))))
 (define (set-image f A)
   (list->set (set-map A f)))
