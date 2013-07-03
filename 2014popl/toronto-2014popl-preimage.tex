@@ -32,6 +32,8 @@
 
 \mathversion{sans}
 
+\newcommand{\arrow}{\rightsquigarrow}
+
 \newcommand{\restrict}[1]{\lvert_{#1}}
 \newcommand{\pto}{\rightharpoonup}
 \newcommand{\Univ}{\mathbb{U}}
@@ -40,7 +42,7 @@
 \newcommand{\arrowlift}{\ensuremath{lift}}
 \newcommand{\arrowarr}{\ensuremath{arr}}
 \newcommand{\arrowcomp}{\ensuremath{{>}\mspace{-6mu}{>}\mspace{-6mu}{>}}}
-%\newcommand{\arrowpair}{\ensuremath{\&\mspace{-5mu}\&\mspace{-5mu}\&}}
+%\newcommand{\arrowpair}{\ensuremath{\&\mspace{-6mu}\&\mspace{-6mu}\&}}
 \newcommand{\arrowpair}{\ensuremath{pair}}
 \newcommand{\arrowif}{\ensuremath{if}}
 \newcommand{\arrowlazy}{\ensuremath{lazy}}
@@ -53,7 +55,7 @@
 \newcommand{\ifbot}{\arrowif_\bot}
 
 \newcommand{\map}{_\mathrm{map}}
-\DeclareMathOperator{\mapto}{\rightsquigarrow_{\mspace{-21mu}\map}}
+\DeclareMathOperator{\mapto}{\arrow_{\mspace{-21mu}\map}}
 %\DeclareMathOperator{\eqmap}{\mbox{\ensuremath{=_{\mspace{-19mu}\map}}}}
 \newcommand{\liftmap}{\arrowlift\map}
 \newcommand{\arrmap}{\arrowarr\map}
@@ -62,7 +64,7 @@
 \newcommand{\ifmap}{\arrowif\map}
 
 \newcommand{\pre}{_\mathrm{pre}}
-\DeclareMathOperator{\preto}{\rightsquigarrow_{\mspace{-19mu}\pre}}
+\DeclareMathOperator{\preto}{\arrow_{\mspace{-19mu}\pre}}
 %\DeclareMathOperator{\eqpre}{=_{\mspace{-17mu}\pre}}
 \newcommand{\liftpre}{\arrowlift\pre}
 \newcommand{\arrpre}{\arrowarr\pre}
@@ -564,13 +566,13 @@ XXX: Figure~\ref{fig:bottom-arrow-defs} defines the bottom arrow...
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\compbot : (X \tto Y_\bot) \tto (Y \tto Z_\bot) \tto (X \tto Z_\bot) \\
-		&\compbot~f_1~f_2~x \ := \ if~(f_1~x = \bot)~\bot~(f_2~(f_1~x))
+		&(\compbot) : (X \tto Y_\bot) \tto (Y \tto Z_\bot) \tto (X \tto Z_\bot) \\
+		&(f_1~\compbot~f_2)~x \ := \ if~(f_1~x = \bot)~\bot~(f_2~(f_1~x))
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
 		&\pairbot : (X \tto {Y_1}_\bot) \tto (X \tto {Y_2}_\bot) \tto (X \tto \pair{Y_1,Y_2}_\bot) \\
-		&\pairbot~f_2~f_2~x \ := \ if~((f_1~x = \bot) \bor (f_2~x = \bot))~\bot~{\pair{f_1~x,f_2~x}}
+		&\pairbot~f_1~f_2~x \ := \ if~((f_1~x = \bot) \bor (f_2~x = \bot))~\bot~{\pair{f_1~x,f_2~x}}
 	\end{aligned}
 \end{aligned}
 &\tab\tab\tab
@@ -595,6 +597,60 @@ We would have had to define $\ifbot$ in Section~XXX (implementation) anyway, bec
 
 
 XXX: point out that $\ifbot$ receives thunks, and remind readers that $1 = \set{0}$
+
+\newcommand{\gen}{_\mathit{a}}
+
+\begin{figure*}[t]\centering
+\begin{align*}
+\begin{aligned}[t]
+	\meaningof{\mathit{x}~\mathit{e}}\gen &\ :\equiv\
+		\meaningof{\pair{\mathit{e},0}}\gen~\arrowcomp\gen~\mathit{x}
+\\
+	\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen &\ :\equiv\
+		\arrowpair\gen~\meaningof{\mathit{e}_1}\gen~\meaningof{\mathit{e}_2}\gen
+\\
+	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
+		if\gen~
+			\meaningof{\mathit{e_c}}\gen~
+			(\fun{0}{\meaningof{\mathit{e_t}}\gen})~
+			(\fun{0}{\meaningof{\mathit{e_f}}\gen})
+\\
+	\meaningof{let~\mathit{e}_0~\mathit{e_b}}\gen &\ :\equiv\ 
+		(\arrowpair\gen~\meaningof{\mathit{e}_0}\gen~(\arrowarr\gen~id))~
+			\arrowcomp\gen~
+		\meaningof{\mathit{e_b}}\gen
+\\
+	\meaningof{env~0}\gen &\ :\equiv\ \arrowarr\gen~fst
+\\
+	\meaningof{env~(n+1)}\gen &\ :\equiv\
+		(\arrowarr\gen~snd)~\arrowcomp\gen~\meaningof{env~n}\gen
+\\
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
+	\meaningof{\mathit{v}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\_}{\mathit{v}}
+\\
+	\meaningof{fst~\mathit{e}}\gen &\ :\equiv\
+		\meaningof{\mathit{e}}\gen~\arrowcomp\gen~(\arrowarr\gen~fst)
+\\
+	\meaningof{snd~\mathit{e}}\gen &\ :\equiv\
+		\meaningof{\mathit{e}}\gen~\arrowcomp\gen~(\arrowarr\gen~snd)
+\\
+	\meaningof{\mathit{e}_1 + \mathit{e}_2}\gen &\ :\equiv\
+		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x+y})
+\\
+	\meaningof{\mathit{e}_1 - \mathit{e}_2}\gen &\ :\equiv\
+		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x-y})
+\\
+	&\ \cdots\ 
+\\
+\end{aligned}
+\end{align*}
+\hrule
+\caption{Transformation from a let-calculus with De-Bruijn-indexed bindings to arrow computations, for an arrow $\mathit{a}$.
+The type of a transformed program is $1 \arrow\gen X$, or an arrow from the empty stack to a value of type $X$.}
+\label{fig:semantic-function}
+\end{figure*}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
