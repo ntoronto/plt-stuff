@@ -42,8 +42,8 @@
 \newcommand{\arrowlift}{\ensuremath{lift}}
 \newcommand{\arrowarr}{\ensuremath{arr}}
 \newcommand{\arrowcomp}{\ensuremath{{>}\mspace{-6mu}{>}\mspace{-6mu}{>}}}
-%\newcommand{\arrowpair}{\ensuremath{\&\mspace{-6mu}\&\mspace{-6mu}\&}}
-\newcommand{\arrowpair}{\ensuremath{pair}}
+\newcommand{\arrowpair}{\ensuremath{\mathit{\&\mspace{-7.5mu}\&\mspace{-7.5mu}\&}}}
+%\newcommand{\arrowpair}{\ensuremath{pair}}
 \newcommand{\arrowif}{\ensuremath{if}}
 \newcommand{\arrowlazy}{\ensuremath{lazy}}
 \newcommand{\arrowapp}{\ensuremath{app}}
@@ -571,8 +571,8 @@ XXX: Figure~\ref{fig:bottom-arrow-defs} defines the bottom arrow...
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\pairbot : (X \tto {Y_1}_\bot) \tto (X \tto {Y_2}_\bot) \tto (X \tto \pair{Y_1,Y_2}_\bot) \\
-		&\pairbot~f_1~f_2~x \ := \ if~((f_1~x = \bot) \bor (f_2~x = \bot))~\bot~{\pair{f_1~x,f_2~x}}
+		&(\pairbot) : (X \tto {Y_1}_\bot) \tto (X \tto {Y_2}_\bot) \tto (X \tto \pair{Y_1,Y_2}_\bot) \\
+		&(f_1~\pairbot~f_2)~x \ := \ if~((f_1~x = \bot) \bor (f_2~x = \bot))~\bot~{\pair{f_1~x,f_2~x}}
 	\end{aligned}
 \end{aligned}
 &\tab\tab\tab
@@ -598,6 +598,12 @@ We would have had to define $\ifbot$ in Section~XXX (implementation) anyway, bec
 
 XXX: point out that $\ifbot$ receives thunks, and remind readers that $1 = \set{0}$
 
+XXX: Figure~\ref{fig:semantic-function}...
+
+XXX: Roughly, first-order application $(\mathit{x~e})$ runs arrow computation $\mathit{x}$ with a fresh stack with $\mathit{e}$ at the head.
+The binding form $(let~\mathit{e}_0~\mathit{e_b})$ pushes $\mathit{e}_0$ onto the stack.
+Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to the head.
+
 \newcommand{\gen}{_\mathit{a}}
 
 \begin{figure*}[t]\centering
@@ -607,7 +613,7 @@ XXX: point out that $\ifbot$ receives thunks, and remind readers that $1 = \set{
 		\meaningof{\pair{\mathit{e},0}}\gen~\arrowcomp\gen~\mathit{x}
 \\
 	\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen &\ :\equiv\
-		\arrowpair\gen~\meaningof{\mathit{e}_1}\gen~\meaningof{\mathit{e}_2}\gen
+		\meaningof{\mathit{e}_1}\gen~\arrowpair\gen~\meaningof{\mathit{e}_2}\gen
 \\
 	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
 		if\gen~
@@ -616,14 +622,14 @@ XXX: point out that $\ifbot$ receives thunks, and remind readers that $1 = \set{
 			(\fun{0}{\meaningof{\mathit{e_f}}\gen})
 \\
 	\meaningof{let~\mathit{e}_0~\mathit{e_b}}\gen &\ :\equiv\ 
-		(\arrowpair\gen~\meaningof{\mathit{e}_0}\gen~(\arrowarr\gen~id))~
+		(\meaningof{\mathit{e}_0}\gen~\arrowpair\gen~(\arrowarr\gen~id))~
 			\arrowcomp\gen~
 		\meaningof{\mathit{e_b}}\gen
 \\
 	\meaningof{env~0}\gen &\ :\equiv\ \arrowarr\gen~fst
 \\
-	\meaningof{env~(n+1)}\gen &\ :\equiv\
-		(\arrowarr\gen~snd)~\arrowcomp\gen~\meaningof{env~n}\gen
+	\meaningof{env~(\mathit{n}+1)}\gen &\ :\equiv\
+		(\arrowarr\gen~snd)~\arrowcomp\gen~\meaningof{env~\mathit{n}}\gen
 \\
 \end{aligned}
 &\tab\tab\tab
@@ -636,21 +642,26 @@ XXX: point out that $\ifbot$ receives thunks, and remind readers that $1 = \set{
 	\meaningof{snd~\mathit{e}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}}\gen~\arrowcomp\gen~(\arrowarr\gen~snd)
 \\
+	\meaningof{\mathit{e}_1 = \mathit{e}_2}\gen &\ :\equiv\
+		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x = y})
+\\
 	\meaningof{\mathit{e}_1 + \mathit{e}_2}\gen &\ :\equiv\
 		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x+y})
-\\
-	\meaningof{\mathit{e}_1 - \mathit{e}_2}\gen &\ :\equiv\
-		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x-y})
 \\
 	&\ \cdots\ 
 \\
 \end{aligned}
 \end{align*}
 \hrule
-\caption{Transformation from a let-calculus with De-Bruijn-indexed bindings to arrow computations, for an arrow $\mathit{a}$.
+\caption{Transformation from a let-calculus with De-Bruijn-indexed bindings to arrow computations, for any arrow $\mathit{a}$.
 The type of a transformed program is $1 \arrow\gen X$, or an arrow from the empty stack to a value of type $X$.}
 \label{fig:semantic-function}
 \end{figure*}
+
+XXX: example: suppose $x \div y$ diverges when $y = 0$...
+\begin{equation}
+	div_\bot := \meaningof{if~(snd~(env~0) = 0)~\bot~(fst~(env~0) \div snd~(env~0))}
+\end{equation}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -697,12 +708,12 @@ The clearest way to ensure that mapping arrow computations mean what we think th
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		\liftmap~(\pairbot~f_1~f_2) \ \equiv \ \pairmap~(\liftmap~f_1)~(\liftmap~f_2)
+		\liftmap~(f_1~\pairbot~f_2) \ \equiv \ (\liftmap~f_1)~\pairmap~(\liftmap~f_2)
 	\label{eqn:liftmap-distributes-over-pairbot}
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		\liftmap~(\compbot~f_1~f_2) \ \equiv \ \compmap~(\liftmap~f_1)~(\liftmap~f_2)
+		\liftmap~(f_1~\compbot~f_2) \ \equiv \ (\liftmap~f_1)~\compmap~(\liftmap~f_2)
 	\label{eqn:liftmap-distributes-over-compbot}
 	\end{aligned} \\
 \nonumber \\[-6pt]
@@ -728,8 +739,8 @@ Figure~\ref{fig:mapping-arrow-defs} shows the result of deriving the other combi
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\compmap : (X \mapto Y) \tto (Y \mapto Z) \tto (X \mapto Z) \\
-		&\compmap~g_1~g_2~A \ := \ 
+		&(\compmap) : (X \mapto Y) \tto (Y \mapto Z) \tto (X \mapto Z) \\
+		&(g_1~\compmap~g_2)~A \ := \ 
 			\lzfclet{
 				g_1' & g_1~A \\
 				g_2' & g_2~(range~g_1')
@@ -737,8 +748,8 @@ Figure~\ref{fig:mapping-arrow-defs} shows the result of deriving the other combi
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\pairmap : (X \mapto Y_1) \tto (X \mapto Y_2) \tto (X \mapto \pair{Y_1,Y_2}) \\
-		&\pairmap~g_1~g_2~A \ := \ \pair{g_1~A,g_2~A}\map
+		&(\pairmap) : (X \mapto Y_1) \tto (X \mapto Y_2) \tto (X \mapto \pair{Y_1,Y_2}) \\
+		&(g_1~\pairmap~g_2)~A \ := \ \pair{g_1~A,g_2~A}\map
 	\end{aligned} \\
 \end{aligned}
 &\tab\tab\tab
@@ -785,7 +796,7 @@ By structural induction; cases follow.
 Starting with the left-hand side of~\eqref{eqn:liftmap-distributes-over-pairbot}, we first expand definitions.
 For any $f_1 : X \tto Y_\bot$, $f_2 : X \tto Z_\bot$, and $A \subseteq X$,
 \begin{align*}
-	&\liftmap~(\pairbot~f_1~f_2)~A
+	&\liftmap~(f_1~\pairbot~f_2)~A
 %\\
 %	&\tab \equiv \ \liftmap~(\fun{x}{if~(f_1~x = \bot \bor f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}})~A
 \\
@@ -798,7 +809,7 @@ For any $f_1 : X \tto Y_\bot$, $f_2 : X \tto Z_\bot$, and $A \subseteq X$,
 \end{align*}
 Next, we replace the definition of $A'$ with one that does not depend on $f$, and rewrite in terms of $\liftmap~f_1$ and $\liftmap~f_2$:
 \begin{align*}
-	&\liftmap~(\pairbot~f_1~f_2)~A
+	&\liftmap~(f_1~\pairbot~f_2)~A
 \\
 	&\tab \equiv \ 
 		\lzfclet{
@@ -817,11 +828,11 @@ Next, we replace the definition of $A'$ with one that does not depend on $f$, an
 	&\tab \equiv \ \pair{\liftmap~f_1~A, \liftmap~f_2~A}\map
 \numberthis
 \end{align*}
-Substituting $g_1$ for $\liftmap~f_1$ and $g_2$ for $\liftmap~f_2$ gives a definition for $\pairmap$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:liftmap-distributes-over-pairbot} holds.
+Substituting $g_1$ for $\liftmap~f_1$ and $g_2$ for $\liftmap~f_2$ gives a definition for $(\pairmap)$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:liftmap-distributes-over-pairbot} holds.
 
 \subsection{Case: Composition}
 
-The derivation of $\compmap$ is similar to that of $\pairmap$ but a little more involved.
+The derivation of $(\compmap)$ is similar to that of $(\pairmap)$ but a little more involved.
 
 XXX: include it?
 
@@ -907,7 +918,7 @@ Substituting $g_1$ for $\liftmap~f_1$, $g_2~0$ for $\liftmap~(f_2~0)$, and $g_3~
 The following two theorems are easy consequences of the fact that $\liftmap$ distributes over bottom arrow computations.
 
 \begin{corollary}
-$\arrmap$, $\pairmap$ and $\compmap$ define an arrow.
+$\arrmap$, $(\pairmap)$ and $(\compmap)$ define an arrow.
 \end{corollary}
 
 \begin{corollary}
@@ -1180,12 +1191,12 @@ Formally, we require the following distributive laws to hold:
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		\liftpre~(\pairmap~g_1~g_2) \ \equiv \ \pairpre~(\liftpre~g_1)~(\liftpre~g_2)
+		\liftpre~(g_1~\pairmap~g_2) \ \equiv \ (\liftpre~g_1)~\pairpre~(\liftpre~g_2)
 	\label{eqn:liftpre-distributes-over-pairmap}
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		\liftpre~(\compmap~g_1~g_2) \ \equiv \ \comppre~(\liftpre~g_1)~(\liftpre~g_2)
+		\liftpre~(g_1~\compmap~g_2) \ \equiv \ (\liftpre~g_1)~\comppre~(\liftpre~g_2)
 	\label{eqn:liftpre-distributes-over-compmap}
 	\end{aligned} \\
 \nonumber \\[-6pt]
@@ -1211,8 +1222,8 @@ Figure~\ref{fig:preimage-arrow-defs} shows the result of deriving the other comb
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\comppre : (X \preto Y) \tto (Y \preto Z) \tto (X \preto Z) \\
-		&\comppre~h_1~h_2~A \ := \ 
+		&(\comppre) : (X \preto Y) \tto (Y \preto Z) \tto (X \preto Z) \\
+		&(h_1~\comppre~h_2)~A \ := \ 
 			\lzfclet{
 				h_1' & h_1~A \\
 				h_2' & h_2~(pre@range~h_1')
@@ -1220,8 +1231,8 @@ Figure~\ref{fig:preimage-arrow-defs} shows the result of deriving the other comb
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\pairpre : (X \preto Y) \tto (X \preto Z) \tto (X \preto Y \times Z) \\
-		&\pairpre~h_1~h_2~A \ := \ \pair{h_1~A,h_2~A}\pre
+		&(\pairpre) : (X \preto Y) \tto (X \preto Z) \tto (X \preto Y \times Z) \\
+		&(h_1~\pairpre~h_2)~A \ := \ \pair{h_1~A,h_2~A}\pre
 	\end{aligned}
 \end{aligned}
 &\tab\tab\tab
@@ -1261,7 +1272,7 @@ By structural induction; cases follow.
 
 Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-pairmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-pairing}, and rewrite in terms of $\liftpre$:
 \begin{align*}
-	&pre@ap~(\liftpre~(\pairmap~g_1~g_2)~A)~B
+	&pre@ap~(\liftpre~(g_1~\pairmap~g_2)~A)~B
 \\
 	&\tab \equiv \ pre@ap~(pre~\pair{g_1~A, g_2~A}\map)~B
 \\
@@ -1269,13 +1280,13 @@ Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-pairmap}
 \\
 	&\tab \equiv \ pre@ap~\pair{\liftpre~g_1~A, \liftpre~g_2~A}\pre~B
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\pairpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-pairmap} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\pairpre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-pairmap} holds.
 
 \subsection{Case: Composition}
 
 Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-compmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-composition} and rewrite in terms of $\liftpre$:
 \begin{align*}
-	&pre@ap~(\liftpre~(\compmap~g_1~g_2)~A)~C
+	&pre@ap~(\liftpre~(g_1~\compmap~g_2)~A)~C
 \\
 	&\tab \equiv \ 
 		\lzfclet{
@@ -1296,7 +1307,7 @@ Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-compmap}
 		}{pre@ap~(h_2 \circ\pre h_1)~C}
 \numberthis
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\comppre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-compmap} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\comppre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-compmap} holds.
 
 \subsection{Case: Conditional}
 
@@ -1357,7 +1368,7 @@ Substituting $h_1$ for $\liftpre~g_1$, $h_2~0$ for $\liftpre~(g_2~0)$ and $h_3~0
 The following two theorems are easy consequences of the fact that $\liftpre$ distributes over mapping arrow computations.
 
 \begin{corollary}
-$\arrpre$, $\pairpre$ and $\comppre$ define an arrow.
+$\arrpre$, $(\pairpre)$ and $(\comppre)$ define an arrow.
 \end{corollary}
 
 \begin{corollary}
