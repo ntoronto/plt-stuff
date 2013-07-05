@@ -19,11 +19,10 @@
 \newcommand{\keyword}[1]{\textbf{#1}}
 \newcommand{\mykeyword}[1]{\textbf{\textit{#1}}}
 
-\newtheorem{axiom}{Axiom}{\bfseries}{\rmfamily}
-\newtheorem{lemma}{Lemma}{\bfseries}{\rmfamily}
-\newtheorem{theorem}{Theorem}{\bfseries}{\rmfamily}
-\newtheorem{corollary}{Corollary}{\bfseries}{\rmfamily}
-\newtheorem{definition}{Definition}{\bfseries}{\rmfamily}
+\newtheorem{theorem}{Theorem}[subsection]{\bfseries}{\rmfamily}
+\newtheorem{lemma}[theorem]{Lemma}{\bfseries}{\rmfamily}
+\newtheorem{corollary}[theorem]{Corollary}{\bfseries}{\rmfamily}
+\newtheorem{definition}[theorem]{Definition}{\bfseries}{\rmfamily}
 
 \newcommand\xqed[1]{%
   \leavevmode\unskip\penalty9999 \hbox{}\nobreak\hfill

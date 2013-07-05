@@ -23,6 +23,9 @@
     (if (bottom? y) y (let ([z  (f2 x)])
                         (if (bottom? z) z (cons y z))))))
 
+(: lazy/bot (All (X Y) ((-> (Bot-Arrow X Y)) -> (Bot-Arrow X Y))))
+(define ((lazy/bot f) x) ((f) x))
+
 (: if/bot (All (X Y) ((Bot-Arrow X Boolean) (-> (Bot-Arrow X Y)) (-> (Bot-Arrow X Y))
                                             -> (Bot-Arrow X Y))))
 (define ((if/bot c t f) x)
@@ -56,21 +59,3 @@
 ;(: app/bot (All (X Y) ((Pair (X -> (U Y Bottom)) X) -> (U Y Bottom))))
 (define (app/bot fx)
   ((car fx) (cdr fx)))
-
-;; Defining (strict) conditional in terms of other combinators
-
-(: switch (All (X) ((Pair Boolean (Pair X X)) -> X)))
-(define (switch x)
-  (if (car x) (car (cdr x)) (cdr (cdr x))))
-
-(: switch/bot (All (X Y) ((Bot-Arrow X Y) (Bot-Arrow X Y) -> (Bot-Arrow (Pair Boolean X) Y))))
-(define (switch/bot t f)
-  (>>>/bot (pair/bot (inst fst/bot Boolean X)
-                     (pair/bot (>>>/bot (inst snd/bot Boolean X) t)
-                               (>>>/bot (inst snd/bot Boolean X) f)))
-           ((inst arr/bot (Pair Boolean (Pair Y Y)) Y) switch)))
-
-(: iff/bot (All (X Y) ((Bot-Arrow X Boolean) (Bot-Arrow X Y) (Bot-Arrow X Y) -> (Bot-Arrow X Y))))
-(define (iff/bot c t f)
-  (>>>/bot (pair/bot c (inst id/bot X)) ((inst switch/bot X Y) t f)))
-

@@ -604,7 +604,8 @@ XXX: Roughly, first-order application $(\mathit{x~e})$ runs arrow computation $\
 The binding form $(let~\mathit{e}_0~\mathit{e_b})$ pushes $\mathit{e}_0$ onto the stack.
 Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to the head.
 
-\newcommand{\gen}{_\mathit{a}}
+\newcommand{\gen}{_\mathrm{a}}
+\newcommand{\genb}{_\mathrm{b}}
 
 \begin{figure*}[t]\centering
 \begin{align*}
@@ -652,7 +653,7 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 \end{aligned}
 \end{align*}
 \hrule
-\caption{Transformation from a let-calculus with first-order definitions and De-Bruijn-indexed bindings to arrow computations, for any arrow $\mathit{a}$.
+\caption{Transformation from a let-calculus with first-order definitions and De-Bruijn-indexed bindings to computations in arrow $\mathrm{a}$.
 %The type of a transformed expression is $1 \arrow\gen X$, or an arrow from the empty stack $\gamma = 0$ to a value of type $X$.
 }
 \label{fig:semantic-function}
@@ -700,31 +701,42 @@ Two mapping arrow computations $g_1 : X \mapto Y$ and $g_2 : X \mapto Y$ are equ
 
 \subsection{Distributive Laws}
 
-The clearest way to ensure that mapping arrow computations mean what we think they mean is to derive each combinator in a way that makes $\liftmap$ distribute over bottom arrow computations. Formally, we require the following distributive laws to hold:
+The clearest way to ensure that mapping arrow computations mean what we think they mean is to derive each combinator in a way that makes $\liftmap$ distribute over bottom arrow computations; i.e. it must be a particular kind of \keyword{homomorphism}.
+
+\begin{definition}[arrow+choice homomorphism]
+A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeyword{arrow homomorphism} from arrow $\mathrm{a}$ to arrow $\mathrm{b}$ if the following distributive laws hold for appropriately typed $f$, $f_1$ and $f_2$:
 \begin{align}
 	&\begin{aligned}
-		\liftmap~(\arrbot~f) \ \equiv \ \arrmap~f
-	\label{eqn:liftmap-distributes-over-arrbot}
+		lift\genb~(\arrowarr\gen~f) \ \equiv \ \arrowarr\genb~f
+	\label{eqn:lift-distributes-over-arr}
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		\liftmap~(f_1~\pairbot~f_2) \ \equiv \ (\liftmap~f_1)~\pairmap~(\liftmap~f_2)
-	\label{eqn:liftmap-distributes-over-pairbot}
+		lift\genb~(f_1~\arrowpair\gen~f_2) \ \equiv \ (lift\genb~f_1)~\arrowpair\genb~(lift\genb~f_2)
+	\label{eqn:lift-distributes-over-pair}
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		\liftmap~(f_1~\compbot~f_2) \ \equiv \ (\liftmap~f_1)~\compmap~(\liftmap~f_2)
-	\label{eqn:liftmap-distributes-over-compbot}
-	\end{aligned} \\
-\nonumber \\[-6pt]
-	&\begin{aligned}
-		&\liftmap~(\ifbot~f_1~f_2~f_3) \ \equiv \ \\
-		&\ \ \ifmap~(\liftmap~f_1)~(\fun{0}{\liftmap~(f_2~0)})~(\fun{0}{\liftmap~(f_3~0)})
-	\label{eqn:liftmap-distributes-over-ifbot}
+		lift\genb~(f_1~\arrowcomp\gen~f_2) \ \equiv \ (lift\genb~f_1)~\arrowcomp\genb~(lift\genb~f_2)
+	\label{eqn:lift-distributes-over-comp}
 	\end{aligned}
 \end{align}
-Clearly $\arrmap~f := \liftmap~(\arrbot~f)$ meets~\eqref{eqn:liftmap-distributes-over-arrbot}.
-Figure~\ref{fig:mapping-arrow-defs} shows the result of deriving the other combinators from the bottom arrow using distributive laws.
+It is additionally an \mykeyword{arrow+choice homomorphism} if
+\begin{equation}
+\begin{aligned}
+	&lift\genb~(\arrowif\gen~f_1~f_2~f_3) \ \equiv \ \\
+	&\tab\arrowif\genb~(lift\genb~f_1)~(\fun{0}{lift\genb~(f_2~0)})~(\fun{0}{lift\genb~(f_3~0)})
+\label{eqn:lift-distributes-over-if}
+\end{aligned}
+\end{equation}
+holds for appropriately typed $f_1$, $f_2$ and $f_3$.
+(In nonstrict languages, the thunks may be dropped.)
+\label{def:arrow-homomorphism}
+\end{definition}
+
+Clearly $\arrowarr\genb := lift\genb \circ \arrowarr\gen$ meets~\eqref{eqn:lift-distributes-over-arr}, so we define $\arrmap$ as a composition.
+The next three subsections derive $\pairmap$, $\compmap$ and $\ifmap$ from their corresponding bottom arrow combinators, in a way that ensures $\liftmap$ is an arrow+choice homomorphism.
+Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 
 \begin{figure*}[t]\centering
 \begin{align*}
@@ -735,7 +747,7 @@ Figure~\ref{fig:mapping-arrow-defs} shows the result of deriving the other combi
 \\[-6pt]
 	&\begin{aligned}[t]
 		&\arrmap : (X \tto Y) \tto (X \mapto Y) \\
-		&\arrmap~f~A \ := \ \liftmap~(\arrbot~f)
+		&\arrmap \ := \ \liftmap \circ \arrbot
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
@@ -784,16 +796,9 @@ Figure~\ref{fig:mapping-arrow-defs} shows the result of deriving the other combi
 \label{fig:mapping-arrow-defs}
 \end{figure*}
 
-\begin{theorem}[mapping arrow correctness]
-$\liftmap$ distributes over bottom arrow computations.
-\end{theorem}
-\begin{proof}
-By structural induction; cases follow.
-\end{proof}
-
 \subsection{Case: Pairing}
 
-Starting with the left-hand side of~\eqref{eqn:liftmap-distributes-over-pairbot}, we first expand definitions.
+Starting with the left-hand side of~\eqref{eqn:lift-distributes-over-pair}, we first expand definitions.
 For any $f_1 : X \tto Y_\bot$, $f_2 : X \tto Z_\bot$, and $A \subseteq X$,
 \begin{align*}
 	&\liftmap~(f_1~\pairbot~f_2)~A
@@ -828,7 +833,7 @@ Next, we replace the definition of $A'$ with one that does not depend on $f$, an
 	&\tab \equiv \ \pair{\liftmap~f_1~A, \liftmap~f_2~A}\map
 \numberthis
 \end{align*}
-Substituting $g_1$ for $\liftmap~f_1$ and $g_2$ for $\liftmap~f_2$ gives a definition for $(\pairmap)$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:liftmap-distributes-over-pairbot} holds.
+Substituting $g_1$ for $\liftmap~f_1$ and $g_2$ for $\liftmap~f_2$ gives a definition for $(\pairmap)$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-pair} holds.
 
 \subsection{Case: Composition}
 
@@ -913,12 +918,20 @@ For $halts@on@true_\bot$, $lazy\map~(\liftmap~(f_3~0))~A_3$ does not diverge whe
 
 Substituting $g_1$ for $\liftmap~f_1$, $g_2~0$ for $\liftmap~(f_2~0)$, and $g_3~0$ for $\liftmap~(f_3~0)$ gives a definition for $\ifmap$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:liftmap-distributes-over-ifbot} holds.
 
-\subsection{Super-Saver Theorems}
+\subsection{Theorems}
 
-The following theorems are easy consequences of the fact that $\liftmap$ distributes over bottom arrow computations.
+\begin{theorem}[mapping arrow correctness]
+$\liftmap$ is an arrow+choice homomorphism.
+\end{theorem}
+\begin{proof}
+By construction.
+\end{proof}
+
+The following are easy consequences of the fact that $\liftmap$ is a homomorphism.
 
 \begin{corollary}
 $\arrmap$, $(\pairmap)$ and $(\compmap)$ define an arrow.
+With $\ifmap$, they define an arrow+choice.
 \end{corollary}
 
 \begin{comment}
@@ -929,7 +942,7 @@ For all $A \subseteq X$, $g~A$ diverges if and only if there exists an $x \in A$
 \end{comment}
 
 \begin{corollary}
-If $\meaningof{\mathit{e}}_\bot : X \tto Y_\bot$, then $\meaningof{\mathit{e}}\map : X \mapto Y$ and $lift\map~\meaningof{\mathit{e}}_\bot \equiv \meaningof{\mathit{e}}\map$.
+If $\meaningof{\mathit{e}}_\bot : X \tto Y_\bot$, then $lift\map~\meaningof{\mathit{e}}_\bot \equiv \meaningof{\mathit{e}}\map$.
 \end{corollary}
 
 
