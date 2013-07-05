@@ -609,6 +609,8 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 \begin{figure*}[t]\centering
 \begin{align*}
 \begin{aligned}[t]
+	\meaningof{\mathit{x} := \mathit{e};\ \cdots}\gen &\ :\equiv\
+		\mathit{x} := \meaningof{\mathit{e}}\gen;\ \cdots \\
 	\meaningof{\mathit{x}~\mathit{e}}\gen &\ :\equiv\
 		\meaningof{\pair{\mathit{e},0}}\gen~\arrowcomp\gen~\mathit{x}
 \\
@@ -626,15 +628,12 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 			\arrowcomp\gen~
 		\meaningof{\mathit{e_b}}\gen
 \\
-	\meaningof{env~0}\gen &\ :\equiv\ \arrowarr\gen~fst
-\\
-	\meaningof{env~(\mathit{n}+1)}\gen &\ :\equiv\
-		(\arrowarr\gen~snd)~\arrowcomp\gen~\meaningof{env~\mathit{n}}\gen
+	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{\gamma_\mathit{n}}
 \\
 \end{aligned}
 &\tab\tab\tab
 \begin{aligned}[t]
-	\meaningof{\mathit{v}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\_}{\mathit{v}}
+	\meaningof{\mathit{v}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{\mathit{v}}
 \\
 	\meaningof{fst~\mathit{e}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}}\gen~\arrowcomp\gen~(\arrowarr\gen~fst)
@@ -653,8 +652,9 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 \end{aligned}
 \end{align*}
 \hrule
-\caption{Transformation from a let-calculus with De-Bruijn-indexed bindings to arrow computations, for any arrow $\mathit{a}$.
-The type of a transformed program is $1 \arrow\gen X$, or an arrow from the empty stack to a value of type $X$.}
+\caption{Transformation from a let-calculus with first-order definitions and De-Bruijn-indexed bindings to arrow computations, for any arrow $\mathit{a}$.
+%The type of a transformed expression is $1 \arrow\gen X$, or an arrow from the empty stack $\gamma = 0$ to a value of type $X$.
+}
 \label{fig:semantic-function}
 \end{figure*}
 
@@ -915,15 +915,21 @@ Substituting $g_1$ for $\liftmap~f_1$, $g_2~0$ for $\liftmap~(f_2~0)$, and $g_3~
 
 \subsection{Super-Saver Theorems}
 
-The following two theorems are easy consequences of the fact that $\liftmap$ distributes over bottom arrow computations.
+The following theorems are easy consequences of the fact that $\liftmap$ distributes over bottom arrow computations.
 
 \begin{corollary}
 $\arrmap$, $(\pairmap)$ and $(\compmap)$ define an arrow.
 \end{corollary}
 
+\begin{comment}
 \begin{corollary}
 Let $f : X \tto Y_\bot$ and $g : X \mapto Y$ its corresponding mapping arrow computation.
 For all $A \subseteq X$, $g~A$ diverges if and only if there exists an $x \in A$ for which $f~x$ diverges.
+\end{corollary}
+\end{comment}
+
+\begin{corollary}
+If $\meaningof{\mathit{e}}_\bot : X \tto Y_\bot$, then $\meaningof{\mathit{e}}\map : X \mapto Y$ and $lift\map~\meaningof{\mathit{e}}_\bot \equiv \meaningof{\mathit{e}}\map$.
 \end{corollary}
 
 
@@ -1365,15 +1371,21 @@ Substituting $h_1$ for $\liftpre~g_1$, $h_2~0$ for $\liftpre~(g_2~0)$ and $h_3~0
 
 \subsection{Super-Saver Theorems}
 
-The following two theorems are easy consequences of the fact that $\liftpre$ distributes over mapping arrow computations.
+The following theorems are easy consequences of the fact that $\liftpre$ distributes over mapping arrow computations.
 
 \begin{corollary}
 $\arrpre$, $(\pairpre)$ and $(\comppre)$ define an arrow.
 \end{corollary}
 
+\begin{comment}
 \begin{corollary}
 Let $g : X \mapto Y$ and $h : X \preto Y$ its corresponding preimage arrow computation.
 For all $A \subseteq X$ and $B \subseteq Y$, $pre@ap~(h~A)~B \equiv preimage~(g~A)~B$.
+\end{corollary}
+\end{comment}
+
+\begin{corollary}
+If $\meaningof{e}\map : X \mapto Y$, then for all $A \subseteq X$ and $B \subseteq Y$, $preimage~(\meaningof{e}\map~A)~B \equiv pre@ap~(\meaningof{e}\pre~A)~B$.
 \end{corollary}
 
 \section{Computable Approximation}
