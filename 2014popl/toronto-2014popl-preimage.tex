@@ -53,6 +53,7 @@
 \newcommand{\compbot}{\arrowcomp_\bot}
 \newcommand{\pairbot}{\arrowpair_\bot}
 \newcommand{\ifbot}{\arrowif_\bot}
+\newcommand{\lazybot}{\arrowlazy_\bot}
 
 \newcommand{\map}{_\mathrm{map}}
 \DeclareMathOperator{\mapto}{\arrow_{\mspace{-21mu}\map}}
@@ -62,6 +63,7 @@
 \newcommand{\compmap}{\arrowcomp\map}
 \newcommand{\pairmap}{\arrowpair\map}
 \newcommand{\ifmap}{\arrowif\map}
+\newcommand{\lazymap}{\arrowlazy\map}
 
 \newcommand{\pre}{_\mathrm{pre}}
 \DeclareMathOperator{\preto}{\arrow_{\mspace{-19mu}\pre}}
@@ -71,6 +73,7 @@
 \newcommand{\comppre}{\arrowcomp\pre}
 \newcommand{\pairpre}{\arrowpair\pre}
 \newcommand{\ifpre}{\arrowif\pre}
+\newcommand{\lazypre}{\arrowlazy\pre}
 
 \newcommand{\prepto}{\pto_{\mspace{-19mu}\pre}}
 
@@ -207,10 +210,11 @@ Because of the particular way \lzfclang's lambda terms are defined, for two lamb
 For example, $(\fun{x}{x}) = (\fun{y}{y})$ reduces to $true$, but $(\fun{x}{2}) = (\fun{x}{1+1})$ reduces to $false$.
 
 We understand any \lzfclang term $\mathit{e}$ used as a truth statement as shorthand for ``$\mathit{e}$ reduces to $true$.''
-Therefore, while the terms $\set{(\fun{x}{x})~1,\,1}$ and $\set{1}$ are (externally, extensionally) unequal, we can say that $\set{(\fun{x}{x})~1,\,1} = \set{1}$.
+Therefore, while the terms $(\fun{x}{x})~1$ and $1$ are (externally, extensionally) unequal, we can say that $(\fun{x}{x})~1 = 1$.
 
 Any truth statement $\mathit{e}$ implies that $\mathit{e}$ converges.
-We sometimes do not want this, particularly when we want to say that $\mathit{e_1}$ and $\mathit{e_2}$ are equivalent when they both diverge.
+In particular, the truth statement $\mathit{e}_1 = \mathit{e}_2$ implies that both $\mathit{e}_1$ and $\mathit{e}_2$ converge.
+However, we often want to say that $\mathit{e}_1$ and $\mathit{e}_1$ are equivalent when they both diverge.
 In these cases, we use a slightly weaker equivalence.
 
 \begin{definition}[observational equivalence]
@@ -252,10 +256,7 @@ For example, $X \pto Y$ is the return type for the restriction function:
 \end{aligned}
 \end{equation}
 which converts a lambda or a mapping to a mapping with domain $A \subseteq X$.
-To create mappings using lambda syntax, we define $\fun{x \in A}{e}$ as shorthand for $(\fun{x}{e})\restrict{A}$.
-
-Figure~\ref{fig:mapping-defs} defines more operations on partial mappings: $domain$, $range$, $preimage$, pairing, composition, and disjoint union.
-The latter three are particularly important in the preimage arrow's derivation, and $preimage$ is critical in measure theory's account of probability.
+To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e_A}}{\mathit{e}}$ as shorthand for $(\fun{\mathit{x}}{\mathit{e}})\restrict{\mathit{e_A}}$.
 
 \begin{figure*}[t]\centering
 \begin{align*}
@@ -306,6 +307,10 @@ The latter three are particularly important in the preimage arrow's derivation, 
 \caption{Operations on mappings.}
 \label{fig:mapping-defs}
 \end{figure*}
+
+Figure~\ref{fig:mapping-defs} defines more operations on partial mappings: $domain$, $range$, $preimage$, pairing, composition, and disjoint union.
+The latter three are particularly important in the preimage arrow's derivation, and $preimage$ is critical in measure theory's account of probability.
+
 
 XXX: lazy mappings
 
@@ -548,39 +553,42 @@ XXX: more explanation, and an example
 
 \section{The Bottom Arrow}
 
-XXX: motivation:
-\begin{itemize}
-	\item derive preimage arrow from something simple and obviously correct
-	\item eventually define functions that may diverge using this arrow; use derivation to do the same with the preimage arrow
-	\item will be implemented to run programs on domain samples
-\end{itemize}
+One way to be certain an arrow correctly computes preimages under functions $f$ is to ultimately \emph{derive} it from a simpler arrow used to construct $f$.
+One obvious candidate is the \keyword{function arrow}, in which $x \arrow y ::= x \tto y$, whose implementation is extremely simple (e.g. $f_1~\arrowcomp~f_2$ is $f_2 \circ f_1$).
+However, it will be necessary to explicitly handle nonterminating functions, so we need a slightly more complicated arrow for which running computations may raise an error.
 
-XXX: Figure~\ref{fig:bottom-arrow-defs} defines the bottom arrow...
+Figure~\ref{fig:bottom-arrow-defs} defines the \mykeyword{bottom arrow}.
+Its computations are of type $x \tto y_\bot$, where the inhabitants of $y_\bot$ are the error value $\bot$ as well as the inhabitants of $y$. The type $Bool_\bot$, for example, denotes the members of $Bool \u \set{\bot}$.
 
 \begin{figure*}[t]\centering
 \begin{align*}
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		&\arrbot : (X \tto Y) \tto (X \tto Y_\bot) \\
+		&\arrbot : (x \tto y) \tto (x \tto y_\bot) \\
 		&\arrbot~f \ := \ f
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&(\compbot) : (X \tto Y_\bot) \tto (Y \tto Z_\bot) \tto (X \tto Z_\bot) \\
+		&(\compbot) : (x \tto y_\bot) \tto (y \tto z_\bot) \tto (x \tto z_\bot) \\
 		&(f_1~\compbot~f_2)~x \ := \ if~(f_1~x = \bot)~\bot~(f_2~(f_1~x))
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&(\pairbot) : (X \tto {Y_1}_\bot) \tto (X \tto {Y_2}_\bot) \tto (X \tto \pair{Y_1,Y_2}_\bot) \\
+		&(\pairbot) : (x \tto {y_1}_\bot) \tto (x \tto {y_2}_\bot) \tto (x \tto \pair{y_1,y_2}_\bot) \\
 		&(f_1~\pairbot~f_2)~x \ := \ if~((f_1~x = \bot) \bor (f_2~x = \bot))~\bot~{\pair{f_1~x,f_2~x}}
 	\end{aligned}
 \end{aligned}
-&\tab\tab\tab
+&\tab\tab
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		&\ifbot : \lzfcsplit{&(X \tto Bool_\bot) \tto (1 \tto (X \tto Y_\bot)) \tto (1 \tto (X \tto Y_\bot)) \\ &\tto (X \tto Y_\bot) } \\
+		&\ifbot : (x \tto Bool_\bot) \tto (x \tto y_\bot) \tto (x \tto y_\bot) \tto (x \tto y_\bot) \\
 		&\ifbot~f_1~f_2~f_3~x \ := \
-			\lzfccase{f_1~x}{true & f_2~0~x \\ false & f_3~0~x \\ else & \bot}
+			\lzfccase{f_1~x}{true & f_2~x \\ false & f_3~x \\ else & \bot}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\lazybot : (1 \tto (x \tto y_\bot)) \tto (x \tto y_\bot) \\
+		&\lazybot~f~x \ := \ f~0~x
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -589,16 +597,46 @@ XXX: Figure~\ref{fig:bottom-arrow-defs} defines the bottom arrow...
 \label{fig:bottom-arrow-defs}
 \end{figure*}
 
-XXX: the standard Kleisli conversion of the Maybe monad (using a $\bot$ instead of Just and Maybe), simplified; arrow laws therefore hold (XXX: check terminology)
+Figure~\ref{fig:bottom-arrow-defs} does not give the typical minimal definition consisting of $\arrowarr$, $(\arrowcomp)$ and $first$ combinators.
+Instead of $first_\bot$, it defines $(\arrowpair_\bot)$---typically called \keyword{fanout}, but its use in this paper will be clearer if we call it \mykeyword{pairing}---which applies two functions to the same input and returns the pair of their outputs.
+Though any arrow's $first$ may be defined in terms of its $(\arrowpair)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair)$ definitions in this paper because the most well-known applicable contemporary measurability theorems are in terms of pairing functions.
 
-In a nonstrict or simply typed $\lambda$-calculus, $\ifbot$ can be defined using the other combinators and a function $choose : \pair{Bool,\pair{X,X}} \tto X$, whose boolean input determines which of the $\pair{X,X}$ it returns.
-However, \lzfclang is call-by-value, so we need an explicitly lazy conditional.
-We would have had to define $\ifbot$ in Section~XXX (implementation) anyway, because the preimage arrow's lift returns unimplementable functions.
+Figure~\ref{fig:bottom-arrow-defs} also defines the \mykeyword{bottom arrow+choice} by defining the additional combinators $\ifbot$ and $\lazybot$.
+Typically, an arrow is strengthened to an arrow+choice---which is not quite as strong as a monad---by defining a $left$ combinator.
+Again, however, our choice of $\ifbot$ will make it easier to apply contemporary measurability theorems, which are in terms of disjoint unions of mappings instead of an explicit disjoint union type.
 
+In a nonstrict or simply typed $\lambda$-calculus, $\lazybot$ is unnecessary.
+For example, in a simply typed $\lambda$-calculus, the following recursive function cannot be typed:
+\begin{equation}
+	halt@on@true_\bot \ := \ \ifbot~(\arrbot~id)~(\arrbot~id)~halt@on@true_\bot
+\end{equation}
+and it diverges in a nonstrict $\lambda$-calculus only when applied to $false$.
+However, its \emph{defining expression} diverges in \lzfclang and every other call-by-value $\lambda$-calculus.
 
-XXX: point out that $\ifbot$ receives thunks, and remind readers that $1 = \set{0}$
+We defer the inner $halt@on@true_\bot$ until after the outer $halt@on@true_\bot$ is applied, using $\lazybot$:
+\begin{equation}
+\begin{aligned}
+	&halt@on@true_\bot \ := \ \\
+	&\tab\ifbot~(\arrbot~id)~(\arrbot~id)~(\lazybot~\fun{0}{halt@on@true_\bot})
+\end{aligned}
+\end{equation}
+This diverges only when applied to $false$ in any sensible $\lambda$-calculus.
+
+XXX: point out that $\lazybot$ receives a thunk, and remind readers that $1 = \set{0}$
+
+\begin{theorem}
+$\arrbot$, $(\pairbot)$ and $(\compbot)$ define an arrow.
+With $\ifbot$ and $\lazybot$, they define an arrow+choice.
+\end{theorem}
+\begin{proof}
+The bottom arrow is the arrow in the Kleisli category of the Maybe monad with $Nothing = \bot$.
+\end{proof}
+
+\section{First-Order Let-Calculus Semantics}
 
 XXX: Figure~\ref{fig:semantic-function}...
+
+XXX: Stack machine...
 
 XXX: Roughly, first-order application $(\mathit{x~e})$ runs arrow computation $\mathit{x}$ with a fresh stack with $\mathit{e}$ at the head.
 The binding form $(let~\mathit{e}_0~\mathit{e_b})$ pushes $\mathit{e}_0$ onto the stack.
@@ -618,18 +656,18 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 	\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}_1}\gen~\arrowpair\gen~\meaningof{\mathit{e}_2}\gen
 \\
-	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
-		if\gen~
-			\meaningof{\mathit{e_c}}\gen~
-			(\fun{0}{\meaningof{\mathit{e_t}}\gen})~
-			(\fun{0}{\meaningof{\mathit{e_f}}\gen})
-\\
 	\meaningof{let~\mathit{e}_0~\mathit{e_b}}\gen &\ :\equiv\ 
 		(\meaningof{\mathit{e}_0}\gen~\arrowpair\gen~(\arrowarr\gen~id))~
 			\arrowcomp\gen~
 		\meaningof{\mathit{e_b}}\gen
 \\
 	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{\gamma_\mathit{n}}
+\\
+	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
+		if\gen~
+			\meaningof{\mathit{e_c}}\gen~
+			(\arrowlazy~\fun{0}{\meaningof{\mathit{e_t}}\gen})~
+			(\arrowlazy~\fun{0}{\meaningof{\mathit{e_f}}\gen})
 \\
 \end{aligned}
 &\tab\tab\tab
@@ -659,83 +697,84 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 \label{fig:semantic-function}
 \end{figure*}
 
-XXX: example: suppose $x \div y$ diverges when $y = 0$...
-\begin{equation}
-	div_\bot := \meaningof{if~(snd~(env~0) = 0)~\bot~(fst~(env~0) \div snd~(env~0))}
-\end{equation}
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Deriving the Mapping Arrow}
 
-XXX: intermediate step between the bottom and preimage arrows; will not be implemented (no approximation will be implemented, either); computations are in terms of mappings, on which we can apply theorems from measure theory directly
+Theorems in measure theory tend to be about mappings, not lambdas.
+As in intermediate step toward the preimage arrow, then, we need an arrow whose computations produce mappings or are mappings themselves.
 
-XXX: the type of mapping arrow computations
+It is tempting to try to define the mapping arrow's type constructor using $X \mapto Y ::= X \pto Y$, and define $(\pairmap) := \pair{\cdot,\cdot}\map$ and $(\compmap) := flip~(\circ\map)$.
+Unfortunately, we run into a problem defining $\arrmap : (X \tto Y) \tto (X \pto Y)$: we cannot define it as $\arrmap~f := f\restrict{X}$. Although $X$ is a \lzfclang value, it is not available within any definition because it is only part of the type.
+
+We need to parameterize computations on a domain, so
 \begin{equation}
 	X \mapto Y \ ::= \ Set~X \tto (X \pto Y)
 \end{equation}
-XXX: notice $X \pto Y$, not $X \pto Y_\bot$
+is the type of \mykeyword{mapping arrow} computations.
 
-XXX: motivate removal of bottom (reasons: won't need to propagate it; its absence will be convenient when computing preimages under functions that may diverge)
+Notice that $\bot$ is absent in $Set~X \tto (X \pto Y)$.
+This will make it easier to disregard nonterminating inputs when computing preimages further on. (XXX: section)
 
-Lifting a bottom arrow computation $f : X \tto Y_\bot$ to the mapping arrow requires restricting $f$'s domain to a subset of $X$ for which $f$ does not return $\bot$.
-It is helpful to have a standalone function $domain_\bot$ that computes such domains, so we define that first, and $\liftmap$ in terms of $domain_\bot$:
-\begin{align}
-	&\begin{aligned}
-		&domain_\bot : (X \tto Y_\bot) \tto Set~X \tto Set~X \\
-		&domain_\bot~f~A \ := \ preimage~f\restrict{A}~((image~f~A) \w \set{\bot})
-	\end{aligned} \\
-\nonumber \\[-6pt]
-	&\begin{aligned}
-		&\liftmap : (X \tto Y_\bot) \tto (X \mapto Y) \\
-		&\liftmap~f~A \ := \ \lzfclet{A' & domain_\bot~f~A}{f\restrict{A'}}
-	\end{aligned}
-\end{align}
-
-XXX: the default equality relation, which for \lzfclang terms is alpha equivalence of reduced terms, will not do; need something more extensional
-
-\begin{definition}[Mapping arrow equivalence]
-Two mapping arrow computations $g_1 : X \mapto Y$ and $g_2 : X \mapto Y$ are equivalent, or $g_1 \equiv g_2$, when $g_1~A \equiv g_2~A$ for all $A \subseteq X$.
-\end{definition}
-
+We want the correspondence between bottom arrow and mapping arrow computations as clear as possible.
+We therefore start by defining a function $\liftmap : (X \tto Y_\bot) \tto (X \mapto Y)$ to lift bottom arrow computations to the mapping arrow.
+It must restrict its argument $f$'s domain to a subset of $X$ for which $f$ does not return $\bot$.
+It is helpful to have a standalone function $domain_\bot$ that computes such domains, so we define that first:
+\begin{equation}
+\begin{aligned}
+	&domain_\bot : (X \tto Y_\bot) \tto Set~X \tto Set~X \\
+	&domain_\bot~f~A \ := \ preimage~f\restrict{A}~((image~f~A) \w \set{\bot})
+\end{aligned}
+\end{equation}
+and define $\liftmap$ in terms of $domain_\bot$:
+\begin{equation}
+\begin{aligned}
+	&\liftmap : (X \tto Y_\bot) \tto (X \mapto Y) \\
+	&\liftmap~f~A \ := \ \lzfclet{A' & domain_\bot~f~A}{f\restrict{A'}}
+\end{aligned}
+\end{equation}
 
 \subsection{Distributive Laws}
 
 The clearest way to ensure that mapping arrow computations mean what we think they mean is to derive each combinator in a way that makes $\liftmap$ distribute over bottom arrow computations; i.e. it must be a particular kind of \keyword{homomorphism}.
+More concretely, for any let-calculus expression $\mathit{e}$, we would like $\meaningof{\mathit{e}}\map \equiv \liftmap~\meaningof{\mathit{e}}_\bot$.
 
 \begin{definition}[arrow+choice homomorphism]
 A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeyword{arrow homomorphism} from arrow $\mathrm{a}$ to arrow $\mathrm{b}$ if the following distributive laws hold for appropriately typed $f$, $f_1$ and $f_2$:
 \begin{align}
-	&\begin{aligned}
-		lift\genb~(\arrowarr\gen~f) \ \equiv \ \arrowarr\genb~f
+	lift\genb~(\arrowarr\gen~f) &\ \equiv \ \arrowarr\genb~f
 	\label{eqn:lift-distributes-over-arr}
-	\end{aligned} \\
-\nonumber \\[-6pt]
-	&\begin{aligned}
-		lift\genb~(f_1~\arrowpair\gen~f_2) \ \equiv \ (lift\genb~f_1)~\arrowpair\genb~(lift\genb~f_2)
+\\
+	lift\genb~(f_1~\arrowpair\gen~f_2) &\ \equiv \ (lift\genb~f_1)~\arrowpair\genb~(lift\genb~f_2)
 	\label{eqn:lift-distributes-over-pair}
-	\end{aligned} \\
-\nonumber \\[-6pt]
-	&\begin{aligned}
-		lift\genb~(f_1~\arrowcomp\gen~f_2) \ \equiv \ (lift\genb~f_1)~\arrowcomp\genb~(lift\genb~f_2)
+\\
+	lift\genb~(f_1~\arrowcomp\gen~f_2) &\ \equiv \ (lift\genb~f_1)~\arrowcomp\genb~(lift\genb~f_2)
 	\label{eqn:lift-distributes-over-comp}
-	\end{aligned}
 \end{align}
-It is additionally an \mykeyword{arrow+choice homomorphism} if
-\begin{equation}
-\begin{aligned}
-	&lift\genb~(\arrowif\gen~f_1~f_2~f_3) \ \equiv \ \\
-	&\tab\arrowif\genb~(lift\genb~f_1)~(\fun{0}{lift\genb~(f_2~0)})~(\fun{0}{lift\genb~(f_3~0)})
-\label{eqn:lift-distributes-over-if}
-\end{aligned}
-\end{equation}
-holds for appropriately typed $f_1$, $f_2$ and $f_3$.
-(In nonstrict languages, the thunks may be dropped.)
+It is an \mykeyword{arrow+choice homomorphism} if, additionally,
+\begin{align}
+	\arrowlift\genb~(\arrowif\gen~f_1~f_2~f_3) &\ \equiv \ 
+		\arrowif\genb~(lift\genb~f_1)~(lift\genb~f_2)~(lift\genb~f_3)
+	\label{eqn:lift-distributes-over-if}
+\\
+	\arrowlift\genb~(\arrowlazy\gen~f) &\ \equiv \
+		\arrowlazy\genb~\fun{0}{\arrowlift\genb~(f~0)}
+	\label{eqn:lift-distributes-over-lazy}
+\end{align}
+hold for appropriately typed $f$, $f_1$, $f_2$ and $f_3$.
 \label{def:arrow-homomorphism}
+\end{definition}
+Recall that in nonstrict or strongly normalizing languages, a $\arrowlazy$ combinator is unnecessary.
+In these languages, only~\eqref{eqn:lift-distributes-over-if} is necessary for arrow+choice homomorphisms.
+
+Because mapping arrow computations are functions, we need to extend the notion of their equivalence---which by default is alpha-equivalence---to something more extensional.
+
+\begin{definition}[mapping arrow equivalence]
+Two mapping arrow computations $g_1 : X \mapto Y$ and $g_2 : X \mapto Y$ are equivalent, or $g_1 \equiv g_2$, when $g_1~A \equiv g_2~A$ for all $A \subseteq X$.
 \end{definition}
 
 Clearly $\arrowarr\genb := lift\genb \circ \arrowarr\gen$ meets~\eqref{eqn:lift-distributes-over-arr}, so we define $\arrmap$ as a composition.
-The next three subsections derive $\pairmap$, $\compmap$ and $\ifmap$ from their corresponding bottom arrow combinators, in a way that ensures $\liftmap$ is an arrow+choice homomorphism.
+The following subsections derive $(\pairmap)$, $(\compmap)$, $\ifmap$ and $\lazymap$ from their corresponding bottom arrow combinators, in a way that ensures $\liftmap$ is an arrow+choice homomorphism.
 Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 
 \begin{figure*}[t]\centering
@@ -767,15 +806,18 @@ Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 &\tab\tab\tab
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		&\ifmap : (X \mapto Bool) \tto (1 \tto (X \mapto Y)) \tto (1 \tto (X \mapto Y)) \tto (X \mapto Y) \\
-		&\lzfcsplit{
-			&\ifmap~g_1~g_2~g_3~A \ := \ \\
-			&\tab\lzfclet{
+		&\ifmap : (X \mapto Bool) \tto (X \mapto Y) \tto (X \mapto Y) \tto (X \mapto Y) \\
+		&\ifmap~g_1~g_2~g_3~A \ := \ 
+			\lzfclet{
 				g_1' & g_1~A \\
-				g_2' & lazy\map~(g_2~0)~(preimage~g_1'~\set{true}) \\
-				g_3' & lazy\map~(g_3~0)~(preimage~g_1'~\set{false})
+				g_2' & g_2~(preimage~g_1'~\set{true}) \\
+				g_3' & g_3~(preimage~g_1'~\set{false})
 			}{g_2' \uplus\map g_3'}
-		}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\lazymap : (1 \tto (X \mapto Y)) \tto (X \mapto Y) \\
+		&\lazymap~g~A \ := \ if~(A = \emptyset)~\emptyset~(g~0~A)
 	\end{aligned} \\
 \\[-6pt]
 \hline
@@ -783,11 +825,6 @@ Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 	&\begin{aligned}[t]
 		&\liftmap : (X \tto Y_\bot) \tto (X \mapto Y) \\
 		&\liftmap~f~A \ := \ \setb{\pair{x,y} \in f\restrict{A}}{y \neq \bot}
-	\end{aligned} \\
-\\[-6pt]
-	&\begin{aligned}[t]
-		&lazy\map : (X \mapto Y) \tto (X \mapto Y) \\
-		&lazy\map~g~A \ := \ if~(A = \emptyset)~\emptyset~(g~A)
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -798,12 +835,12 @@ Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 
 \subsection{Case: Pairing}
 
-Starting with the left-hand side of~\eqref{eqn:lift-distributes-over-pair}, we first expand definitions.
+Starting with the left side of~\eqref{eqn:lift-distributes-over-pair}, we first expand definitions.
 For any $f_1 : X \tto Y_\bot$, $f_2 : X \tto Z_\bot$, and $A \subseteq X$,
 \begin{align*}
 	&\liftmap~(f_1~\pairbot~f_2)~A
-%\\
-%	&\tab \equiv \ \liftmap~(\fun{x}{if~(f_1~x = \bot \bor f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}})~A
+\\
+	&\tab \equiv \ \liftmap~(\fun{x}{if~(f_1~x = \bot \bor f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}})~A
 \\
 	&\tab \equiv \ 
 		\lzfclet{
@@ -843,80 +880,73 @@ XXX: include it?
 
 \subsection{Case: Conditional}
 
-The derivation of $\ifmap$ needs some care to maintain laziness of conditional branches in the presence of recursion.
-
-We will use as an example the following bottom arrow computation, which returns $true$ when applied to $true$ and diverges on $false$:
-\begin{equation}
-	halts@on@true_\bot \ := \ \ifbot~id~(\fun{0}{id})~(\fun{0}{halts@on@true_\bot})
-\end{equation}
-Its corresponding mapping arrow computation should diverge only if applied to a set containing $false$.
-
-Starting with the left-hand-side of~\eqref{eqn:liftmap-distributes-over-ifbot}, we expand definitions, and simplify $f$ by restricting it to a domain for which $f_1~x$ cannot be $\bot$:
+Starting with the left side of~\eqref{eqn:lift-distributes-over-if}, we expand definitions, and simplify $f$ by restricting it to a domain for which $f_1~x$ cannot be $\bot$:
 \begin{align*}
 	&\liftmap~(\ifbot~f_1~f_2~f_3)~A \\
 	&\tab \equiv \ 
 		\lzfclet{
-			f & \fun{x}{\lzfccase{f_1~x}{true & f_2~0~x \\ false & f_3~0~x \\ else & \bot}} \\
+			f & \fun{x}{\lzfccase{f_1~x}{true & f_2~x \\ false & f_3~x \\ else & \bot}} \\
 			A' & domain_\bot~f~A
 		}{f\restrict{A'}} \\
 	&\tab \equiv \ 
 		\lzfclet{
 			A_2 & preimage~f_1\restrict{A}~\set{true} \\
 			A_3 & preimage~f_1\restrict{A}~\set{false} \\
-			f & \fun{x}{if~(f_1~x)~(f_2~0~x)~(f_3~0~x)} \\
-			A' & domain_\bot~f~(A_2 \u A_3)
+			f & \fun{x}{if~(f_1~x)~(f_2~x)~(f_3~x)} \\
+			A' & domain_\bot~f~(A_2 \uplus A_3)
 		}{f\restrict{A'}}
 \numberthis
 \end{align*}
-It is tempting at this point to finish by simply converting bottom arrow computations to the mapping arrow; i.e.
-\begin{align*}
-	&\liftmap~(\ifbot~f_1~f_2~f_3)~A \\
-	&\tab \equiv \ 
-		\lzfclet{
-			g_1 & \liftmap~f_1~A \\
-			A_2 & preimage~g_1~\set{true} \\
-			A_3 & preimage~g_1~\set{false} \\
-			g_2 & \liftmap~(f_2~0)~A_2 \\
-			g_3 & \liftmap~(f_3~0)~A_3 \\
-			A' & (domain~g_2) \u (domain~g_3)
-		}{\fun{x \in A'}{if~(g_1~x)~(g_2~x)~(g_3~x)}}
-\numberthis
-\end{align*}
-This is close to correct.
-Unfortunately, for $halts@on@true_\bot$, computing $g_3 := \liftmap~(f_3~0)~A_3$ always diverges.
-Wrapping the branch computations $g_2$ and $g_3$ in thunks will not help because $A'$ is computed from their domains.
-
-Note that the ``true'' branch needs to be taken only if $A_2$ is nonempty; similarly for the ``false'' branch and $A_3$.
-Further, applying a mapping arrow computation to $\emptyset$ should always yield the empty mapping $\emptyset$.
-We can therefore maintain laziness in conditional branches by applying $\liftmap~(f_2~0)$ and $\liftmap~(f_3~0)$ only to nonempty sets, using
-\begin{equation}
-\begin{aligned}
-	&lazy\map : (X \mapto Y) \tto (X \mapto Y) \\
-	&lazy\map~f~A \ := \ if~(A = \emptyset)~\emptyset~(f~A)
-\end{aligned}
-\end{equation}
-In terms of $lazy\map$, we have
+We finish by converting bottom arrow computations to the mapping arrow and rewriting in terms of $(\uplus\map)$:
 \begin{align*}
 	&\liftmap~(\ifbot~f_1~f_2~f_3)~A \numberthis
 \\
 	&\tab \equiv \ 
 	\lzfclet{
 		g_1 & \liftmap~f_1~A \\
-		g_2 & lazy\map~(\liftmap~(f_2~0))~(preimage~g_1~\set{true}) \\
-		g_3 & lazy\map~(\liftmap~(f_3~0))~(preimage~g_1~\set{false}) \\
-		A' & (domain~g_2) \u (domain~g_3)
-	}{\fun{x \in A'}{if~(g_1~x)~(g_2~x)~(g_3~x)}}
+		g_2 & \liftmap~f_2~(preimage~g_1~\set{true}) \\
+		g_3 & \liftmap~f_3~(preimage~g_1~\set{false}) \\
+		A' & (domain~g_2) \uplus (domain~g_3)
+	}{\fun{x \in A'}{if~(x \in domain~g_2)~(g_2~x)~(g_3~x)}}
 \\
 	&\tab \equiv \
 	\lzfclet{
 		g_1 & \liftmap~f_1~A \\
-		g_2 & lazy\map~(\liftmap~(f_2~0))~(preimage~g_1~\set{true}) \\
-		g_3 & lazy\map~(\liftmap~(f_3~0))~(preimage~g_1~\set{false})
+		g_2 & \liftmap~f_2~(preimage~g_1~\set{true}) \\
+		g_3 & \liftmap~f_3~(preimage~g_1~\set{false})
 	}{g_2 \uplus\map g_3}
 \end{align*}
-For $halts@on@true_\bot$, $lazy\map~(\liftmap~(f_3~0))~A_3$ does not diverge when $A_3$ is empty.
+Substituting $g_1$ for $\liftmap~f_1$, $g_2$ for $\liftmap~f_2$, and $g_3$ for $\liftmap~f_3$ gives a definition for $\ifmap$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-if} holds.
 
-Substituting $g_1$ for $\liftmap~f_1$, $g_2~0$ for $\liftmap~(f_2~0)$, and $g_3~0$ for $\liftmap~(f_3~0)$ gives a definition for $\ifmap$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:liftmap-distributes-over-ifbot} holds.
+\subsection{Case: Laziness}
+
+Starting with the left side of~\eqref{eqn:lift-distributes-over-lazy}, we first expand definitions:
+\begin{align*}
+	&\liftmap~(\lazybot~f)~A
+\\
+	&\tab \equiv \
+		\lzfclet{
+			A' & domain_\bot~(\fun{x}{f~0~x})~A
+		}{(\fun{x}{f~0~x})\restrict{A'}}
+\end{align*}
+\lzfclang does not have an $\eta$ rule (i.e. $\fun{x}{e~x} \not\equiv e$ because $e$ may diverge), but we can use weaker facts.
+If $A \neq \emptyset$, then $domain_\bot~(\fun{x}{f~0~x})~A \equiv domain_\bot~(f~0)~A$.
+Further, it diverges iff $f~0$ diverges, which diverges iff $(f~0)\restrict{A'}$ diverges.
+Therefore, if $A \neq \emptyset$, we can replace $\fun{x}{f~0~x}$ with $f~0$.
+If $A = \emptyset$, then $\liftmap~(\lazybot~f)~A = \emptyset$ (the empty mapping), so
+\begin{align*}
+	&\liftmap~(\lazybot~f)~A
+\\
+	&\tab \equiv \
+		if~(A = \emptyset)~\emptyset~
+		\lzfclet{
+			A' & domain_\bot~(f~0)~A
+		}{(f~0)\restrict{A'}}
+\\
+	&\tab \equiv \
+		if~(A = \emptyset)~\emptyset~(\liftmap~(f~0)~A)
+\end{align*}
+Substituting $g~0$ for $\liftmap~(f~0)$ gives a definition for $\lazymap$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-lazy} holds.
 
 \subsection{Theorems}
 
@@ -931,7 +961,7 @@ The following are easy consequences of the fact that $\liftmap$ is a homomorphis
 
 \begin{corollary}
 $\arrmap$, $(\pairmap)$ and $(\compmap)$ define an arrow.
-With $\ifmap$, they define an arrow+choice.
+With $\ifmap$ and $\lazymap$, they define an arrow+choice.
 \end{corollary}
 
 \begin{comment}
@@ -950,12 +980,12 @@ If $\meaningof{\mathit{e}}_\bot : X \tto Y_\bot$, then $lift\map~\meaningof{\mat
 
 \section{Lazy Preimage Mappings}
 
-On a computer, we will not often have the luxury of testing each function input to see whether it belongs in a preimage set.
+On a computer, we will not often have the luxury of testing each function input to see whether it belongs to a preimage set.
 Even for finite domains, doing so is often intractable.
 
 If we wish to compute with infinite sets in the language implementation, we will need an abstraction that makes it easy to replace computation on points with computation on sets.
-Therefore, in the preimage arrow, we will confine computation on points to \mykeyword{lazy preimage mappings}, or just \emph{preimage mappings}, for which application is like applying $preimage$.
-The type is
+Therefore, in the preimage arrow, we will confine computation on points to \mykeyword{lazy preimage mappings}, or just \emph{preimage mappings}, for which application is like applying $preimage$ to a mapping.
+Further on, we will need their ranges to be observable, so we define their type as
 \begin{equation}
 	X \prepto Y \ ::= \ \pair{Set~Y, Set~Y \tto Set~X}
 \end{equation}
@@ -974,23 +1004,20 @@ Applying a preimage mapping to any subset of its codomain:
 \end{aligned}
 \end{equation}
 The necessary property here is that using $pre@ap$ to compute preimages is the same as computing them from a mapping using $preimage$.
+
+\begin{lemma}
+Let $g \in X \pto Y$.
+For all $B \subseteq Y$ and $Y'$ such that $range~g \subseteq Y' \subseteq Y$,
+$preimage~g~(B \i Y') = preimage~g~B$.
+\label{lem:preimage-restricted-range}
+\end{lemma}
+
 \begin{theorem}[$pre@ap$ computes preimages]
 Let $g \in X \pto Y$. For all $B \subseteq Y$, $pre@ap~(pre~g)~B = preimage~g~B$.
 \label{thm:pre-like-preimage}
 \end{theorem}
 \begin{proof}
-\begin{align*}
-	pre@ap~(pre~g)~B 
-		&\ = \ 
-			\lzfclet{
-				Y' & range~g \\
-				p & \fun{B}{preimage~g~B} \\
-			}{p~(B \i Y')}
-\\
-		&\ = preimage~g~(B \i (range~g))
-\\
-		&\ = preimage~g~B
-\end{align*}
+Apply Lemma~\ref{lem:preimage-restricted-range} with $Y' = range~g$.
 \end{proof}
 
 Figure~\ref{fig:preimage-mapping-defs} defines more operations on preimage mappings, including pairing, composition, and disjoint union operations corresponding to the mapping operations in Figure~\ref{fig:mapping-defs}.
@@ -1077,7 +1104,7 @@ Let $g_1 \in X \pto Y_1$ and $g_2 \in X \pto Y_2$. Then $pre~\pair{g_1,g_2}\map 
 \end{theorem}
 \begin{proof}
 Let $\pair{Y_1',p_1} := pre~g_1$ and $\pair{Y_2',p_2} := pre~g_2$.
-Starting from the right-hand side, for all $B \in Y_1 \times Y_2$,
+Starting from the right side, for all $B \in Y_1 \times Y_2$,
 \begin{align*}
 	&pre@ap~\tpair{pre~g_1,pre~g_2}\pre~B 
 \\
@@ -1087,11 +1114,11 @@ Starting from the right-hand side, for all $B \in Y_1 \times Y_2$,
 			p & \fun{B}{\U\limits_{\pair{y_1,y_2} \in B}(p_1~\set{y_1}) \i (p_2~\set{y_2})} \\
 		}{p~(B \i Y')}
 \\
-	&\tab = \ \U\limits_{\pair{y_1,y_2} \in (B \i (Y_1' \times Y_2'))}(p_1~\set{y_1}) \i (p_2~\set{y_2})
+	&\tab = \U\limits_{\pair{y_1,y_2} \in B \i (Y_1' \times Y_2')} (p_1~\set{y_1}) \i (p_2~\set{y_2})
 \\
-	&\tab = \ \U\limits_{\pair{y_1,y_2} \in (B \i (Y_1' \times Y_2'))}(preimage~g_1~\set{y_1}) \i (preimage~g_2~\set{y_2})
+	&\tab = \U\limits_{\pair{y_1,y_2} \in B \i (Y_1' \times Y_2')} (preimage~g_1~\set{y_1}) \i (preimage~g_2~\set{y_2})
 \\
-	&\tab = \ \U\limits_{y \in B \i (Y_1' \times Y_2')}(preimage~\pair{g_1,g_2}\map~\set{y})
+	&\tab = \U\limits_{y \in B \i (Y_1' \times Y_2')} (preimage~\pair{g_1,g_2}\map~\set{y})
 \\
 	&\tab = \ preimage~\pair{g_1,g_2}\map~(B \i (Y_1' \times Y_2'))
 \\
@@ -1118,7 +1145,7 @@ Then $pre~(g_2 \circ\map g_1) \equiv (pre~g_2) \circ\pre (pre~g_1)$.
 \end{theorem}
 \begin{proof}
 Let $\tpair{Z',p_2} := pre~g_2$.
-Starting from the right-hand side, for all $C \subseteq Z$,
+Starting from the right side, for all $C \subseteq Z$,
 \begin{align*}
 	&pre@ap~((pre~g_2) \circ\pre (pre~g_1))~C
 \\
@@ -1155,14 +1182,14 @@ Then $pre~(g_1 \uplus\map g_2) \equiv (pre~g_1) \uplus\pre (pre~g_2)$.
 \label{thm:piecewise-preimage-mappings}
 \end{theorem}
 \begin{proof}
-Let $Y_1' := pre@range~(pre~g_1)$ and $Y_2' := pre@range~(pre~g_2)$.
-Starting from the right-hand side, for all $B \subseteq Y$,
+Let $Y_1' := range~g_1$ and $Y_2' := range~g_2$.
+Starting from the right side, for all $B \subseteq Y$,
 \begin{align*}
 	&pre@ap~((pre~g_1) \uplus\pre (pre~g_2))~B
 \\
 	&\tab = \ 
 		\lzfclet{
-			Y' & Y_1' \u Y_2' \\
+			\! Y' & Y_1' \u Y_2' \\
 			h & \fun{B}{(pre@ap~(pre~g_1)~B) \uplus (pre@ap~(pre~g_2)~B)}
 		}{h~(B \i Y')}
 \\
@@ -1198,35 +1225,8 @@ Two preimage arrow computations $h_1 : X \preto Y$ and $h_2 : X \preto Y$ are eq
 $h_1~A \equiv h_2~A$ for all $A \subseteq X$.
 \end{definition}
 
-\subsection{Distributive Laws}
-
-XXX: ensuring $\liftpre$ distributes over mapping arrow computations is awesome...
-
-Formally, we require the following distributive laws to hold:
-\begin{align}
-	&\begin{aligned}
-		\liftpre~(\arrmap~f) \ \equiv \ \arrpre~f
-	\label{eqn:liftpre-distributes-over-arrmap}
-	\end{aligned} \\
-\nonumber \\[-6pt]
-	&\begin{aligned}
-		\liftpre~(g_1~\pairmap~g_2) \ \equiv \ (\liftpre~g_1)~\pairpre~(\liftpre~g_2)
-	\label{eqn:liftpre-distributes-over-pairmap}
-	\end{aligned} \\
-\nonumber \\[-6pt]
-	&\begin{aligned}
-		\liftpre~(g_1~\compmap~g_2) \ \equiv \ (\liftpre~g_1)~\comppre~(\liftpre~g_2)
-	\label{eqn:liftpre-distributes-over-compmap}
-	\end{aligned} \\
-\nonumber \\[-6pt]
-	&\begin{aligned}
-		&\liftpre~(\ifmap~g_1~g_2~g_3) \ \equiv \ \\
-		&\tab\ifpre~(\liftpre~g_1)~(\fun{0}{\liftpre~(g_2~0)})~(\fun{0}{\liftpre~(g_3~0)})
-	\label{eqn:liftpre-distributes-over-ifmap}
-	\end{aligned}
-\end{align}
-Clearly $\arrpre~f := \liftpre~(\arrmap~f)$ meets~\eqref{eqn:liftpre-distributes-over-arrmap}.
-Figure~\ref{fig:preimage-arrow-defs} shows the result of deriving the other combinators from the mapping arrow using distributive laws.
+As with $\arrmap$, defining $\arrpre$ as a composition meets~\eqref{eqn:lift-distributes-over-arr}.
+The following subsections derive $(\pairpre)$, $(\comppre)$, $\ifpre$ and $\lazypre$ from their corresponding mapping arrow combinators, in a way that ensures $\liftpre$ is an arrow+choice homomorphism from the mapping arrow to the preimage arrow. Figure~\ref{fig:preimage-arrow-defs} contains the resulting definitions.
 
 \begin{figure*}
 \begin{align*}
@@ -1236,8 +1236,8 @@ Figure~\ref{fig:preimage-arrow-defs} shows the result of deriving the other comb
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\arrpre : (X \mapto Y) \tto (X \preto Y) \\
-		&\arrpre~g~A \ := \ pre~(g~A)
+		&\arrpre : (X \tto Y) \tto (X \preto Y) \\
+		&\arrpre \ := \ \liftpre \circ \arrmap
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
@@ -1257,21 +1257,25 @@ Figure~\ref{fig:preimage-arrow-defs} shows the result of deriving the other comb
 &\tab\tab\tab
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		&\ifpre: (X \preto Bool) \tto (1 \tto (X \preto Y)) \tto (1 \tto (X \preto Y)) \tto (X \preto Y) \\
-		&\lzfcsplit{
-			&\ifpre~h_1~h_2~h_3~A \ := \ \\
-			&\lzfclet{
+		&\ifpre: (X \preto Bool) \tto (X \preto Y) \tto (X \preto Y) \tto (X \preto Y) \\
+		&\ifpre~h_1~h_2~h_3~A \ := \ 
+			\lzfclet{
 				h_1' & h_1~A \\
-				h_2' & lazy\pre~(h_2~0)~(pre@ap~h_1'~\set{true}) \\
-				h_3' & lazy\pre~(h_3~0)~(pre@ap~h_1'~\set{false})
+				h_2' & h_2~(pre@ap~h_1'~\set{true}) \\
+				h_3' & h_3~(pre@ap~h_1'~\set{false})
 			}{h_2' \uplus\pre h_3'}
-		}
 	\end{aligned} \\
-\\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&lazy\pre : (X \preto Y) \tto (X \preto Y) \\
-		&lazy\pre~h~A \ := \ if~(A = \emptyset)~(pre~\emptyset)~(h~A)
+		&\lazypre : (1 \tto (X \preto Y)) \tto (X \preto Y) \\
+		&\lazypre~h~A \ := \ if~(A = \emptyset)~(pre~\emptyset)~(h~0~A)
+	\end{aligned} \\
+\\[-6pt]
+\hline
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\liftpre : (X \mapto Y) \tto (X \preto Y) \\
+		&\liftpre~g~A \ := \ pre~(g~A)
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -1280,16 +1284,9 @@ Figure~\ref{fig:preimage-arrow-defs} shows the result of deriving the other comb
 \label{fig:preimage-arrow-defs}
 \end{figure*}
 
-\begin{theorem}[preimage arrow correctness]
-$\liftpre$ distributes over mapping arrow computations.
-\end{theorem}
-\begin{proof}
-By structural induction; cases follow.
-\end{proof}
-
 \subsection{Case: Pairing}
 
-Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-pairmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-pairing}, and rewrite in terms of $\liftpre$:
+Starting with the left side of~\eqref{eqn:lift-distributes-over-pair}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-pairing}, and rewrite in terms of $\liftpre$:
 \begin{align*}
 	&pre@ap~(\liftpre~(g_1~\pairmap~g_2)~A)~B
 \\
@@ -1299,11 +1296,11 @@ Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-pairmap}
 \\
 	&\tab \equiv \ pre@ap~\pair{\liftpre~g_1~A, \liftpre~g_2~A}\pre~B
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\pairpre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-pairmap} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\pairpre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-pair} holds.
 
 \subsection{Case: Composition}
 
-Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-compmap}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-composition} and rewrite in terms of $\liftpre$:
+Starting with the left side of~\eqref{eqn:lift-distributes-over-comp}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-composition} and rewrite in terms of $\liftpre$:
 \begin{align*}
 	&pre@ap~(\liftpre~(g_1~\compmap~g_2)~A)~C
 \\
@@ -1326,68 +1323,73 @@ Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-compmap}
 		}{pre@ap~(h_2 \circ\pre h_1)~C}
 \numberthis
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\comppre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-compmap} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\comppre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-comp} holds.
 
 \subsection{Case: Conditional}
 
-Starting with the left-hand side of~\eqref{eqn:liftpre-distributes-over-ifmap}, we expand terms, apply Theorem~\ref{thm:piecewise-preimage-mappings}, rewrite in terms of $\liftpre$, and apply Theorem~\ref{thm:pre-like-preimage} in the definitions of $h_2$ and $h_3$:
+Starting with the left side of~\eqref{eqn:lift-distributes-over-if}, we expand terms, apply Theorem~\ref{thm:piecewise-preimage-mappings}, rewrite in terms of $\liftpre$, and apply Theorem~\ref{thm:pre-like-preimage} in the definitions of $h_2$ and $h_3$:
 \begin{align*}
 	&pre@ap~(\liftpre~(\ifmap~g_1~g_2~g_3)~A)~B
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1' & g_1~A \\
-			g_2' & lazy\map~(g_2~0)~(preimage~g_1'~\set{true}) \\
-			g_3' & lazy\map~(g_3~0)~(preimage~g_1'~\set{false})
+			g_2' & g_2~(preimage~g_1'~\set{true}) \\
+			g_3' & g_3~(preimage~g_1'~\set{false})
 		}{pre@ap~(pre~(g_2' \uplus\map g_3'))~B}
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1' & g_1~A \\
-			g_2' & lazy\map~(g_2~0)~(preimage~g_1'~\set{true}) \\
-			g_3' & lazy\map~(g_3~0)~(preimage~g_1'~\set{false})
+			g_2' & g_2~(preimage~g_1'~\set{true}) \\
+			g_3' & g_3~(preimage~g_1'~\set{false})
 		}{pre@ap~((pre~g_2') \uplus\pre (pre~g_3'))~B}
 \\
 	&\tab \equiv \ 
 		\lzfclet{
-			g_1' & g_1~A \\
-			h_2 & \liftpre~(lazy\map~(g_2~0))~(preimage~g_1'~\set{true}) \\
-			h_3 & \liftpre~(lazy\map~(g_3~0))~(preimage~g_1'~\set{false})
-		}{pre@ap~(h_2 \uplus\pre h_3)~B}
-\\
-	&\tab \equiv \ 
-		\lzfclet{
 			h_1 & \liftpre~g_1~A \\
-			h_2 & \liftpre~(lazy\map~(g_2~0))~(pre@ap~h_1~\set{true}) \\
-			h_3 & \liftpre~(lazy\map~(g_3~0))~(pre@ap~h_1~\set{false})
+			h_2 & \liftpre~g_2~(pre@ap~h_1~\set{true}) \\
+			h_3 & \liftpre~g_3~(pre@ap~h_1~\set{false})
 		}{pre@ap~(h_2 \uplus\pre h_3)~B}
 \end{align*}
-Replacing mappings with lazy preimage mappings requires removing $lazy\map$.
-First, we define $lazy\pre$ as in Figure~\ref{fig:preimage-arrow-defs}.
-It is not hard to check that
-\begin{equation}
-	\liftpre~(lazy\map~g) \ \equiv \ lazy\pre~(\liftpre~g)
-\label{eqn:arrpre-distributes-over-lazymap}
-\end{equation}
-In terms of $lazy\pre$, we have
+Substituting $h_1$ for $\liftpre~g_1$, $h_2$ for $\liftpre~g_2$ and $h_3$ for $\liftpre~g_3$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\ifpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-if} holds.
+
+\subsection{Case: Laziness}
+
+Starting with the left side of~\eqref{eqn:lift-distributes-over-lazy}, expand definitions, distribute $pre$ over the branches of $if$, and rewrite in terms of $\liftpre~(g~0)$:
 \begin{align*}
-	&pre@ap~(\liftpre~(\ifmap~g_1~g_2~g_3)~A)~B
+	&pre@ap~(\liftpre~(\lazymap~g)~A)~B
 \\
-	&\tab \equiv \ 
+	&\tab\equiv \
 		\lzfclet{
-			h_1 & \liftpre~g_1~A \\
-			h_2 & lazy\pre~(\liftpre~(g_2~0))~(pre@ap~h_1~\set{true}) \\
-			h_3 & lazy\pre~(\liftpre~(g_3~0))~(pre@ap~h_1~\set{false})
-		}{pre@ap~(h_2 \uplus\pre h_3)~B}
+			g' & if~(A = \emptyset)~\emptyset~(g~0~A)
+		}{pre@ap~(pre~g')~B}
+\\
+	&\tab\equiv \
+		\lzfclet{
+			h & if~(A = \emptyset)~(pre~\emptyset)~(pre~(g~0~A))
+		}{pre@ap~h~B}
+\\
+	&\tab\equiv \
+		\lzfclet{
+			h & if~(A = \emptyset)~(pre~\emptyset)~(\liftpre~(g~0)~A)
+		}{pre@ap~h~B}
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$, $h_2~0$ for $\liftpre~(g_2~0)$ and $h_3~0$ for $\liftpre~(g_3~0)$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\ifpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:liftpre-distributes-over-ifmap} holds.
+Substituting $h~0$ for $\liftpre~(g~0)$ and removing the application of $pre@ap$ from both sides of the equivalence gives a definition for $\lazypre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-lazy} holds.
 
-\subsection{Super-Saver Theorems}
+\subsection{Theorems}
 
-The following theorems are easy consequences of the fact that $\liftpre$ distributes over mapping arrow computations.
+\begin{theorem}[preimage arrow correctness]
+$\liftpre$ is an arrow+choice homomorphism.
+\end{theorem}
+\begin{proof}
+By construction.
+\end{proof}
+
+The following are easy consequences of the fact that $\liftpre$ is a homomorphism.
 
 \begin{corollary}
-$\arrpre$, $(\pairpre)$ and $(\comppre)$ define an arrow.
+$\arrpre$, $(\pairpre)$ and $(\comppre)$ define an arrow. With $\ifpre$ and $\lazypre$, they define an arrow+choice.
 \end{corollary}
 
 \begin{comment}
@@ -1398,8 +1400,10 @@ For all $A \subseteq X$ and $B \subseteq Y$, $pre@ap~(h~A)~B \equiv preimage~(g~
 \end{comment}
 
 \begin{corollary}
-If $\meaningof{e}\map : X \mapto Y$, then for all $A \subseteq X$ and $B \subseteq Y$, $preimage~(\meaningof{e}\map~A)~B \equiv pre@ap~(\meaningof{e}\pre~A)~B$.
+If $\meaningof{\mathit{e}}\map : X \mapto Y$, then for all $A \subseteq X$ and $B \subseteq Y$, $preimage~(\meaningof{\mathit{e}}\map~A)~B \equiv pre@ap~(\meaningof{\mathit{e}}\pre~A)~B$.
 \end{corollary}
+
+In other words, $\meaningof{\mathit{e}}\pre$ returns a computation that correctly computes preimages under $\meaningof{\mathit{e}}\map$ or, again by homomorphism, $\meaningof{\mathit{e}}_\bot$ (without error inputs).
 
 \section{Computable Approximation}
 

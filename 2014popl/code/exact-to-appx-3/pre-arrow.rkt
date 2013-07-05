@@ -30,16 +30,15 @@
 (define ((pair/pre h1 h2) A)
   (pmapping-pair (h1 A) (h2 A)))
 
-(: lazy/pre (All (X Y) ((Pre-Arrow X Y) -> (Pre-Arrow X Y))))
+(: lazy/pre (All (X Y) ((-> (Pre-Arrow X Y)) -> (Pre-Arrow X Y))))
 (define ((lazy/pre h) A)
-  (if (set-empty? A) (pmapping ((inst set Y)) (λ: ([B : (Setof Y)]) ((inst set X)))) (h A)))
+  (if (set-empty? A) (pmapping ((inst set Y)) (λ: ([B : (Setof Y)]) ((inst set X)))) ((h) A)))
 
-(: if/pre (All (X Y) ((Pre-Arrow X Boolean) (-> (Pre-Arrow X Y)) (-> (Pre-Arrow X Y))
-                                            -> (Pre-Arrow X Y))))
+(: if/pre (All (X Y) ((Pre-Arrow X Boolean) (Pre-Arrow X Y) (Pre-Arrow X Y) -> (Pre-Arrow X Y))))
 (define ((if/pre c t f) A)
   (let* ([c  (c A)]
-         [t  ((lazy/pre (t)) (pmapping-ap c (set #t)))]
-         [f  ((lazy/pre (f)) (pmapping-ap c (set #f)))])
+         [t  (t (pmapping-ap c (set #t)))]
+         [f  (f (pmapping-ap c (set #f)))])
     (pmapping-disjoint-union t f)))
 
 ;; Some useful lifts

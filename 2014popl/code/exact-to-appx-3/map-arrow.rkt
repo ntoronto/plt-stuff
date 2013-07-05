@@ -40,16 +40,15 @@
 (define ((pair/map g1 g2) A)
   (mapping-pair (g1 A) (g2 A)))
 
-(: lazy/map (All (X Y) ((Map-Arrow X Y) -> (Map-Arrow X Y))))
+(: lazy/map (All (X Y) ((-> (Map-Arrow X Y)) -> (Map-Arrow X Y))))
 (define ((lazy/map g) A)
-  (if (set-empty? A) (set) (g A)))
+  (if (set-empty? A) (set) ((g) A)))
 
-(: if/map (All (X Y) ((Map-Arrow X Boolean) (-> (Map-Arrow X Y)) (-> (Map-Arrow X Y))
-                                            -> (Map-Arrow X Y))))
+(: if/map (All (X Y) ((Map-Arrow X Boolean) (Map-Arrow X Y) (Map-Arrow X Y) -> (Map-Arrow X Y))))
 (define ((if/map c t f) A)
   (let* ([c  (c A)]
-         [t  ((lazy/map (t)) (mapping-preimage c (set #t)))]
-         [f  ((lazy/map (f)) (mapping-preimage c (set #f)))])
+         [t  (t (mapping-preimage c (set #t)))]
+         [f  (f (mapping-preimage c (set #f)))])
     (mapping-disjoint-union t f)))
 
 (: id/map (All (X) (Map-Arrow X X)))

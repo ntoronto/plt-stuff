@@ -147,38 +147,38 @@
 (: halt-on-true/bot (Bot-Arrow Boolean Boolean))
 (define halt-on-true/bot
   (if/bot (inst id/bot Boolean)
-          (λ () ((inst const/bot Boolean Boolean) #t))
-          (λ () halt-on-true/bot)))
+          (lazy/bot (λ () ((inst const/bot Boolean Boolean) #t)))
+          (lazy/bot (λ () halt-on-true/bot))))
 
 (: halt-on-true/map (Map-Arrow Boolean Boolean))
 (define halt-on-true/map
   (if/map (inst id/map Boolean)
-          (λ () ((inst const/map Boolean Boolean) #t))
-          (λ () halt-on-true/map)))
+          (lazy/map (λ () ((inst const/map Boolean Boolean) #t)))
+          (lazy/map (λ () halt-on-true/map))))
 
 (: halt-on-true/pre (Pre-Arrow Boolean Boolean))
 (define halt-on-true/pre
   (if/pre (inst id/pre Boolean)
-          (λ () ((inst const/pre Boolean Boolean) #t))
-          (λ () halt-on-true/pre)))
+          (lazy/pre (λ () ((inst const/pre Boolean Boolean) #t)))
+          (lazy/pre (λ () halt-on-true/pre))))
 
 (: halt-on-true/pbot (PBot-Arrow Boolean Boolean))
 (define halt-on-true/pbot
   (if/pbot (inst id/pbot Boolean)
-           (λ () ((inst const/pbot Boolean Boolean) #t))
-           (λ () halt-on-true/pbot)))
+           (lazy/pbot (λ () ((inst const/pbot Boolean Boolean) #t)))
+           (lazy/pbot (λ () halt-on-true/pbot))))
 
 (: halt-on-true/pmap (PMap-Arrow Boolean Boolean))
 (define halt-on-true/pmap
   (if/pmap (inst id/pmap Boolean)
-           (λ () ((inst const/pmap Boolean Boolean) #t))
-           (λ () halt-on-true/pmap)))
+           (lazy/pmap (λ () ((inst const/pmap Boolean Boolean) #t)))
+           (lazy/pmap (λ () halt-on-true/pmap))))
 
 (: halt-on-true/ppre (PPre-Arrow Boolean Boolean))
 (define halt-on-true/ppre
   (if/ppre (inst id/ppre Boolean)
-           (λ () ((inst const/ppre Boolean Boolean) #t))
-           (λ () halt-on-true/ppre)))
+           (lazy/ppre (λ () ((inst const/ppre Boolean Boolean) #t)))
+           (lazy/ppre (λ () halt-on-true/ppre))))
 
 (test-map-arrow halt-on-true/bot halt-on-true/map (set #t))
 (test-pre-arrow halt-on-true/map halt-on-true/pre (set #t))

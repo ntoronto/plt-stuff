@@ -26,12 +26,11 @@
 (: lazy/bot (All (X Y) ((-> (Bot-Arrow X Y)) -> (Bot-Arrow X Y))))
 (define ((lazy/bot f) x) ((f) x))
 
-(: if/bot (All (X Y) ((Bot-Arrow X Boolean) (-> (Bot-Arrow X Y)) (-> (Bot-Arrow X Y))
-                                            -> (Bot-Arrow X Y))))
+(: if/bot (All (X Y) ((Bot-Arrow X Boolean) (Bot-Arrow X Y) (Bot-Arrow X Y) -> (Bot-Arrow X Y))))
 (define ((if/bot c t f) x)
   (define b (c x))
-  (cond [(eq? b #t)  ((t) x)]
-        [(eq? b #f)  ((f) x)]
+  (cond [(eq? b #t)  (t x)]
+        [(eq? b #f)  (f x)]
         [else  bottom]))
 
 (: id/bot (All (X) (Bot-Arrow X X)))

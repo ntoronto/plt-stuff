@@ -42,8 +42,8 @@
 ;; Partial arrow transformer
 
 (define-syntax-rule (define-transformed-arrow
-                      In-Arrow arr/in >>>/in pair/in if/in bottom/in branches-ref/in
-                      Out-Arrow arr/out >>>/out pair/out if/out)
+                      In-Arrow arr/in >>>/in pair/in if/in lazy/in bottom/in branches-ref/in
+                      Out-Arrow arr/out >>>/out pair/out if/out lazy/out)
   (begin
     (define-type (Out-Arrow X Y) (Tree-Index -> (In-Arrow (Pair Branches X) Y)))
     
@@ -72,25 +72,28 @@
             [f2  (f2 (cons 1 idx))])
         (pair/in f1 f2)))
     
-    (: if/out (All (X Y Z) ((Out-Arrow X Boolean) (-> (Out-Arrow X Y)) (-> (Out-Arrow X Y))
+    (: lazy/out (All (X Y) ((-> (Out-Arrow X Y)) -> (Out-Arrow X Y))))
+    (define ((lazy/out f) idx) (lazy/in (λ () ((f) idx))))
+    
+    (: if/out (All (X Y Z) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y)
                                                   -> (Out-Arrow X Y))))
     (define ((if/out f1 f2 f3) idx)
       (let ([f1  (f1 (cons 0 idx))]
-            [f2  (λ () ((f2) (list* 0 1 idx)))]
-            [f3  (λ () ((f3) (list* 1 1 idx)))])
+            [f2  (f2 (list* 0 1 idx))]
+            [f3  (f3 (list* 1 1 idx))])
         (define b (>>>/in (inst fst/in Branches X) (branches-ref/in idx)))
-        (define bot (λ () bottom/in))
+        (define bot bottom/in)
         (if/in f1
-               (λ () (if/in b f2 bot))
-               (λ () (if/in b bot f3)))))
+               (if/in b f2 bot)
+               (if/in b bot f3))))
     ))
 
 ;; ===================================================================================================
 ;; Partial bottom arrow
 
 (define-transformed-arrow
-  Bot-Arrow arr/bot >>>/bot pair/bot if/bot bottom/bot branches-ref/bot
-  PBot-Arrow arr/pbot >>>/pbot pair/pbot if/pbot)
+  Bot-Arrow arr/bot >>>/bot pair/bot if/bot lazy/bot bottom/bot branches-ref/bot
+  PBot-Arrow arr/pbot >>>/pbot pair/pbot if/pbot lazy/pbot)
 
 (: id/pbot (All (X) (PBot-Arrow X X)))
 (define (id/pbot x)
@@ -112,8 +115,8 @@
 ;; Partial mapping arrow
 
 (define-transformed-arrow
-  Map-Arrow arr/map >>>/map pair/map if/map bottom/map branches-ref/map
-  PMap-Arrow arr/pmap >>>/pmap pair/pmap if/pmap)
+  Map-Arrow arr/map >>>/map pair/map if/map lazy/map bottom/map branches-ref/map
+  PMap-Arrow arr/pmap >>>/pmap pair/pmap if/pmap lazy/pmap)
 
 (: lift/pmap (All (X Y) ((PBot-Arrow X Y) -> (PMap-Arrow X Y))))
 (define ((lift/pmap f) idx)
@@ -139,8 +142,8 @@
 ;; Partial preimage arrow
 
 (define-transformed-arrow
-  Pre-Arrow arr/pre >>>/pre pair/pre if/pre bottom/pre branches-ref/pre
-  PPre-Arrow arr/ppre >>>/ppre pair/ppre if/ppre)
+  Pre-Arrow arr/pre >>>/pre pair/pre if/pre lazy/pre bottom/pre branches-ref/pre
+  PPre-Arrow arr/ppre >>>/ppre pair/ppre if/ppre lazy/ppre)
 
 (: lift/ppre (All (X Y) ((PMap-Arrow X Y) -> (PPre-Arrow X Y))))
 (define ((lift/ppre f) idx)

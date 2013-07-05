@@ -30,7 +30,7 @@
     [(cdr (Pair X Y) e)
      #`(>>>/bot #,(S #'e) (inst snd/bot X Y))]
     [(if ec et ef)
-     #`(if/bot #,(S #'ec) (λ () #,(S #'et)) (λ () #,(S #'ef)))]
+     #`(if/bot #,(S #'ec) (lazy/bot (λ () #,(S #'et))) (lazy/bot (λ () #,(S #'ef))))]
     [(let E ex X eb)
      #`(((inst let/bot E X) #,(S #'ex)) #,(S #'eb))]
     [(env (Pair E0 E) 0)
