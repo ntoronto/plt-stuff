@@ -44,7 +44,7 @@
 \newcommand{\arrowcomp}{\ensuremath{{>}\mspace{-6mu}{>}\mspace{-6mu}{>}}}
 \newcommand{\arrowpair}{\ensuremath{\mathit{\&\mspace{-7.5mu}\&\mspace{-7.5mu}\&}}}
 %\newcommand{\arrowpair}{\ensuremath{pair}}
-\newcommand{\arrowif}{\ensuremath{if}}
+\newcommand{\arrowif}{\ensuremath{ifte}}
 \newcommand{\arrowlazy}{\ensuremath{lazy}}
 \newcommand{\arrowapp}{\ensuremath{app}}
 \newcommand{\arrowrun}{\ensuremath{run}}
@@ -311,8 +311,23 @@ To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e
 Figure~\ref{fig:mapping-defs} defines more operations on partial mappings: $domain$, $range$, $preimage$, pairing, composition, and disjoint union.
 The latter three are particularly important in the preimage arrow's derivation, and $preimage$ is critical in measure theory's account of probability.
 
-
 XXX: lazy mappings
+
+XXX: total mappings are infinite vectors
+
+XXX: projection functions
+\begin{align}
+&\begin{aligned}
+	&\pi : J \tto (J \to X) \tto X \\
+	&\pi~j~f \ := \ f~j
+\end{aligned} \\
+\nonumber \\[-6pt]
+&\begin{aligned}
+	&proj : J \tto (J \to X) \tto Set~X \\
+	&proj~j~A \ := \ image~(\pi~j)~A
+\end{aligned}
+\end{align}
+
 
 \begin{comment}
 \subsection{Ordinal Numbers and Transfinite Recursion}
@@ -575,7 +590,7 @@ Its computations are of type $x \tto y_\bot$, where the inhabitants of $y_\bot$ 
 \\[-6pt]
 	&\begin{aligned}[t]
 		&(\pairbot) : (x \tto {y_1}_\bot) \tto (x \tto {y_2}_\bot) \tto (x \tto \pair{y_1,y_2}_\bot) \\
-		&(f_1~\pairbot~f_2)~x \ := \ if~((f_1~x = \bot) \bor (f_2~x = \bot))~\bot~{\pair{f_1~x,f_2~x}}
+		&(f_1~\pairbot~f_2)~x \ := \ if~(f_1~x = \bot~or~f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}
 	\end{aligned}
 \end{aligned}
 &\tab\tab
@@ -601,9 +616,9 @@ Figure~\ref{fig:bottom-arrow-defs} does not give the typical minimal definition 
 Instead of $first_\bot$, it defines $(\arrowpair_\bot)$---typically called \keyword{fanout}, but its use in this paper will be clearer if we call it \mykeyword{pairing}---which applies two functions to the same input and returns the pair of their outputs.
 Though any arrow's $first$ may be defined in terms of its $(\arrowpair)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair)$ definitions in this paper because the most well-known applicable contemporary measurability theorems are in terms of pairing functions.
 
-Figure~\ref{fig:bottom-arrow-defs} also defines the \mykeyword{bottom arrow+choice} by defining the additional combinators $\ifbot$ and $\lazybot$.
-Typically, an arrow is strengthened to an arrow+choice---which is not quite as strong as a monad---by defining a $left$ combinator.
-Again, however, our choice of $\ifbot$ will make it easier to apply contemporary measurability theorems, which are in terms of disjoint unions of mappings instead of an explicit disjoint union type.
+Figure~\ref{fig:bottom-arrow-defs} also defines the \mykeyword{bottom arrow+choice} by defining the additional combinators $\ifbot$ (if-then-else) and $\lazybot$.
+An arrow is typically strengthened to an arrow+choice (which is not quite as strong as a monad) by defining a $left$ combinator.
+Again, however, defining $\ifbot$ instead of $left_\bot$ will make it easier to apply contemporary measurability theorems, which are in terms of disjoint unions of mappings instead of an explicit disjoint union type.
 
 In a nonstrict or simply typed $\lambda$-calculus, $\lazybot$ is unnecessary.
 For example, in a simply typed $\lambda$-calculus, the following recursive function cannot be typed:
@@ -664,10 +679,10 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{\gamma_\mathit{n}}
 \\
 	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
-		if\gen~
+		\arrowif\gen~
 			\meaningof{\mathit{e_c}}\gen~
-			(\arrowlazy~\fun{0}{\meaningof{\mathit{e_t}}\gen})~
-			(\arrowlazy~\fun{0}{\meaningof{\mathit{e_f}}\gen})
+			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_t}}\gen})~
+			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_f}}\gen})
 \\
 \end{aligned}
 &\tab\tab\tab
@@ -719,20 +734,18 @@ This will make it easier to disregard nonterminating inputs when computing preim
 We want the correspondence between bottom arrow and mapping arrow computations as clear as possible.
 We therefore start by defining a function $\liftmap : (X \tto Y_\bot) \tto (X \mapto Y)$ to lift bottom arrow computations to the mapping arrow.
 It must restrict its argument $f$'s domain to a subset of $X$ for which $f$ does not return $\bot$.
-It is helpful to have a standalone function $domain_\bot$ that computes such domains, so we define that first:
-\begin{equation}
-\begin{aligned}
-	&domain_\bot : (X \tto Y_\bot) \tto Set~X \tto Set~X \\
-	&domain_\bot~f~A \ := \ preimage~f\restrict{A}~((image~f~A) \w \set{\bot})
-\end{aligned}
-\end{equation}
-and define $\liftmap$ in terms of $domain_\bot$:
-\begin{equation}
-\begin{aligned}
-	&\liftmap : (X \tto Y_\bot) \tto (X \mapto Y) \\
-	&\liftmap~f~A \ := \ \lzfclet{A' & domain_\bot~f~A}{f\restrict{A'}}
-\end{aligned}
-\end{equation}
+It is helpful to have a standalone function $domain_\bot$ that computes such domains, so we define that first, and then define $\liftmap$ in terms of it:
+\begin{align}
+	&\begin{aligned}
+		&domain_\bot : (X \tto Y_\bot) \tto Set~X \tto Set~X \\
+		&domain_\bot~f~A \ := \ preimage~f\restrict{A}~((image~f~A) \w \set{\bot})
+	\end{aligned} \\
+\nonumber \\[-6pt]
+	&\begin{aligned}
+		&\liftmap : (X \tto Y_\bot) \tto (X \mapto Y) \\
+		&\liftmap~f~A \ := \ \lzfclet{A' & domain_\bot~f~A}{f\restrict{A'}}
+	\end{aligned}
+\end{align}
 
 \subsection{Distributive Laws}
 
@@ -840,11 +853,11 @@ For any $f_1 : X \tto Y_\bot$, $f_2 : X \tto Z_\bot$, and $A \subseteq X$,
 \begin{align*}
 	&\liftmap~(f_1~\pairbot~f_2)~A
 \\
-	&\tab \equiv \ \liftmap~(\fun{x}{if~(f_1~x = \bot \bor f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}})~A
+	&\tab \equiv \ \liftmap~(\fun{x}{if~(f_1~x = \bot~or~f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}})~A
 \\
 	&\tab \equiv \ 
 		\lzfclet{
-			f & \fun{x}{if~(f_1~x = \bot \bor f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}} \\
+			f & \fun{x}{if~(f_1~x = \bot~or~f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}} \\
 			A' & domain_\bot~f~A
 		}{f\restrict{A'}}
 \numberthis
@@ -1403,12 +1416,152 @@ For all $A \subseteq X$ and $B \subseteq Y$, $pre@ap~(h~A)~B \equiv preimage~(g~
 If $\meaningof{\mathit{e}}\map : X \mapto Y$, then for all $A \subseteq X$ and $B \subseteq Y$, $preimage~(\meaningof{\mathit{e}}\map~A)~B \equiv pre@ap~(\meaningof{\mathit{e}}\pre~A)~B$.
 \end{corollary}
 
-In other words, $\meaningof{\mathit{e}}\pre$ returns a computation that correctly computes preimages under $\meaningof{\mathit{e}}\map$ or, again by homomorphism, $\meaningof{\mathit{e}}_\bot$ (without error inputs).
+In other words, $\meaningof{\mathit{e}}\pre$ returns a computation that correctly computes preimages under $\meaningof{\mathit{e}}\map$ or, again by homomorphism, $\meaningof{\mathit{e}}_\bot$.
+
+\section{Approximating Preimage Arrow}
+
+XXX: $\arrpre$ is generally uncomputable, but we don't need that many lifts; Figure~\ref{fig:extra-preimage-arrow-defs} has the rest of the non-arithmetic ones we'll need
+
+XXX: figure out a good way to present the following info
+
+Figure~\ref{fig:mapping-arrow-defs}:
+\begin{itemize}
+	\item $pre$: can't implement
+	\item $pre@ap$: need $\i$
+	\item $\pair{\cdot,\cdot}\pre$: approximate; need $\times$ and $\i$
+	\item $\circ\pre$: no change
+	\item $\uplus\pre$: approximate; need join
+\end{itemize}
+
+Figure~\ref{fig:preimage-arrow-defs}:
+\begin{itemize}
+	\item $\arrpre$ (and $\liftpre$): can't implement
+	\item $\comppre$: no change
+	\item $\pairpre$: use approximating $\pair{\cdot,\cdot}\pre$
+	\item $\ifpre$: need $\set{true}$ and $\set{false}$; use approximating $\uplus\pre$
+	\item $\lazypre$: need $(= \emptyset)$, $(pre~\emptyset)$
+\end{itemize}
+
+Figure~\ref{fig:extra-preimage-arrow-defs}:
+\begin{itemize}
+	\item $id\pre$: no change
+	\item $const\pre$: need $\set{y}$, $(= \emptyset)$, $\emptyset$
+	\item $fst\pre$ and $snd\pre$: need projections, $i$, $\times$
+	\item $\pi\pre$: need projections, $\i$, arbitrary products
+\end{itemize}
+
+\begin{figure*}[t]\centering
+\begin{align*}
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&id\pre : X \preto X \\
+		&id\pre~A \ := \ \pair{A,\fun{B}{B}}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&const\pre : Y \tto X \preto Y \\
+		&const\pre~y~A \ := \ \pair{\set{y},\fun{B}{if~(B = \emptyset)~\emptyset~A}}
+	\end{aligned} \\
+\\[-6pt]
+&\begin{aligned}
+	&\pi\pre : J \tto (J \to X) \preto X \\
+	&\pi\pre~j~A \ := \ 
+		\lzfclet{
+			A_j & proj~j~A \\
+			p & \fun{B}{A \i \prod_{i \in J} if~(j = i)~B~(proj~i~A)}
+		}{\pair{A_j,p}}
+\end{aligned}
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&fst\pre : \pair{X,Y} \preto X \\
+		&fst\pre~A \ := \ 
+			\lzfclet{
+				A_1 & image~fst~A \\
+				A_2 & image~snd~A
+			}{\pair{A_1,\fun{B}{A \i (B \times A_2)}}}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&snd\pre : \pair{X,Y} \preto Y \\
+		&snd\pre~A \ := \ 
+			\lzfclet{
+				A_1 & image~fst~A \\
+				A_2 & image~snd~A
+			}{\pair{A_2,\fun{B}{A \i (A_1 \times B)}}}
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
+\caption{Specific instances of $\arrpre~f$}
+\label{fig:extra-preimage-arrow-defs}
+\end{figure*}
+
+\section{Preimages of Partial Functions}
+
+Probabilistic functions that may diverge, but converge with probability 1, are common.
+They often come up when practitioners want to build data with random size or structure, but they may show up in simpler circumstances as well.
+
+Suppose $boolean~p$ returns $true$ with probability $p$, by retrieving a number $x_i \in [0,1]$ from a uniform random source $x$ and returning $true$ when $x_i < p$.
+The following recursive function, which defines the well-known \keyword{geometric distribution}, counts the number of times $boolean~p$ is $false$:
+\begin{equation}
+	geometric~p \ := \ if~(boolean~p)~0~(1 + geometric~p)
+\label{eqn:geometric-def}
+\end{equation}
+While $geometric~p$ for any $p > 0$ may diverge, the probability of always taking the false branch is $(1-p) \times (1-p) \times (1-p) \times \cdots = 0$.
+Divergence simply does not happen in practice.
+
+Suppose we interpret~\eqref{eqn:geometric-def} as $h : X \preto \Nat$, a preimage arrow computation from random sources in $X$ to natural numbers.
+Given a uniform probability measure $P \in \powerset~X \pto [0,1]$, we could compute the probability of some output set $N \subseteq \Nat$ using $P~(h~A~N)$, where $A \subseteq X$, $P~A = 1$ and $h~A$ converges.
+
+We have three hurdles to overcome:
+\begin{enumerate}
+	\item Determining how $boolean~p$ retrieves unique real numbers $x_i$ from $x$.
+	\item Ensuring that each $x \in X$ contains enough random numbers.
+	\item Ensuring that $h~A$ converges.
+\end{enumerate}
+For hurdle 3, we will ensure that $h~A$ converges for any $A \subseteq X$.
+Hurdle 2 is easy: we make each $x$ infinite.
+Hurdle 1 relies on an expression indexing scheme for unrolled programs, which we develop to address 3.
+
+\subsection{Expression Indexing}
+
+XXX: overall idea: define an arrow transformer that assigns every combinator a unique index; define another arrow transformer that threads 
+
+threads an infinite vector of random numbers through its computations
+
+\begin{definition}[binary indexing scheme]
+Let $J$ be an index set and $j_0 \in J$ a distinguished element.
+Let $left : J \tto J$ and $right : J \tto J$ be total functions.
+If for any finite composition $f$ of $left$ and $right$, $f~j_0$ is unique, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
+\end{definition}
+
+For example, let $J$ be the set of lists of booleans, $j_0$ the empty list, and define
+\begin{equation}
+\begin{aligned}
+	left~xs &\ := \ \pair{true,xs}
+\\
+	right~xs &\ := \ \pair{false,xs}
+\end{aligned}
+\end{equation}
+Alternatively, let $J := (0,1) \i \Rat$, $j_0 := \tfrac{1}{2}$ and
+\begin{equation}
+\begin{aligned}
+	left~(p/q) &\ := \ (p-\tfrac{1}{2})/q
+\\
+	right~(p/q) &\ := \ (p+\tfrac{1}{2})/q
+\end{aligned}
+\end{equation}
+
+If $J$ ... then $x \in J \to [0,1]$ 
+
+
+\subsection{Applicative Store-Passing}
 
 \section{Computable Approximation}
 
 
-\section{Preimages of Partial Functions}
 
 
 
