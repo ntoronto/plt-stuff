@@ -58,3 +58,11 @@
 (: snd/pre (All (X Y) (Pre-Arrow (Pair X Y) Y)))
 (define (snd/pre A)
   (((inst lift/pre (Pair X Y) Y) snd/map) A))
+
+(: error/pre (All (X Y) (Pre-Arrow X Y)))
+(define (error/pre A)
+  (((inst lift/pre X Y) error/map) A))
+
+(: assert=/pre (All (X) (Pre-Arrow (Pair X X) X)))
+(define (assert=/pre A)
+  (((inst lift/pre (Pair X X) X) assert=/map) A))

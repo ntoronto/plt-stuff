@@ -12,12 +12,6 @@
          "../set-ops.rkt"
          )
 
-(: ap/pbot (All (X Y) ((PBot-Arrow X Y) X -> Y)))
-(define (ap/pbot f x)
-  (define ys (set-image (f '()) (set-product some-branches (set x))))
-  (set-take ((inst set-filter-out Y Bottom) bottom? ys)))
-
-
 (: test-map-arrow (All (X Y) ((Bot-Arrow X Y) (Map-Arrow X Y) (Setof X) -> Any)))
 (define (test-map-arrow comp/bot comp/map A)
   (define comp/map* ((inst lift/map X Y) comp/bot))
@@ -40,16 +34,16 @@
 (define (test-pmap-arrow comp/pbot comp/pmap A)
   (define comp/pmap* ((inst lift/pmap X Y) comp/pbot))
   (define A* (set-product some-branches A))
-  (check-true (equal? ((comp/pmap* '()) A*) ((comp/pmap '()) A*))))
+  (check-true (equal? ((comp/pmap* j0) A*) ((comp/pmap j0) A*))))
 
 (: test-ppre-arrow (All (X Y) ((PMap-Arrow X Y) (PPre-Arrow X Y) (Setof X) -> Any)))
 (define (test-ppre-arrow comp/pmap comp/ppre A)
   (define comp/ppre* ((inst lift/ppre X Y) comp/pmap))
   (define A* (set-product some-branches A))
   (parameterize ([pmapping-approx?  #f])
-    (check-true (pmapping-equal? ((comp/ppre* '()) A*) ((comp/ppre '()) A*))))
+    (check-true (pmapping-equal? ((comp/ppre* j0) A*) ((comp/ppre j0) A*))))
   (parameterize ([pmapping-approx?  #t])
-    (check-true (pmapping-subset? ((comp/ppre* '()) A*) ((comp/ppre '()) A*)))))
+    (check-true (pmapping-subset? ((comp/ppre* j0) A*) ((comp/ppre j0) A*)))))
 
 (printf "Testing add1...~n")
 (define add1/bot ((inst arr/bot Integer Integer) add1))
@@ -162,17 +156,23 @@
           (lazy/pre (λ () ((inst const/pre Boolean Boolean) #t)))
           (lazy/pre (λ () halt-on-true/pre))))
 
+(printf "pbot~n")
+
 (: halt-on-true/pbot (PBot-Arrow Boolean Boolean))
 (define halt-on-true/pbot
   (if/pbot (inst id/pbot Boolean)
            (lazy/pbot (λ () ((inst const/pbot Boolean Boolean) #t)))
            (lazy/pbot (λ () halt-on-true/pbot))))
 
+(printf "pmap~n")
+
 (: halt-on-true/pmap (PMap-Arrow Boolean Boolean))
 (define halt-on-true/pmap
   (if/pmap (inst id/pmap Boolean)
            (lazy/pmap (λ () ((inst const/pmap Boolean Boolean) #t)))
            (lazy/pmap (λ () halt-on-true/pmap))))
+
+(printf "ppre~n")
 
 (: halt-on-true/ppre (PPre-Arrow Boolean Boolean))
 (define halt-on-true/ppre
@@ -182,6 +182,9 @@
 
 (test-map-arrow halt-on-true/bot halt-on-true/map (set #t))
 (test-pre-arrow halt-on-true/map halt-on-true/pre (set #t))
+(printf "pbot~n")
 (test-pbot-arrow halt-on-true/bot halt-on-true/pbot (set #t))
+(printf "pmap~n")
 (test-pmap-arrow halt-on-true/pbot halt-on-true/pmap (set #t #f))
+(printf "ppre~n")
 (test-ppre-arrow halt-on-true/pmap halt-on-true/ppre (set #t #f))

@@ -48,6 +48,8 @@
 \newcommand{\arrowlazy}{\ensuremath{lazy}}
 \newcommand{\arrowapp}{\ensuremath{app}}
 \newcommand{\arrowrun}{\ensuremath{run}}
+\newcommand{\arrowget}{\ensuremath{get}}
+\newcommand{\arrowerror}{\ensuremath{error}}
 
 \newcommand{\gen}{_\mathrm{a}}
 \newcommand{\genb}{_\mathrm{b}}
@@ -701,7 +703,7 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 			\arrowcomp\gen~
 		\meaningof{\mathit{e_b}}\gen
 \\
-	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{\gamma_\mathit{n}}
+	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{list@ref~\gamma~\mathit{n}}
 \\
 	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
 		\arrowif\gen~
@@ -720,11 +722,11 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 	\meaningof{snd~\mathit{e}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}}\gen~\arrowcomp\gen~(\arrowarr\gen~snd)
 \\
-	\meaningof{\mathit{e}_1 = \mathit{e}_2}\gen &\ :\equiv\
-		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x = y})
-\\
 	\meaningof{\mathit{e}_1 + \mathit{e}_2}\gen &\ :\equiv\
-		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x+y})
+		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x + y})
+\\
+	\meaningof{\mathit{e}_1 < \mathit{e}_2}\gen &\ :\equiv\
+		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x < y})
 \\
 	&\ \cdots\ 
 \\
@@ -752,6 +754,10 @@ Its computations are of type $x \botto y ::= x \tto y_\bot$, where the inhabitan
 \begin{figure*}[t]\centering
 \begin{align*}
 \begin{aligned}[t]
+	&\begin{aligned}[t]
+		&x \botto y \ ::= \ x \tto y_\bot
+	\end{aligned} \\
+\\[-6pt]
 	&\begin{aligned}[t]
 		&\arrbot : (x \tto y) \tto (x \botto y) \\
 		&\arrbot~f \ := \ f
@@ -1446,34 +1452,46 @@ In particular, $\meaningof{\mathit{e}}\pre$ correctly computes preimages under t
 Probabilistic functions that may diverge, but converge with probability 1, are common.
 They come up not only when practitioners want to build data with random size or structure, but in simpler circumstances as well.
 
-Suppose $boolean~p$ returns $true$ with probability $p$, by retrieving a number $x_i \in [0,1]$ from a uniform random source $x$ and returning $true$ when $x_i < p$.
-The following recursive function, which defines the well-known \keyword{geometric distribution}, counts the number of times $boolean~p$ is $false$:
+Suppose $random$ retrieves a number $x_j \in [0,1]$ from a uniform random source $x$.
+The following recursive function, which defines the well-known \keyword{geometric distribution} with parameter $p$, counts the number of times $random < p$ is $false$:
 \begin{equation}
-	geometric~p \ := \ if~(boolean~p)~0~(1 + geometric~p)
+	geometric~p \ := \ if~(random < p)~0~(1 + geometric~p)
 \label{eqn:geometric-def}
 \end{equation}
-While $geometric~p$ for any $p > 0$ may diverge, the probability of always taking the false branch is $(1-p) \times (1-p) \times (1-p) \times \cdots = 0$.
+For any $p > 0$, $geometric~p$ may diverge, but the probability of always taking the false branch is $(1-p) \times (1-p) \times (1-p) \times \cdots = 0$.
 Divergence with probability $0$ simply does not happen in practice.
 
 Suppose we interpret~\eqref{eqn:geometric-def} as $h : X \preto \Nat$, a preimage arrow computation from random sources in $X$ to natural numbers, and that we have a probability measure $P \in \powerset~X \pto [0,1]$.
 We could compute the probability of any output set $N \subseteq \Nat$ using $P~(h~A~N)$, where $A \subseteq X$ and $P~A = 1$. We have three hurdles to overcome:
 \begin{enumerate}
 	\item Ensuring $h~A$ converges.
-	\item Determining how $boolean~p$ indexes numbers in $x$.
+	\item Determining how $random$ indexes numbers in $x$.
 	\item Ensuring each $x \in X$ contains enough random numbers.
 \end{enumerate}
-Ensuring $h~A$ converges is the most difficult, but will provide an expression indexing scheme for unrolled programs to help with the other two.
+Ensuring $h~A$ converges is the most difficult, but doing the other two will provide enough structure to make it easy.
 
-\subsection{Expression Indexing}
+\subsection{Threading and Indexing}
 
-XXX: overall idea: define an arrow transformer that assigns every combinator a unique index; define another arrow transformer that threads 
+We clearly need a new arrow that threads a random source through its computations.
+To ensure it contains enough random numbers, the source should be infinite.
 
-threads an infinite vector of random numbers through its computations
+In a pure $\lambda$-calculus, random sources are typically infinite lists, threaded monadically: each computation receives and produces a random source.
+A new combinator is defined that removes the head of the random source and passes the tail along.
+This is likely preferred because pseudorandom number generators are almost universally monadic.
+
+A little-used alternative is for the random source to be an infinite tree, threaded applicatively:
+each computation receives, but does not produce, a random source.
+Multi-argument combinators split the tree and pass sub-trees to sub-computations.
+
+We have tried both ways with arrows defined using pairing.
+In each case, the resulting definitions are large, conceptually difficult, and hard to formally manipulate.
+Fortunately, assigning each sub-computation a unique index into a tree-shaped, \emph{constant} random source, and passing the source applicatively, is relatively easy.
+
+We first need a way to assign unique indexes.
 
 \begin{definition}[binary indexing scheme]
-Let $J$ be an index set and $j_0 \in J$ a distinguished element.
-Let $left : J \tto J$ and $right : J \tto J$ be total functions.
-If for any finite composition $f$ of $left$ and $right$, $f~j_0$ is unique, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
+Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto J$ and $right : J \tto J$ be total functions.
+If for every finite composition $f$ of $left$ and $right$, $f~j_0$ is unique, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
 \end{definition}
 
 For example, let $J$ be the set of lists of booleans, $j_0$ the empty list, and define
@@ -1484,7 +1502,7 @@ For example, let $J$ be the set of lists of booleans, $j_0$ the empty list, and 
 	right~xs &\ := \ \pair{false,xs}
 \end{aligned}
 \end{equation}
-Alternatively, let $J := (0,1) \i \Rat$, $j_0 := \tfrac{1}{2}$ and
+Alternatively, let $J$ be the set of dyadic rationals in $(0,1)$ (i.e. those with power-of-two denominators), $j_0 := \tfrac{1}{2}$ and
 \begin{equation}
 \begin{aligned}
 	left~(p/q) &\ := \ (p-\tfrac{1}{2})/q
@@ -1492,11 +1510,228 @@ Alternatively, let $J := (0,1) \i \Rat$, $j_0 := \tfrac{1}{2}$ and
 	right~(p/q) &\ := \ (p+\tfrac{1}{2})/q
 \end{aligned}
 \end{equation}
+With this alternative, left-to-right evaluation order can be made to correspond with the natural order $(<)$ over $J$.
 
-If $J$ ... then $x \in J \to [0,1]$ 
+\subsection{Applicative, Associative Store}
+
+XXX: \keyword{arrow transformer}: an arrow whose combinators are defined entirely in terms of another arrow
+
+XXX: computations receive an index and return an arrow from a store paired with $x$ to $y$:
+\begin{equation}
+	AStore~(x \arrow\gen y) \ ::= \ J \tto \pair{s,x} \arrow\gen y
+\end{equation}
+
+XXX: motivational wurds for definition:
+\begin{equation}
+\begin{aligned}
+	&\arrowlift\genb : x \arrow\gen y \tto AStore~(x \arrow\gen y) \\
+	&\arrowlift\genb~f~j \ := \ \arrowarr\gen~snd~\arrowcomp\gen~f
+\end{aligned}
+\end{equation}
+
+\begin{figure*}[t]\centering
+\begin{align*}
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		x \arrow\genb y \ ::= \ AStore~(x \arrow\gen y) \ ::= \ J \tto (\pair{s,x} \arrow\gen y)
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\arrowarr\genb : (x \tto y) \tto (x \arrow\genb y) \\
+		&\arrowarr\genb \ := \ \arrowlift\genb \circ \arrowarr\gen
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\arrowcomp\genb) : (x \arrow\genb y) \tto (y \arrow\genb z) \tto (x \arrow\genb z) \\
+		&(k_1~\arrowcomp\genb~k_2)~j \ := \
+			(\arrowarr\gen~fst~\arrowpair\gen~k_1~(left~j))~\arrowcomp\gen~k_2~(right~j)
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\arrowpair\genb) : (x \arrow\genb y) \tto (x \arrow\genb z) \tto (x \arrow\genb \pair{y,z}) \\
+		&(k_1~\arrowpair\genb~k_2)~j \ := \ k_1~(left~j)~\arrowpair\gen~k_2~(right~j)
+	\end{aligned} \\
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&(\arrowif\genb) : (x \arrow\genb Bool) \tto (x \arrow\genb y) \tto (x \arrow\genb y) \tto (x \arrow\genb y) \\
+		&\arrowif\genb~k_1~k_2~k_3~j \ := \
+			\lzfcsplit{\arrowif\gen~&(k_1~(left~j)) \\ &(k_2~(left~(right~j))) \\ &(k_3~(right~(right~j)))}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\arrowlazy\genb : (1 \tto (x \arrow\genb y)) \tto (x \arrow\genb y) \\
+		&\arrowlazy\genb~k~j \ := \ \arrowlazy\gen~\fun{0}{k~0~j}
+	\end{aligned} \\
+\\[-6pt]
+\hline
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y) \\
+		&\arrowlift\genb~f~j \ := \ \arrowarr\gen~snd~\arrowcomp\gen~f
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
+\caption{$AStore$ (associative store) arrow transformer definitions.}
+\label{fig:astore-arrow-defs}
+\end{figure*}
+
+Figure~\ref{fig:astore-arrow-defs} defines the $AStore$ arrow transformer.
+As with the other arrows, proving that its lift is a homomorphism allows us to prove that programs interpreted as its computations are correct.
+Again, to do so, we need to extend equivalence to be more extensional for arrows $AStore~(x \arrow\gen y)$.
+
+\begin{definition}[$AStore$ arrow equivalence]
+Two $AStore$ arrow computations $k_1$ and $k_2$ are equivalent, or $k_1 \equiv k_2$, when $k_1~j \equiv k_2~j$ for all $j \in J$.
+\end{definition}
+
+\begin{theorem}[$AStore$ arrow correctness]
+Let $x \arrow\genb y ::= AStore~(x \arrow\gen y)$.
+$\arrowlift\genb$ is an arrow+choice homomorphism.
+\end{theorem}
+\begin{proof}
+Defining $\arrowarr\genb$ as a composition clearly meets the first homomorphism identity~\eqref{eqn:lift-distributes-over-arr}.
+
+\emph{Composition.} Starting with the right side of~\eqref{eqn:lift-distributes-over-comp}, expand definitions and use $(\arrowarr\gen~f~\arrowpair\gen~f_1)~\arrowcomp\gen~\arrowarr\gen~snd \equiv f_1$:
+\begin{align*}
+	&(\arrowlift\genb~f_1~\arrowcomp\genb~\arrowlift\genb~f_2)~j
+\\
+	&\tab\equiv\ 
+		(\arrowarr\gen~fst~\arrowpair\gen~(\arrowarr\gen~snd~\arrowcomp\gen~f_1))~
+		\arrowcomp\gen~
+		\arrowarr\gen~snd~\arrowcomp\gen~f_2
+\\
+	&\tab\equiv\
+		\arrowarr\gen~snd~\arrowcomp\gen~f_1~\arrowcomp\gen~f_2
+\\
+	&\tab\equiv\
+		\arrowlift\genb~(f_1~\arrowcomp\gen~f_2)~j
+\end{align*}
+
+\emph{Pairing.} Starting with the right side of~\eqref{eqn:lift-distributes-over-pair}, expand definitions and use the arrow law $\arrowarr\gen~f~\arrowcomp\gen~(f_1~\arrowpair\gen~f_2) \equiv (\arrowarr\gen~f~\arrowcomp\gen~f_1)~\arrowpair\gen~(\arrowarr\gen~f~\arrowcomp\gen~f_2)$:
+\begin{align*}
+	&(\arrowlift\genb~f_1~\arrowpair\genb~\arrowlift\genb~f_2)~j
+\\
+	&\tab\equiv\ 
+		(\arrowarr\gen~snd~\arrowcomp\gen~f_1)~
+		\arrowpair\gen~
+		(\arrowarr\gen~snd~\arrowcomp\gen~f_2)
+\\
+	&\tab\equiv\
+		\arrowarr\gen~snd~\arrowcomp\gen~(f_1~\arrowpair\gen~f_2)
+\\
+	&\tab\equiv\
+		\arrowlift\genb~(f_1~\arrowpair\gen~f_2)~j
+\end{align*}
+
+\emph{Conditional.} Starting with the right side of~\eqref{eqn:lift-distributes-over-if}, expand definitions and use the arrow law $\arrowarr\gen~f~\arrowcomp\gen~\arrowif\gen~f_1~f_2~f_3 \equiv \arrowif\gen~(\arrowarr\gen~f~\arrowcomp\gen~f_1)~(\arrowarr\gen~f~\arrowcomp\gen~f_2)~(\arrowarr\gen~f~\arrowcomp\gen~f_3)$:
+\begin{align*}
+	&(\arrowif\genb~(\arrowlift\genb~f_1)~(\arrowlift\genb~f_2)~(\arrowlift\genb~f_3))~j
+\\
+	&\tab\equiv\ 
+		\lzfcsplit{\arrowif\gen~
+			&(\arrowarr\gen~snd~\arrowcomp\gen~f_1) \\ 
+			&(\arrowarr\gen~snd~\arrowcomp\gen~f_2) \\
+			&(\arrowarr\gen~snd~\arrowcomp\gen~f_3)}
+\\
+	&\tab\equiv\ 
+		\arrowarr\gen~snd~\arrowcomp\gen~(\arrowif~f_1~f_2~f_3)
+\\
+	&\tab\equiv\ 
+		\arrowlift\genb~(\arrowif~f_1~f_2~f_3)~j
+\end{align*}
+
+\emph{Laziness.} Starting with the right side of~\eqref{eqn:lift-distributes-over-lazy}, expand definitions, $\beta$-expand within the outer thunk, and use the arrow law $\arrowarr\gen~f~\arrowcomp\gen~\arrowlazy\gen~f_1 \equiv \arrowlazy\gen~\fun{0}{\arrowarr\gen~f~\arrowcomp\gen~f_1~0}$:
+\begin{align*}
+	&(\arrowlazy\genb~\fun{0}{\arrowlift\genb~(f~0)})~j
+\\
+	&\tab\equiv\ 
+		\arrowlazy\gen~\fun{0}{(\fun{0}\fun{j}{\arrowarr\gen~snd~\arrowcomp\gen~f~0})~0~j}
+\\
+	&\tab\equiv\ 
+		\arrowlazy\gen~\fun{0}{\arrowarr\gen~snd~\arrowcomp\gen~f~0}
+\\
+	&\tab\equiv\ 
+		\arrowarr\gen~snd~\arrowcomp\gen~\arrowlazy\gen~f
+\\
+	&\tab\equiv\ 
+		\arrowlift\genb~(\arrowlazy\gen~f)~j
+\end{align*}
+\end{proof}
+
+\begin{corollary}[semantic correctness]
+Let $x \arrow\genb y ::= AStore~(x \arrow\gen y)$. If $\meaningof{\mathit{e}}\gen : x \arrow\gen y$, then $\arrowlift\genb~\meaningof{\mathit{e}}\gen \equiv \meaningof{\mathit{e}}\genb$ and $\meaningof{\mathit{e}}\genb : x \arrow\genb y$.
+\end{corollary}
+
+\subsection{Probabilistic Programs}
+
+Define $\Omega := J \to [0,1]$ as the set of infinite random sources
+
+Store type: $s ::= \Omega$
 
 
-\subsection{Applicative Store-Passing}
+\begin{equation}
+\begin{aligned}
+	&random\genb : x \arrow\genb [0,1] \\
+	&random\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~(\pi~j)
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+	\meaningof{random}\genb \ :\equiv \ random\genb
+\end{equation}
+
+
+
+\subsection{Partial Programs}
+
+Let $Z \subset J \to Bool$ be the set of $z \in J \to Bool$ such that $z~j = true$ for only finitely many $j$
+
+Store type: $s ::= Z$
+
+\newcommand{\arrowgetlazy}{\ensuremath{getz}}
+
+\begin{equation}
+\begin{aligned}
+	&\arrowgetlazy\genb : x \arrow\genb Bool \\
+	&\arrowgetlazy\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~(\pi~j)
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+\begin{aligned}
+	&\arrowlazy\genb' : (1 \tto (x \arrow\genb y)) \tto (x \arrow\genb y) \\
+	&\arrowlazy\genb'~k \ := \ \arrowlazy\genb~\fun{0}{\arrowif\genb~\arrowgetlazy\genb~(k~0)~(\arrowarr\genb~\fun{x}{\bot})}
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+		\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\genb' \ :\equiv\
+		\arrowif\genb~
+			\meaningof{\mathit{e_c}}\genb~
+			(\arrowlazy\gen'~\fun{0}{\meaningof{\mathit{e_t}}\genb})~
+			(\arrowlazy\gen'~\fun{0}{\meaningof{\mathit{e_f}}\genb})
+\end{equation}
+
+
+\subsection{Partial, Probabilistic Programs}
+
+Store type: $s ::= \pair{Z, \Omega}$
+
+\begin{equation}
+\begin{aligned}
+	&\arrowgetlazy\genb : x \arrow\genb Bool \\
+	&\arrowgetlazy\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~\pi~j
+\end{aligned}
+\end{equation}
+
+\begin{equation}
+\begin{aligned}
+	&random\genb : x \arrow\genb [0,1] \\
+	&random\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~snd~\arrowcomp\gen~\arrowarr\gen~(\pi~j)
+\end{aligned}
+\end{equation}
 
 
 \section{Approximating Preimage Arrow}

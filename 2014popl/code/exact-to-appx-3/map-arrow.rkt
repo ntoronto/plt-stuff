@@ -23,7 +23,7 @@
    bottom?
    (set-image (λ: ([x : X])
                 (define y (f x))
-                (if (bottom? y) bottom (cons x y)))
+                (if (bottom? y) bottom (cons x (just-value y))))
               A)))
 
 (: arr/map (All (X Y) ((X -> Y) -> (Map-Arrow X Y))))
@@ -66,3 +66,11 @@
 (: snd/map (All (X Y) (Map-Arrow (Pair X Y) Y)))
 (define (snd/map A)
   (((inst arr/map (Pair X Y) Y) cdr) A))
+
+(: error/map (All (X Y) (Map-Arrow X Y)))
+(define (error/map A)
+  (((inst lift/map X Y) error/bot) A))
+
+(: assert=/map (All (X) (Map-Arrow (Pair X X) X)))
+(define (assert=/map A)
+  (((inst lift/map (Pair X X) X) assert=/bot) A))

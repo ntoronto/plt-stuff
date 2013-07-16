@@ -14,35 +14,24 @@
 ;; ===================================================================================================
 ;; More lifts
 
-(: bottom/bot (All (X) (Bot-Arrow X Nothing)))
-(define (bottom/bot x)
-  (((inst const/bot X Bottom) bottom) x))
+(: π/bot (Tree-Index -> (Bot-Arrow Branches Boolean)))
+(define ((π/bot j) b)
+  (define x ((π j) b))
+  (if (bottom? x) bottom (just x)))
 
-(: bottom/map (All (X Y) (Map-Arrow X Y)))
-(define (bottom/map A)
-  (((inst lift/map X Y) bottom/bot) A))
+(: π/map (Tree-Index -> (Map-Arrow Branches Boolean)))
+(define (π/map j)
+  (lift/map (π/bot j)))
 
-(: bottom/pre (All (X Y) (Pre-Arrow X Y)))
-(define (bottom/pre A)
-  (((inst lift/pre X Y) bottom/map) A))
-
-(: branches-ref/bot (Tree-Index -> (Bot-Arrow Branches (U Boolean Bottom))))
-(define ((branches-ref/bot i) b)
-  (branches-ref b i))
-
-(: branches-ref/map (Tree-Index -> (Map-Arrow Branches Boolean)))
-(define (branches-ref/map i)
-  (lift/map (branches-ref/bot i)))
-
-(: branches-ref/pre (Tree-Index -> (Pre-Arrow Branches Boolean)))
-(define (branches-ref/pre i)
-  (lift/pre (branches-ref/map i)))
+(: π/pre (Tree-Index -> (Pre-Arrow Branches Boolean)))
+(define (π/pre j)
+  (lift/pre (π/map j)))
 
 ;; ===================================================================================================
 ;; Partial arrow transformer
 
 (define-syntax-rule (define-transformed-arrow
-                      In-Arrow arr/in >>>/in pair/in if/in lazy/in bottom/in branches-ref/in
+                      In-Arrow arr/in >>>/in pair/in if/in lazy/in error/in assert=/in π/in
                       Out-Arrow arr/out >>>/out pair/out if/out lazy/out)
   (begin
     (define-type (Out-Arrow X Y) (Tree-Index -> (In-Arrow (Pair Branches X) Y)))
@@ -55,45 +44,62 @@
     (define (snd/in xy)
       (((inst arr/in (Pair X Y) Y) cdr) xy))
     
+    (: lift/out (All (X Y) ((In-Arrow X Y) -> (Out-Arrow X Y))))
+    (define ((lift/out f) j)
+      (>>>/in (inst snd/in Branches X) f))
+    
     (: arr/out (All (X Y) ((X -> Y) -> (Out-Arrow X Y))))
     (define (arr/out f)
-      (let ([f  ((inst arr/in X Y) f)])
-        (λ (idx) (>>>/in (inst snd/in Branches X) f))))
+      (lift/out ((inst arr/in X Y) f)))
     
     (: >>>/out (All (X Y Z) ((Out-Arrow X Y) (Out-Arrow Y Z) -> (Out-Arrow X Z))))
-    (define ((>>>/out f1 f2) idx)
-      (let ([f1  (f1 (cons 0 idx))]
-            [f2  (f2 (cons 1 idx))])
-        (>>>/in (pair/in (inst fst/in Branches X) f1) f2)))
+    (define ((>>>/out f1 f2) j)
+      (>>>/in (pair/in (inst fst/in Branches X) (f1 (left j))) (f2 (right j))))
     
     (: pair/out (All (X Y Z) ((Out-Arrow X Y) (Out-Arrow X Z) -> (Out-Arrow X (Pair Y Z)))))
-    (define ((pair/out f1 f2) idx)
-      (let ([f1  (f1 (cons 0 idx))]
-            [f2  (f2 (cons 1 idx))])
-        (pair/in f1 f2)))
+    (define ((pair/out f1 f2) j)
+      (pair/in (f1 (left j)) (f2 (right j))))
+    
+    (: lazy*/out (All (X Y) ((-> (Out-Arrow X Y)) -> (Out-Arrow X Y))))
+    (define ((lazy*/out f) j) (lazy/in (λ () ((f) j))))
+    
+    (: if/out (All (X Y) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y) -> (Out-Arrow X Y))))
+    (define ((if/out f1 f2 f3) j)
+      (if/in (f1 (left j)) (f2 (left (right j))) (f3 (right (right j)))))
+    
+    (: branch/out (All (X) (Out-Arrow X Boolean)))
+    (define (branch/out j)
+      (>>>/in (inst fst/in Branches X) (π/in j)))
     
     (: lazy/out (All (X Y) ((-> (Out-Arrow X Y)) -> (Out-Arrow X Y))))
-    (define ((lazy/out f) idx) (lazy/in (λ () ((f) idx))))
+    (define (lazy/out f)
+      (lazy*/out (λ () (if/out (inst branch/out X) (f) ((inst lift/out X Y) error/in)))))
+    #;
+    (define ((lazy/out f) j)
+      (lazy/in (λ ()
+                 (if/in ((inst branch/out X) j)
+                        ((f) j)
+                        error/in))))
     
-    (: if/out (All (X Y Z) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y)
-                                                  -> (Out-Arrow X Y))))
-    (define ((if/out f1 f2 f3) idx)
-      (let ([f1  (f1 (cons 0 idx))]
-            [f2  (f2 (list* 0 1 idx))]
-            [f3  (f3 (list* 1 1 idx))])
-        (define b (>>>/in (inst fst/in Branches X) (branches-ref/in idx)))
-        (define bot bottom/in)
-        (if/in f1
-               (if/in b f2 bot)
-               (if/in b bot f3))))
+    (: if*/out (All (X Y) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y) -> (Out-Arrow X Y))))
+    (define ((if*/out f1 f2 f3) j)
+      (if/in (>>>/in (pair/in (f1 (left j)) ((inst branch/out X) j)) (inst assert=/in Boolean))
+             (f2 (left (right j)))
+             (f3 (right (right j)))))
     ))
 
 ;; ===================================================================================================
 ;; Partial bottom arrow
 
 (define-transformed-arrow
-  Bot-Arrow arr/bot >>>/bot pair/bot if/bot lazy/bot bottom/bot branches-ref/bot
+  Bot-Arrow arr/bot >>>/bot pair/bot if/bot lazy/bot error/bot assert=/bot π/bot
   PBot-Arrow arr/pbot >>>/pbot pair/pbot if/pbot lazy/pbot)
+
+(: ap/pbot (All (X Y) ((PBot-Arrow X Y) X -> (U Bottom (just Y)))))
+(define (ap/pbot f x)
+  (define B (set-image (f j0) (set-product some-branches (set x))))
+  (define C ((inst set-filter-out (just Y) Bottom) bottom? B))
+  (if (set-empty? C) bottom (set-take C)))
 
 (: id/pbot (All (X) (PBot-Arrow X X)))
 (define (id/pbot x)
@@ -115,12 +121,12 @@
 ;; Partial mapping arrow
 
 (define-transformed-arrow
-  Map-Arrow arr/map >>>/map pair/map if/map lazy/map bottom/map branches-ref/map
+  Map-Arrow arr/map >>>/map pair/map if/map lazy/map error/map assert=/map π/map
   PMap-Arrow arr/pmap >>>/pmap pair/pmap if/pmap lazy/pmap)
 
 (: lift/pmap (All (X Y) ((PBot-Arrow X Y) -> (PMap-Arrow X Y))))
-(define ((lift/pmap f) idx)
-  (lift/map (f idx)))
+(define ((lift/pmap f) j)
+  (lift/map (f j)))
 
 (: id/pmap (All (X) (PMap-Arrow X X)))
 (define (id/pmap x)
@@ -142,12 +148,12 @@
 ;; Partial preimage arrow
 
 (define-transformed-arrow
-  Pre-Arrow arr/pre >>>/pre pair/pre if/pre lazy/pre bottom/pre branches-ref/pre
+  Pre-Arrow arr/pre >>>/pre pair/pre if/pre lazy/pre error/pre assert=/pre π/pre
   PPre-Arrow arr/ppre >>>/ppre pair/ppre if/ppre lazy/ppre)
 
 (: lift/ppre (All (X Y) ((PMap-Arrow X Y) -> (PPre-Arrow X Y))))
-(define ((lift/ppre f) idx)
-  (lift/pre (f idx)))
+(define ((lift/ppre f) j)
+  (lift/pre (f j)))
 
 (: id/ppre (All (X) (PPre-Arrow X X)))
 (define (id/ppre x)

@@ -5,23 +5,23 @@
 (provide (all-defined-out))
 
 ;; ===================================================================================================
-;; Function arrow
+;; Bottom arrow
 
-(define-type (Bot-Arrow X Y) (X -> (U Y Bottom)))
+(define-type (Bot-Arrow X Y) (X -> (U (just Y) Bottom)))
 
 (: arr/bot (All (X Y) ((X -> Y) -> (Bot-Arrow X Y))))
-(define ((arr/bot f) x) (f x))
+(define ((arr/bot f) x) (just (f x)))
 
 (: >>>/bot (All (X Y Z) ((Bot-Arrow X Y) (Bot-Arrow Y Z) -> (Bot-Arrow X Z))))
 (define ((>>>/bot f1 f2) x)
   (let ([y  (f1 x)])
-    (if (bottom? y) bottom (f2 y))))
+    (if (bottom? y) bottom (f2 (just-value y)))))
 
 (: pair/bot (All (X Y Z) ((Bot-Arrow X Y) (Bot-Arrow X Z) -> (Bot-Arrow X (Pair Y Z)))))
 (define ((pair/bot f1 f2) x)
   (let ([y  (f1 x)])
     (if (bottom? y) y (let ([z  (f2 x)])
-                        (if (bottom? z) z (cons y z))))))
+                        (if (bottom? z) z (just (cons (just-value y) (just-value z))))))))
 
 (: lazy/bot (All (X Y) ((-> (Bot-Arrow X Y)) -> (Bot-Arrow X Y))))
 (define ((lazy/bot f) x) ((f) x))
@@ -29,9 +29,9 @@
 (: if/bot (All (X Y) ((Bot-Arrow X Boolean) (Bot-Arrow X Y) (Bot-Arrow X Y) -> (Bot-Arrow X Y))))
 (define ((if/bot c t f) x)
   (define b (c x))
-  (cond [(eq? b #t)  (t x)]
-        [(eq? b #f)  (f x)]
-        [else  bottom]))
+  (cond [(bottom? b)  bottom]
+        [else  (let ([b  (just-value b)])
+                 (if b (t x) (f x)))]))
 
 (: id/bot (All (X) (Bot-Arrow X X)))
 (define (id/bot x)
@@ -49,12 +49,9 @@
 (define (snd/bot xy)
   (((inst arr/bot (Pair X Y) Y) cdr) xy))
 
-;; ===================================================================================================
-;; Other combinators (play area)
+(: error/bot (All (X Y) (Bot-Arrow X Y)))
+(define (error/bot x) bottom)
 
-;; From Yallop et al
-; app : (X ~> Y)×X ~> Y
-(: app/bot (All (X Y) (Bot-Arrow (Pair (Bot-Arrow X Y) X) Y)))
-;(: app/bot (All (X Y) ((Pair (X -> (U Y Bottom)) X) -> (U Y Bottom))))
-(define (app/bot fx)
-  ((car fx) (cdr fx)))
+(: assert=/bot (All (X) (Bot-Arrow (Pair X X) X)))
+(define (assert=/bot xy)
+  (if (equal? (car xy) (cdr xy)) (just (car xy)) bottom))
