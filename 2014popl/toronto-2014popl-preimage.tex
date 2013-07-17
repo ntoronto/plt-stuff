@@ -43,16 +43,18 @@
 \newcommand{\arrowarr}{\ensuremath{arr}}
 \newcommand{\arrowcomp}{\ensuremath{{>}\mspace{-6mu}{>}\mspace{-6mu}{>}}}
 \newcommand{\arrowpair}{\ensuremath{\mathit{\&\mspace{-7.5mu}\&\mspace{-7.5mu}\&}}}
-%\newcommand{\arrowpair}{\ensuremath{pair}}
 \newcommand{\arrowif}{\ensuremath{ifte}}
 \newcommand{\arrowlazy}{\ensuremath{lazy}}
 \newcommand{\arrowapp}{\ensuremath{app}}
 \newcommand{\arrowrun}{\ensuremath{run}}
 \newcommand{\arrowget}{\ensuremath{get}}
 \newcommand{\arrowerror}{\ensuremath{error}}
+\newcommand{\arrowtrans}{\ensuremath{\eta}}
 
 \newcommand{\gen}{_\mathrm{a}}
 \newcommand{\genb}{_\mathrm{b}}
+\newcommand{\genc}{_\mathrm{a^{\mspace{-2mu}*}}}
+\newcommand{\gend}{_\mathrm{b^{\mspace{-2mu}*}}}
 
 \DeclareMathOperator{\botto}{\arrow_{\mspace{-3mu}\bot}}
 \newcommand{\arrbot}{\arrowarr_{\mspace{-3mu}\bot}}
@@ -63,7 +65,6 @@
 
 \newcommand{\map}{_\mathrm{map}}
 \DeclareMathOperator{\mapto}{\arrow_{\mspace{-21mu}\map}}
-%\DeclareMathOperator{\eqmap}{\mbox{\ensuremath{=_{\mspace{-19mu}\map}}}}
 \newcommand{\liftmap}{\arrowlift\map}
 \newcommand{\arrmap}{\arrowarr\map}
 \newcommand{\compmap}{\arrowcomp\map}
@@ -73,13 +74,38 @@
 
 \newcommand{\pre}{_\mathrm{pre}}
 \DeclareMathOperator{\preto}{\arrow_{\mspace{-19mu}\pre}}
-%\DeclareMathOperator{\eqpre}{=_{\mspace{-17mu}\pre}}
 \newcommand{\liftpre}{\arrowlift\pre}
 \newcommand{\arrpre}{\arrowarr\pre}
 \newcommand{\comppre}{\arrowcomp\pre}
 \newcommand{\pairpre}{\arrowpair\pre}
 \newcommand{\ifpre}{\arrowif\pre}
 \newcommand{\lazypre}{\arrowlazy\pre}
+
+\newcommand{\pbot}{{\bot^{\mspace{-4mu}*}}}
+\DeclareMathOperator{\pbotto}{\arrow_{\mspace{-3mu}\pbot}}
+\newcommand{\arrpbot}{\arrowarr_{\mspace{-3mu}\pbot}}
+\newcommand{\comppbot}{\arrowcomp_{\mspace{-5mu}\pbot}}
+\newcommand{\pairpbot}{\arrowpair_{\mspace{-3mu}\pbot}}
+\newcommand{\ifpbot}{\arrowif_{\mspace{-2mu}\pbot}}
+\newcommand{\lazypbot}{\arrowlazy_{\mspace{-2mu}\pbot}}
+
+\newcommand{\pmap}{_\mathrm{map^*}}
+\DeclareMathOperator{\pmapto}{\arrow_{\mspace{-21mu}\pmap}}
+\newcommand{\liftpmap}{\arrowlift\pmap}
+\newcommand{\arrpmap}{\arrowarr\pmap}
+\newcommand{\comppmap}{\arrowcomp\pmap}
+\newcommand{\pairpmap}{\arrowpair\pmap}
+\newcommand{\ifpmap}{\arrowif\pmap}
+\newcommand{\lazypmap}{\arrowlazy\pmap}
+
+\newcommand{\ppre}{_\mathrm{pre^*}}
+\DeclareMathOperator{\ppreto}{\arrow_{\mspace{-19mu}_{\mathrm{pre*}}}}
+\newcommand{\liftppre}{\arrowlift\ppre}
+\newcommand{\arrppre}{\arrowarr\ppre}
+\newcommand{\compppre}{\arrowcomp\ppre}
+\newcommand{\pairppre}{\arrowpair\ppre}
+\newcommand{\ifppre}{\arrowif\ppre}
+\newcommand{\lazyppre}{\arrowlazy\ppre}
 
 \newcommand{\prepto}{\pto_{\mspace{-19mu}\pre}}
 
@@ -131,6 +157,21 @@ For the bulk of this paper, we
 	\item Approximate the preimage arrow by operating on rectangles instead of generally uncomputable sets.
 \end{enumerate}
 We report on our implementation of the bottom arrow and the approximating preimage arrow.
+
+\begin{equation}
+\begin{CD}
+X \botto Y   @>\liftmap>>   X \mapto Y   @>\liftpre>>   X \preto Y \\
+@V{\eta_\bot}VV             @VV{\eta\map}V              @VV{\eta\pre}V\\
+X \botto' Y  @>>\liftmap'>  X \mapto' Y  @>>\liftpre'>  X \preto' Y
+\end{CD}
+\end{equation}
+
+Formal goals:
+\begin{enumerate}
+	\item Preimages of pure, total functions computed using $X \preto' Y$ are the preimages under $X \botto Y$ (have this, by homomorphism)
+	\item Preimages computed using $X \preto' Y$ are the preimages under $X \botto' Y$ (need to prove $\liftmap'$ and $\liftpre'$ are homomorphisms)
+	\item Running $X \botto' Y$ and $X \preto' Y$ computations always converges
+\end{enumerate}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -458,25 +499,25 @@ XXX: motivate and define informally
 Formally, using the following functions to generate $\emptyset$, complements, and countable unions from families of any type $x$:
 \begin{align}
 	&\begin{aligned}
-		&\sigma@comps : Set~(Set~x) \tto Set~(Set~x) \\
-		&\sigma@comps~\A \ := \ \setb{A \w A'}{A, A' \in \A} \\
+		&\sigma!comps : Set~(Set~x) \tto Set~(Set~x) \\
+		&\sigma!comps~\A \ := \ \setb{A \w A'}{A, A' \in \A} \\
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		&\sigma@unions : Set~(Set~x) \tto Set~(Set~x) \\
-		&\sigma@unions~\A \ := \ \setb{\U\A'}{\A' \subseteq \A \band |\A'| \leq \omega} \\
+		&\sigma!unions : Set~(Set~x) \tto Set~(Set~x) \\
+		&\sigma!unions~\A \ := \ \setb{\U\A'}{\A' \subseteq \A \band |\A'| \leq \omega} \\
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
-		&\sigma@ops : Set~(Set~x) \tto Set~(Set~x) \\
-		&\sigma@ops~\A \ := \ \set{\emptyset} \u (\sigma@comps~\A) \u (\sigma@unions~\A) \\
+		&\sigma!ops : Set~(Set~x) \tto Set~(Set~x) \\
+		&\sigma!ops~\A \ := \ \set{\emptyset} \u (\sigma!comps~\A) \u (\sigma!unions~\A) \\
 	\end{aligned}
 \end{align}
 the following function identifies $\sigma$-algebras:
 \begin{equation}
 \begin{aligned}
-	&\sigma@algebra? : Set~(Set~x) \tto Bool \\
-	&\sigma@algebra?~\A \ := \ (\sigma@ops~\A) \subseteq \A
+	&\sigma!algebra? : Set~(Set~x) \tto Bool \\
+	&\sigma!algebra?~\A \ := \ (\sigma!ops~\A) \subseteq \A
 \end{aligned}
 \end{equation}
 
@@ -497,8 +538,8 @@ The \keyword{trace} of a family of subsets $\A$ with a set $A$ is the result of 
 For any $\sigma$-algebra $\A$ and set $A$, $trace~\A~A$ is a $\sigma$-algebra on $A \i \U\A$.
 \end{lemma}
 
-\begin{lemma}[$\sigma@close$ distributes over $trace$]
-For any family of subsets $\A$ and set $A$, $\sigma@close~(trace~\A~A) = trace~(\sigma@close~\A)~A$.
+\begin{lemma}[$\sigma!close$ distributes over $trace$]
+For any family of subsets $\A$ and set $A$, $\sigma!close~(trace~\A~A) = trace~(\sigma!close~\A)~A$.
 \label{lem:close-distributes-over-trace}
 \end{lemma}
 
@@ -514,24 +555,24 @@ XXX: images of measurable sets under measurable functions are not always measura
 Often, $\sigma$-algebras are too complicated to work with directly.
 In such cases, we reason about them in terms of \keyword{generating families}: simpler families of sets that, when closed under $\sigma$-algebra operations, are $\sigma$-algebras with nice properties.
 
-To generate $\sigma$-algebras, first note that $\sigma@ops$ is monotone and has an upper bound (the powerset $\sigma$-algebra).
+To generate $\sigma$-algebras, first note that $\sigma!ops$ is monotone and has an upper bound (the powerset $\sigma$-algebra).
 Therefore, $close$ can generate a least fixpoint from it:
 \begin{equation}
 \begin{aligned}
-	&\sigma@close : Set~(Set~x) \tto Set~(Set~x) \\
-	&\sigma@close \ := \ close~\sigma@ops~\omega_1
+	&\sigma!close : Set~(Set~x) \tto Set~(Set~x) \\
+	&\sigma!close \ := \ close~\sigma!ops~\omega_1
 \end{aligned}
 \end{equation}
 Here, $\omega_1$ is the \keyword{first uncountable ordinal}, or the least ordinal containing every countable ordinal.\footnote{\lzfclang does not decide the continuum hypothesis; i.e. whether $\omega_1 = |\Re|$.}
 
 \begin{lemma}[generated $\sigma$-algebras]
-Let $\A$ be a family of sets and $\A' := \sigma@close~\A$.
+Let $\A$ be a family of sets and $\A' := \sigma!close~\A$.
 Then $\A'$ is the smallest $\sigma$-algebra for which $\A \subseteq \A'$.
 \label{lem:generated-sigma-algebra}
 \end{lemma}
 
 Perhaps the most well-studied generated $\sigma$-algebras are \keyword{Borel $\sigma$-algebras}: those generated from topologies.
-For example, if $\tau$ is the standard topology on $\Re$, containing the open intervals and uncountable unions of open intervals, then $\sigma@close~\tau$ is the Borel $\sigma$-algebra for that topology, containing all intervals (open, closed and half-open), and their countable unions and complements.
+For example, if $\tau$ is the standard topology on $\Re$, containing the open intervals and uncountable unions of open intervals, then $\sigma!close~\tau$ is the Borel $\sigma$-algebra for that topology, containing all intervals (open, closed and half-open), and their countable unions and complements.
 
 Other well-studied, generated $\sigma$-algebras are \keyword{product $\sigma$-algebras}: those generated from the rectangles of, or the pairwise products of sets from, other $\sigma$-algebras.
 For example, the product $\sigma$-algebra $\A_1 \otimes \A_2$ can be defined by
@@ -543,7 +584,7 @@ For example, the product $\sigma$-algebra $\A_1 \otimes \A_2$ can be defined by
 \nonumber \\[-6pt]
 	&\begin{aligned}
 		&(\otimes) : Set~(Set~x) \tto Set~(Set~y) \tto Set~(Set~\pair{x,y}) \\
-		&\A_1 \otimes \A_2 \ := \ \sigma@close~(\A_1 \boxtimes \A_2) \\
+		&\A_1 \otimes \A_2 \ := \ \sigma!close~(\A_1 \boxtimes \A_2) \\
 	\end{aligned}
 \end{align}
 However, the following theorem is usually taken (somewhat less constructively) as the definition of $\A_1 \otimes \A_2$.
@@ -604,16 +645,16 @@ For example, suppose we define the \keyword{function arrow} with choice, by defi
 \end{equation}
 and try to define the following recursive function:
 \begin{equation}
-	halt@on@true \ := \ \arrowif~(\arrowarr~id)~(\arrowarr~id)~halt@on@true
+	halt!on!true \ := \ \arrowif~(\arrowarr~id)~(\arrowarr~id)~halt!on!true
 \end{equation}
 The defining expression diverges in a strict $\lambda$-calculus.
 In a nonstrict $\lambda$-calculus, it diverges only when applied to $false$.
 
-Using $\arrowlazy~f~a := f~0~a$, which receives thunks and returns arrow computations, we can write $halt@on@true$ as
+Using $\arrowlazy~f~a := f~0~a$, which receives thunks and returns arrow computations, we can write $halt!on!true$ as
 \begin{equation}
 \begin{aligned}
-	&halt@on@true \ := \ 
-	\arrowif~(\arrowarr~id)~(\arrowarr~id)~(\arrowlazy~\fun{0}{halt@on@true})
+	&halt!on!true \ := \ 
+	\arrowif~(\arrowarr~id)~(\arrowarr~id)~(\arrowlazy~\fun{0}{halt!on!true})
 \end{aligned}
 \end{equation}
 which diverges only when applied to $false$ in any $\lambda$-calculus.
@@ -703,7 +744,7 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 			\arrowcomp\gen~
 		\meaningof{\mathit{e_b}}\gen
 \\
-	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{list@ref~\gamma~\mathit{n}}
+	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{list!ref~\gamma~\mathit{n}}
 \\
 	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
 		\arrowif\gen~
@@ -1015,7 +1056,7 @@ If $A = \emptyset$, then $\liftmap~(\lazybot~f)~A = \emptyset$ (the empty mappin
 \end{align*}
 Substituting $g~0$ for $\liftmap~(f~0)$ gives a definition for $\lazymap$ (Figure~\ref{fig:mapping-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-lazy} holds.
 
-\subsection{Theorems}
+\subsection{Correctness}
 
 \begin{theorem}[mapping arrow correctness]
 $\liftmap$ is an arrow+choice homomorphism.
@@ -1052,11 +1093,11 @@ Converting a mapping to a lazy preimage mapping:
 Applying a preimage mapping to any subset of its codomain:
 \begin{equation}
 \begin{aligned}
-	&pre@ap : (X \prepto Y) \tto Set~Y \tto Set~X \\
-	&pre@ap~\pair{Y',p}~B \ := \ p~(B \i Y')
+	&pre!ap : (X \prepto Y) \tto Set~Y \tto Set~X \\
+	&pre!ap~\pair{Y',p}~B \ := \ p~(B \i Y')
 \end{aligned}
 \end{equation}
-The necessary property here is that using $pre@ap$ to compute preimages is the same as computing them from a mapping using $preimage$.
+The necessary property here is that using $pre!ap$ to compute preimages is the same as computing them from a mapping using $preimage$.
 
 \begin{lemma}
 Let $g \in X \pto Y$.
@@ -1065,8 +1106,8 @@ $preimage~g~(B \i Y') = preimage~g~B$.
 \label{lem:preimage-restricted-range}
 \end{lemma}
 
-\begin{theorem}[$pre@ap$ computes preimages]
-Let $g \in X \pto Y$. For all $B \subseteq Y$, $pre@ap~(pre~g)~B = preimage~g~B$.
+\begin{theorem}[$pre!ap$ computes preimages]
+Let $g \in X \pto Y$. For all $B \subseteq Y$, $pre!ap~(pre~g)~B = preimage~g~B$.
 \label{thm:pre-like-preimage}
 \end{theorem}
 \begin{proof}
@@ -1090,13 +1131,13 @@ The precise correspondence is the subject of the next three theorems, which will
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&pre@ap : (X \prepto Y) \tto Set~Y \tto Set~X \\
-		&pre@ap~\pair{Y',p}~B \ := \ p~(B \i Y') 
+		&pre!ap : (X \prepto Y) \tto Set~Y \tto Set~X \\
+		&pre!ap~\pair{Y',p}~B \ := \ p~(B \i Y') 
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&pre@range : (X \prepto Y) \tto Set~Y \\
-		&pre@range \ := \ fst
+		&pre!range : (X \prepto Y) \tto Set~Y \\
+		&pre!range \ := \ fst
 	\end{aligned}
 \end{aligned}
 &\tab\tab\tab
@@ -1112,7 +1153,7 @@ The precise correspondence is the subject of the next three theorems, which will
 \\[-6pt]
 	&\begin{aligned}[t]
 		&(\circ\pre) : (Y \prepto Z) \tto (X \prepto Y) \tto (X \prepto Z) \\
-		&\pair{Z',p_2} \circ\pre h_1 \ := \ \pair{Z', \fun{C}{pre@ap~h_1~(p_2~C)}}
+		&\pair{Z',p_2} \circ\pre h_1 \ := \ \pair{Z', \fun{C}{pre!ap~h_1~(p_2~C)}}
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
@@ -1120,8 +1161,8 @@ The precise correspondence is the subject of the next three theorems, which will
 		&\lzfcsplit{
 			&h_1 \uplus\pre h_2 \ := \ 
 			\lzfclet{
-					Y' & (pre@range~h_1) \u (pre@range~h_2) \\
-					p & \fun{B}{(pre@ap~h_1~B) \uplus (pre@ap~h_2~B)}
+					Y' & (pre!range~h_1) \u (pre!range~h_2) \\
+					p & \fun{B}{(pre!ap~h_1~B) \uplus (pre!ap~h_2~B)}
 				}{\pair{Y',p}}
 		}
 	\end{aligned}
@@ -1135,7 +1176,7 @@ The precise correspondence is the subject of the next three theorems, which will
 First, we need a new notion of equivalence.
 
 \begin{definition}
-Two preimage mappings $h_1 : X \prepto Y$ and $h_2 : X \prepto Y$ are equivalent, or $h_1 \equiv h_2$, when $pre@ap~h_1~B = pre@ap~h_2~B$ for all $B \subseteq Y$.
+Two preimage mappings $h_1 : X \prepto Y$ and $h_2 : X \prepto Y$ are equivalent, or $h_1 \equiv h_2$, when $pre!ap~h_1~B = pre!ap~h_2~B$ for all $B \subseteq Y$.
 \end{definition}
 
 XXX: define equivalence in terms of equivalence, check observational equivalence in the proofs (specifically divergence)
@@ -1159,7 +1200,7 @@ Let $g_1 \in X \pto Y_1$ and $g_2 \in X \pto Y_2$. Then $pre~\pair{g_1,g_2}\map 
 Let $\pair{Y_1',p_1} := pre~g_1$ and $\pair{Y_2',p_2} := pre~g_2$.
 Starting from the right side, for all $B \in Y_1 \times Y_2$,
 \begin{align*}
-	&pre@ap~\pair{pre~g_1,pre~g_2}\pre~B 
+	&pre!ap~\pair{pre~g_1,pre~g_2}\pre~B 
 \\
 	&\tab = \ 
 		\lzfclet{
@@ -1177,7 +1218,7 @@ Starting from the right side, for all $B \in Y_1 \times Y_2$,
 \\
 	&\tab = \ preimage~\pair{g_1,g_2}\map~B
 \\
-	&\tab = \ pre@ap~(pre~\pair{g_1,g_2}\map)~B
+	&\tab = \ pre!ap~(pre~\pair{g_1,g_2}\map)~B
 \end{align*}
 \end{proof}
 
@@ -1200,22 +1241,22 @@ Then $pre~(g_2 \circ\map g_1) \equiv (pre~g_2) \circ\pre (pre~g_1)$.
 Let $\pair{Z',p_2} := pre~g_2$.
 Starting from the right side, for all $C \subseteq Z$,
 \begin{align*}
-	&pre@ap~((pre~g_2) \circ\pre (pre~g_1))~C
+	&pre!ap~((pre~g_2) \circ\pre (pre~g_1))~C
 \\
 	&\tab = \ 
 		\lzfclet{
-			h & \fun{C}{pre@ap~(pre~g_1)~(p_2~C)} \\
+			h & \fun{C}{pre!ap~(pre~g_1)~(p_2~C)} \\
 			}{h~(C \i Z')}
 \\
-	&\tab = \ pre@ap~(pre~g_1)~(p_2~(C \i Z'))
+	&\tab = \ pre!ap~(pre~g_1)~(p_2~(C \i Z'))
 \\
-	&\tab = \ pre@ap~(pre~g_1)~(pre@ap~(pre~g_2)~C)
+	&\tab = \ pre!ap~(pre~g_1)~(pre!ap~(pre~g_2)~C)
 \\
 	&\tab = \ preimage~g_1~(preimage~g_2~C)
 \\
 	&\tab = \ preimage~(g_2 \circ\map g_1)~C
 \\
-	&\tab = \ pre@ap~(pre~(g_2 \circ\map g_1))~C
+	&\tab = \ pre!ap~(pre~(g_2 \circ\map g_1))~C
 \end{align*}
 \end{proof}
 
@@ -1238,15 +1279,15 @@ Then $pre~(g_1 \uplus\map g_2) \equiv (pre~g_1) \uplus\pre (pre~g_2)$.
 Let $Y_1' := range~g_1$ and $Y_2' := range~g_2$.
 Starting from the right side, for all $B \subseteq Y$,
 \begin{align*}
-	&pre@ap~((pre~g_1) \uplus\pre (pre~g_2))~B
+	&pre!ap~((pre~g_1) \uplus\pre (pre~g_2))~B
 \\
 	&\tab = \ 
 		\lzfclet{
 			\! Y' & Y_1' \u Y_2' \\
-			h & \fun{B}{(pre@ap~(pre~g_1)~B) \uplus (pre@ap~(pre~g_2)~B)}
+			h & \fun{B}{(pre!ap~(pre~g_1)~B) \uplus (pre!ap~(pre~g_2)~B)}
 		}{h~(B \i Y')}
 \\
-	&\tab = \ \lzfcsplit{&(pre@ap~(pre~g_1)~(B \i (Y_1' \u Y_2')))\ \uplus\\ &(pre@ap~(pre~g_2)~(B \i (Y_1' \u Y_2')))}
+	&\tab = \ \lzfcsplit{&(pre!ap~(pre~g_1)~(B \i (Y_1' \u Y_2')))\ \uplus\\ &(pre!ap~(pre~g_2)~(B \i (Y_1' \u Y_2')))}
 \\
 	&\tab = \ \lzfcsplit{&(preimage~g_1~(B \i (Y_1' \u Y_2')))\ \uplus\\ &(preimage~g_2~(B \i (Y_1' \u Y_2')))}
 \\
@@ -1254,7 +1295,7 @@ Starting from the right side, for all $B \subseteq Y$,
 \\
 	&\tab = \ preimage~(g_1 \uplus\map g_2)~B
 \\
-	&\tab = \ pre@ap~(pre~(g_1 \uplus\map g_2))~B
+	&\tab = \ pre!ap~(pre~(g_1 \uplus\map g_2))~B
 \end{align*}
 \end{proof}
 
@@ -1298,7 +1339,7 @@ The following subsections derive $(\pairpre)$, $(\comppre)$, $\ifpre$ and $\lazy
 		&(h_1~\comppre~h_2)~A \ := \ 
 			\lzfclet{
 				h_1' & h_1~A \\
-				h_2' & h_2~(pre@range~h_1')
+				h_2' & h_2~(pre!range~h_1')
 			}{h_2' \circ\pre h_1'}
 	\end{aligned} \\
 \\[-6pt]
@@ -1314,8 +1355,8 @@ The following subsections derive $(\pairpre)$, $(\comppre)$, $\ifpre$ and $\lazy
 		&\ifpre~h_1~h_2~h_3~A \ := \ 
 			\lzfclet{
 				h_1' & h_1~A \\
-				h_2' & h_2~(pre@ap~h_1'~\set{true}) \\
-				h_3' & h_3~(pre@ap~h_1'~\set{false})
+				h_2' & h_2~(pre!ap~h_1'~\set{true}) \\
+				h_3' & h_3~(pre!ap~h_1'~\set{false})
 			}{h_2' \uplus\pre h_3'}
 	\end{aligned} \\
 \\[-6pt]
@@ -1341,96 +1382,96 @@ The following subsections derive $(\pairpre)$, $(\comppre)$, $\ifpre$ and $\lazy
 
 Starting with the left side of~\eqref{eqn:lift-distributes-over-pair}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-pairing}, and rewrite in terms of $\liftpre$:
 \begin{align*}
-	&pre@ap~(\liftpre~(g_1~\pairmap~g_2)~A)~B
+	&pre!ap~(\liftpre~(g_1~\pairmap~g_2)~A)~B
 \\
-	&\tab \equiv \ pre@ap~(pre~\pair{g_1~A, g_2~A}\map)~B
+	&\tab \equiv \ pre!ap~(pre~\pair{g_1~A, g_2~A}\map)~B
 \\
-	&\tab \equiv \ pre@ap~\pair{pre~(g_1~A), pre~(g_2~A)}\pre~B
+	&\tab \equiv \ pre!ap~\pair{pre~(g_1~A), pre~(g_2~A)}\pre~B
 \\
-	&\tab \equiv \ pre@ap~\pair{\liftpre~g_1~A, \liftpre~g_2~A}\pre~B
+	&\tab \equiv \ pre!ap~\pair{\liftpre~g_1~A, \liftpre~g_2~A}\pre~B
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\pairpre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-pair} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre!ap$ from both sides of the equivalence gives a definition of $(\pairpre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-pair} holds.
 
 \subsection{Case: Composition}
 
 Starting with the left side of~\eqref{eqn:lift-distributes-over-comp}, we expand definitions, apply Theorem~\ref{thm:preimage-mapping-composition} and rewrite in terms of $\liftpre$:
 \begin{align*}
-	&pre@ap~(\liftpre~(g_1~\compmap~g_2)~A)~C
+	&pre!ap~(\liftpre~(g_1~\compmap~g_2)~A)~C
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1' & g_1~A \\
 			g_2' & g_2~(range~g_1')
-		}{pre@ap~(pre~(g_2' \circ\map g_1'))~C}
+		}{pre!ap~(pre~(g_2' \circ\map g_1'))~C}
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1' & g_1~A \\
 			g_2' & g_2~(range~g_1')
-		}{pre@ap~((pre~g_1') \circ\pre (pre~g_2'))~C}
+		}{pre!ap~((pre~g_1') \circ\pre (pre~g_2'))~C}
 \\
 	&\tab \equiv \
 		\lzfclet{
 			h_1 & \liftpre~g_1~A \\
-			h_2 & \liftpre~g_2~(pre@range~h_1)
-		}{pre@ap~(h_2 \circ\pre h_1)~C}
+			h_2 & \liftpre~g_2~(pre!range~h_1)
+		}{pre!ap~(h_2 \circ\pre h_1)~C}
 \numberthis
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $(\comppre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-comp} holds.
+Substituting $h_1$ for $\liftpre~g_1$ and $h_2$ for $\liftpre~g_2$, and removing the application of $pre!ap$ from both sides of the equivalence gives a definition of $(\comppre)$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-comp} holds.
 
 \subsection{Case: Conditional}
 
 Starting with the left side of~\eqref{eqn:lift-distributes-over-if}, we expand terms, apply Theorem~\ref{thm:piecewise-preimage-mappings}, rewrite in terms of $\liftpre$, and apply Theorem~\ref{thm:pre-like-preimage} in the definitions of $h_2$ and $h_3$:
 \begin{align*}
-	&pre@ap~(\liftpre~(\ifmap~g_1~g_2~g_3)~A)~B
+	&pre!ap~(\liftpre~(\ifmap~g_1~g_2~g_3)~A)~B
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1' & g_1~A \\
 			g_2' & g_2~(preimage~g_1'~\set{true}) \\
 			g_3' & g_3~(preimage~g_1'~\set{false})
-		}{pre@ap~(pre~(g_2' \uplus\map g_3'))~B}
+		}{pre!ap~(pre~(g_2' \uplus\map g_3'))~B}
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1' & g_1~A \\
 			g_2' & g_2~(preimage~g_1'~\set{true}) \\
 			g_3' & g_3~(preimage~g_1'~\set{false})
-		}{pre@ap~((pre~g_2') \uplus\pre (pre~g_3'))~B}
+		}{pre!ap~((pre~g_2') \uplus\pre (pre~g_3'))~B}
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			h_1 & \liftpre~g_1~A \\
-			h_2 & \liftpre~g_2~(pre@ap~h_1~\set{true}) \\
-			h_3 & \liftpre~g_3~(pre@ap~h_1~\set{false})
-		}{pre@ap~(h_2 \uplus\pre h_3)~B}
+			h_2 & \liftpre~g_2~(pre!ap~h_1~\set{true}) \\
+			h_3 & \liftpre~g_3~(pre!ap~h_1~\set{false})
+		}{pre!ap~(h_2 \uplus\pre h_3)~B}
 \end{align*}
-Substituting $h_1$ for $\liftpre~g_1$, $h_2$ for $\liftpre~g_2$ and $h_3$ for $\liftpre~g_3$, and removing the application of $pre@ap$ from both sides of the equivalence gives a definition of $\ifpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-if} holds.
+Substituting $h_1$ for $\liftpre~g_1$, $h_2$ for $\liftpre~g_2$ and $h_3$ for $\liftpre~g_3$, and removing the application of $pre!ap$ from both sides of the equivalence gives a definition of $\ifpre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-if} holds.
 
 \subsection{Case: Laziness}
 
 Starting with the left side of~\eqref{eqn:lift-distributes-over-lazy}, expand definitions, distribute $pre$ over the branches of $if$, and rewrite in terms of $\liftpre~(g~0)$:
 \begin{align*}
-	&pre@ap~(\liftpre~(\lazymap~g)~A)~B
+	&pre!ap~(\liftpre~(\lazymap~g)~A)~B
 \\
 	&\tab\equiv \
 		\lzfclet{
 			g' & if~(A = \emptyset)~\emptyset~(g~0~A)
-		}{pre@ap~(pre~g')~B}
+		}{pre!ap~(pre~g')~B}
 \\
 	&\tab\equiv \
 		\lzfclet{
 			h & if~(A = \emptyset)~(pre~\emptyset)~(pre~(g~0~A))
-		}{pre@ap~h~B}
+		}{pre!ap~h~B}
 \\
 	&\tab\equiv \
 		\lzfclet{
 			h & if~(A = \emptyset)~(pre~\emptyset)~(\liftpre~(g~0)~A)
-		}{pre@ap~h~B}
+		}{pre!ap~h~B}
 \end{align*}
-Substituting $h~0$ for $\liftpre~(g~0)$ and removing the application of $pre@ap$ from both sides of the equivalence gives a definition for $\lazypre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-lazy} holds.
+Substituting $h~0$ for $\liftpre~(g~0)$ and removing the application of $pre!ap$ from both sides of the equivalence gives a definition for $\lazypre$ (Figure~\ref{fig:preimage-arrow-defs}) for which~\eqref{eqn:lift-distributes-over-lazy} holds.
 
-\subsection{Theorems}
+\subsection{Correctness}
 
 \begin{theorem}[preimage arrow correctness]
 $\liftpre$ is an arrow+choice homomorphism.
@@ -1485,7 +1526,7 @@ Multi-argument combinators split the tree and pass sub-trees to sub-computations
 
 We have tried both ways with arrows defined using pairing.
 In each case, the resulting definitions are large, conceptually difficult, and hard to formally manipulate.
-Fortunately, assigning each sub-computation a unique index into a tree-shaped, \emph{constant} random source, and passing the source applicatively, is relatively easy.
+Fortunately, assigning each sub-computation a unique index into a tree-shaped random source, and passing it unchanged, is relatively easy.
 
 We first need a way to assign unique indexes.
 
@@ -1516,16 +1557,16 @@ With this alternative, left-to-right evaluation order can be made to correspond 
 
 XXX: \keyword{arrow transformer}: an arrow whose combinators are defined entirely in terms of another arrow
 
-XXX: computations receive an index and return an arrow from a store paired with $x$ to $y$:
+XXX: computations receive an index and return an arrow from a store of type $s$ paired with $x$, to $y$:
 \begin{equation}
-	AStore~(x \arrow\gen y) \ ::= \ J \tto \pair{s,x} \arrow\gen y
+	AStore~s~(x \arrow\gen y) \ ::= \ J \tto (\pair{s,x} \arrow\gen y)
 \end{equation}
 
-XXX: motivational wurds for definition:
+XXX: motivational wurds for definition of lift:
 \begin{equation}
 \begin{aligned}
-	&\arrowlift\genb : x \arrow\gen y \tto AStore~(x \arrow\gen y) \\
-	&\arrowlift\genb~f~j \ := \ \arrowarr\gen~snd~\arrowcomp\gen~f
+	&\arrowtrans\genc : (x \arrow\gen y) \tto AStore~s~(x \arrow\gen y) \\
+	&\arrowtrans\genc~f~j \ := \ \arrowarr\gen~snd~\arrowcomp\gen~f
 \end{aligned}
 \end{equation}
 
@@ -1533,43 +1574,43 @@ XXX: motivational wurds for definition:
 \begin{align*}
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		x \arrow\genb y \ ::= \ AStore~(x \arrow\gen y) \ ::= \ J \tto (\pair{s,x} \arrow\gen y)
+		x \arrow\genc y \ ::= \ AStore~s~(x \arrow\gen y) \ ::= \ J \tto (\pair{s,x} \arrow\gen y)
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\arrowarr\genb : (x \tto y) \tto (x \arrow\genb y) \\
-		&\arrowarr\genb \ := \ \arrowlift\genb \circ \arrowarr\gen
+		&\arrowarr\genc : (x \tto y) \tto (x \arrow\genc y) \\
+		&\arrowarr\genc \ := \ \arrowtrans\genc \circ \arrowarr\gen
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&(\arrowcomp\genb) : (x \arrow\genb y) \tto (y \arrow\genb z) \tto (x \arrow\genb z) \\
-		&(k_1~\arrowcomp\genb~k_2)~j \ := \
-			(\arrowarr\gen~fst~\arrowpair\gen~k_1~(left~j))~\arrowcomp\gen~k_2~(right~j)
+		&(\arrowcomp\genc) : (x \arrow\genc y) \tto (y \arrow\genc z) \tto (x \arrow\genc z) \\
+		&(k_1~\arrowcomp\genc~k_2)~j \ := \\
+			&\tab(\arrowarr\gen~fst~\arrowpair\gen~k_1~(left~j))~\arrowcomp\gen~k_2~(right~j)
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&(\arrowpair\genb) : (x \arrow\genb y) \tto (x \arrow\genb z) \tto (x \arrow\genb \pair{y,z}) \\
-		&(k_1~\arrowpair\genb~k_2)~j \ := \ k_1~(left~j)~\arrowpair\gen~k_2~(right~j)
+		&(\arrowpair\genc) : (x \arrow\genc y_1) \tto (x \arrow\genc y_2) \tto (x \arrow\genc \pair{y_1,y_2}) \\
+		&(k_1~\arrowpair\genc~k_2)~j \ := \ k_1~(left~j)~\arrowpair\gen~k_2~(right~j)
 	\end{aligned} \\
 \end{aligned}
 &\tab\tab\tab
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		&(\arrowif\genb) : (x \arrow\genb Bool) \tto (x \arrow\genb y) \tto (x \arrow\genb y) \tto (x \arrow\genb y) \\
-		&\arrowif\genb~k_1~k_2~k_3~j \ := \
+		&\arrowif\genc : (x \arrow\genc Bool) \tto (x \arrow\genc y) \tto (x \arrow\genc y) \tto (x \arrow\genc y) \\
+		&\arrowif\genc~k_1~k_2~k_3~j \ := \
 			\lzfcsplit{\arrowif\gen~&(k_1~(left~j)) \\ &(k_2~(left~(right~j))) \\ &(k_3~(right~(right~j)))}
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\arrowlazy\genb : (1 \tto (x \arrow\genb y)) \tto (x \arrow\genb y) \\
-		&\arrowlazy\genb~k~j \ := \ \arrowlazy\gen~\fun{0}{k~0~j}
+		&\arrowlazy\genc : (1 \tto (x \arrow\genc y)) \tto (x \arrow\genc y) \\
+		&\arrowlazy\genc~k~j \ := \ \arrowlazy\gen~\fun{0}{k~0~j}
 	\end{aligned} \\
 \\[-6pt]
 \hline
 \\[-6pt]
 	&\begin{aligned}[t]
-		&\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y) \\
-		&\arrowlift\genb~f~j \ := \ \arrowarr\gen~snd~\arrowcomp\gen~f
+		&\arrowtrans\genc : (x \arrow\gen y) \tto (x \arrow\genc y) \\
+		&\arrowtrans\genc~f~j \ := \ \arrowarr\gen~snd~\arrowcomp\gen~f
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -1580,22 +1621,22 @@ XXX: motivational wurds for definition:
 
 Figure~\ref{fig:astore-arrow-defs} defines the $AStore$ arrow transformer.
 As with the other arrows, proving that its lift is a homomorphism allows us to prove that programs interpreted as its computations are correct.
-Again, to do so, we need to extend equivalence to be more extensional for arrows $AStore~(x \arrow\gen y)$.
+Again, to do so, we need to extend equivalence to be more extensional for arrows $AStore~s~(x \arrow\gen y)$.
 
 \begin{definition}[$AStore$ arrow equivalence]
 Two $AStore$ arrow computations $k_1$ and $k_2$ are equivalent, or $k_1 \equiv k_2$, when $k_1~j \equiv k_2~j$ for all $j \in J$.
 \end{definition}
 
 \begin{theorem}[$AStore$ arrow correctness]
-Let $x \arrow\genb y ::= AStore~(x \arrow\gen y)$.
-$\arrowlift\genb$ is an arrow+choice homomorphism.
+Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$.
+$\arrowtrans\genc$ is an arrow+choice homomorphism.
 \end{theorem}
 \begin{proof}
-Defining $\arrowarr\genb$ as a composition clearly meets the first homomorphism identity~\eqref{eqn:lift-distributes-over-arr}.
+Defining $\arrowarr\genc$ as a composition clearly meets the first homomorphism identity~\eqref{eqn:lift-distributes-over-arr}.
 
 \emph{Composition.} Starting with the right side of~\eqref{eqn:lift-distributes-over-comp}, expand definitions and use $(\arrowarr\gen~f~\arrowpair\gen~f_1)~\arrowcomp\gen~\arrowarr\gen~snd \equiv f_1$:
 \begin{align*}
-	&(\arrowlift\genb~f_1~\arrowcomp\genb~\arrowlift\genb~f_2)~j
+	&(\arrowtrans\genc~f_1~\arrowcomp\genc~\arrowtrans\genc~f_2)~j
 \\
 	&\tab\equiv\ 
 		(\arrowarr\gen~fst~\arrowpair\gen~(\arrowarr\gen~snd~\arrowcomp\gen~f_1))~
@@ -1606,12 +1647,12 @@ Defining $\arrowarr\genb$ as a composition clearly meets the first homomorphism 
 		\arrowarr\gen~snd~\arrowcomp\gen~f_1~\arrowcomp\gen~f_2
 \\
 	&\tab\equiv\
-		\arrowlift\genb~(f_1~\arrowcomp\gen~f_2)~j
+		\arrowtrans\genc~(f_1~\arrowcomp\gen~f_2)~j
 \end{align*}
 
 \emph{Pairing.} Starting with the right side of~\eqref{eqn:lift-distributes-over-pair}, expand definitions and use the arrow law $\arrowarr\gen~f~\arrowcomp\gen~(f_1~\arrowpair\gen~f_2) \equiv (\arrowarr\gen~f~\arrowcomp\gen~f_1)~\arrowpair\gen~(\arrowarr\gen~f~\arrowcomp\gen~f_2)$:
 \begin{align*}
-	&(\arrowlift\genb~f_1~\arrowpair\genb~\arrowlift\genb~f_2)~j
+	&(\arrowtrans\genc~f_1~\arrowpair\genc~\arrowtrans\genc~f_2)~j
 \\
 	&\tab\equiv\ 
 		(\arrowarr\gen~snd~\arrowcomp\gen~f_1)~
@@ -1622,12 +1663,12 @@ Defining $\arrowarr\genb$ as a composition clearly meets the first homomorphism 
 		\arrowarr\gen~snd~\arrowcomp\gen~(f_1~\arrowpair\gen~f_2)
 \\
 	&\tab\equiv\
-		\arrowlift\genb~(f_1~\arrowpair\gen~f_2)~j
+		\arrowtrans\genc~(f_1~\arrowpair\gen~f_2)~j
 \end{align*}
 
 \emph{Conditional.} Starting with the right side of~\eqref{eqn:lift-distributes-over-if}, expand definitions and use the arrow law $\arrowarr\gen~f~\arrowcomp\gen~\arrowif\gen~f_1~f_2~f_3 \equiv \arrowif\gen~(\arrowarr\gen~f~\arrowcomp\gen~f_1)~(\arrowarr\gen~f~\arrowcomp\gen~f_2)~(\arrowarr\gen~f~\arrowcomp\gen~f_3)$:
 \begin{align*}
-	&(\arrowif\genb~(\arrowlift\genb~f_1)~(\arrowlift\genb~f_2)~(\arrowlift\genb~f_3))~j
+	&(\arrowif\genc~(\arrowtrans\genc~f_1)~(\arrowtrans\genc~f_2)~(\arrowtrans\genc~f_3))~j
 \\
 	&\tab\equiv\ 
 		\lzfcsplit{\arrowif\gen~
@@ -1639,12 +1680,12 @@ Defining $\arrowarr\genb$ as a composition clearly meets the first homomorphism 
 		\arrowarr\gen~snd~\arrowcomp\gen~(\arrowif~f_1~f_2~f_3)
 \\
 	&\tab\equiv\ 
-		\arrowlift\genb~(\arrowif~f_1~f_2~f_3)~j
+		\arrowtrans\genc~(\arrowif~f_1~f_2~f_3)~j
 \end{align*}
 
 \emph{Laziness.} Starting with the right side of~\eqref{eqn:lift-distributes-over-lazy}, expand definitions, $\beta$-expand within the outer thunk, and use the arrow law $\arrowarr\gen~f~\arrowcomp\gen~\arrowlazy\gen~f_1 \equiv \arrowlazy\gen~\fun{0}{\arrowarr\gen~f~\arrowcomp\gen~f_1~0}$:
 \begin{align*}
-	&(\arrowlazy\genb~\fun{0}{\arrowlift\genb~(f~0)})~j
+	&(\arrowlazy\genc~\fun{0}{\arrowtrans\genc~(f~0)})~j
 \\
 	&\tab\equiv\ 
 		\arrowlazy\gen~\fun{0}{(\fun{0}\fun{j}{\arrowarr\gen~snd~\arrowcomp\gen~f~0})~0~j}
@@ -1656,82 +1697,157 @@ Defining $\arrowarr\genb$ as a composition clearly meets the first homomorphism 
 		\arrowarr\gen~snd~\arrowcomp\gen~\arrowlazy\gen~f
 \\
 	&\tab\equiv\ 
-		\arrowlift\genb~(\arrowlazy\gen~f)~j
+		\arrowtrans\genc~(\arrowlazy\gen~f)~j
 \end{align*}
+
+XXX: all of these rely on arrow laws that aren't proved for the mapping and preimage arrows
 \end{proof}
 
 \begin{corollary}[semantic correctness]
-Let $x \arrow\genb y ::= AStore~(x \arrow\gen y)$. If $\meaningof{\mathit{e}}\gen : x \arrow\gen y$, then $\arrowlift\genb~\meaningof{\mathit{e}}\gen \equiv \meaningof{\mathit{e}}\genb$ and $\meaningof{\mathit{e}}\genb : x \arrow\genb y$.
+Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$. If $\meaningof{\mathit{e}}\gen : x \arrow\gen y$, then $\arrowtrans\genc~\meaningof{\mathit{e}}\gen \equiv \meaningof{\mathit{e}}\genc$ and $\meaningof{\mathit{e}}\genc : x \arrow\genc y$.
+\label{cor:astore-semantic-correctness}
 \end{corollary}
+
+In particular, Corollary~\ref{cor:astore-semantic-correctness} implies that, if a pure let-calculus expression is interpreted as a computation $k : AStore~S~(X \preto Y)$, then $k~j_0$ correctly computes preimages.
+We still need to know that preimages under functions that use the store are computed correctly, which we will get to after defining stores and combinators that access them.
+
 
 \subsection{Probabilistic Programs}
 
-Define $\Omega := J \to [0,1]$ as the set of infinite random sources
+Define $R := J \to [0,1]$ as the set of infinite random sources.
+Each $r \in R$ is a total mapping from an expression index to a random number.
+Equivalently, each $r \in R$ is an infinite vector of random numbers indexed by $J$.
 
-Store type: $s ::= \Omega$
-
-
+Let $x \arrow\genc y ::= AStore~R~(x \arrow\gen y)$.
+The following combinator returns the number at its own index in the random source:
 \begin{equation}
 \begin{aligned}
-	&random\genb : x \arrow\genb [0,1] \\
-	&random\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~(\pi~j)
+	&random\genc : x \arrow\genc [0,1] \\
+	&random\genc~j \ := \ \arrowarr\gen~(fst~\arrowcomp~\pi~j)
 \end{aligned}
 \end{equation}
-
+We extend the let-calculus semantic function with
 \begin{equation}
-	\meaningof{random}\genb \ :\equiv \ random\genb
+	\meaningof{random}\genc :\equiv random\genc
 \end{equation}
-
-
+for arrows $b$ for which $random\genc$ is defined.
 
 \subsection{Partial Programs}
 
-Let $Z \subset J \to Bool$ be the set of $z \in J \to Bool$ such that $z~j = true$ for only finitely many $j$
+Divergence is an applicative effect, so it should not be too surprising that it can be modeled using an applicative store.
+Roughly, the store determines which branch of each conditional, if any, is allowed to continue computing.
 
-Store type: $s ::= Z$
+\begin{definition}[branch trace]
+A \mykeyword{branch trace} is a total mapping $t \in J \to Bool_\bot$ such that $t~j = true$ or $t~j = false$ for no more than finitely many $j \in J$.
+\end{definition}
 
-\newcommand{\arrowgetlazy}{\ensuremath{getz}}
-
+Let $T$ be the largest subset of branch traces in $J \to Bool_\bot$, and $x \arrow\genc y ::= AStore~T~(x \arrow\gen y)$.
+The following combinator returns $t~j$ using its own index $j$:
 \begin{equation}
 \begin{aligned}
-	&\arrowgetlazy\genb : x \arrow\genb Bool \\
-	&\arrowgetlazy\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~(\pi~j)
+	&branch\genc : x \arrow\genc Bool \\
+	&branch\genc~j \ := \ \arrowarr\gen~(fst~\arrowcomp~\pi~j)
 \end{aligned}
 \end{equation}
+Using $branch\genc$, we define an additional if-then-else combinator, which checks to see whether its conditional expression agrees with the branch trace:
+\begin{align}
+	&\begin{aligned}
+		&agrees : \pair{Bool,Bool} \tto Bool_\bot \\
+		&agrees~\pair{a_1,a_2} \ := \ if~(a_1 = a_2)~a_1~\bot
+	\end{aligned} \\
+\nonumber \\[-6pt]
+	&\begin{aligned}
+		&\arrowif\genc' : (x \arrow\genc Bool) \tto (x \arrow\genc y) \tto (x \arrow\genc y) \tto (x \arrow\genc y) \\
+		&\arrowif\genc'~k_1~k_2~k_3 \ := \\ 
+			&\tab\arrowif\genc~((k_1~\arrowpair\genc~branch\genc)~\arrowcomp\genc~\arrowarr\genc~agrees)~k_2~k_3
+	\end{aligned}
+\end{align}
+If the branch trace agrees with the conditional expression, it computes a branch; otherwise, it returns an error.
 
-\begin{equation}
-\begin{aligned}
-	&\arrowlazy\genb' : (1 \tto (x \arrow\genb y)) \tto (x \arrow\genb y) \\
-	&\arrowlazy\genb'~k \ := \ \arrowlazy\genb~\fun{0}{\arrowif\genb~\arrowgetlazy\genb~(k~0)~(\arrowarr\genb~\fun{x}{\bot})}
-\end{aligned}
-\end{equation}
-
-\begin{equation}
-		\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\genb' \ :\equiv\
-		\arrowif\genb~
-			\meaningof{\mathit{e_c}}\genb~
-			(\arrowlazy\gen'~\fun{0}{\meaningof{\mathit{e_t}}\genb})~
-			(\arrowlazy\gen'~\fun{0}{\meaningof{\mathit{e_f}}\genb})
-\end{equation}
-
+We will prove that this correctly returns $\bot$ instead of diverging after defining the meaning of partial, probabilistic let-calculus programs.
 
 \subsection{Partial, Probabilistic Programs}
 
-Store type: $s ::= \pair{Z, \Omega}$
+Let $S ::= R \times T$ and $x \arrow\genc y ::= AStore~S~(x \arrow\gen y)$.
+Update the $random\genc$ and $branch\genc$ combinators to reflect that the store is now a pair:
+\begin{align}
+	&\begin{aligned}
+		&random\genc : x \arrow\genc [0,1] \\
+		&random\genc~j \ := \ \arrowarr\gen~(fst~\arrowcomp~fst~\arrowcomp~\pi~j)
+	\end{aligned} \\
+\nonumber\\[-6pt]
+	&\begin{aligned}
+		&branch\genc : x \arrow\genc Bool \\
+		&branch\genc~j \ := \ \arrowarr\gen~(fst~\arrowcomp~snd~\arrowcomp~\pi~j)
+	\end{aligned}
+\end{align}
+The $\arrowif\genc'$ combinator's definition remains the same.
 
+We define a new semantic function $\meaningof{\cdot}\genc'$ by extending $\meaningof{\cdot}\genc$:
 \begin{equation}
 \begin{aligned}
-	&\arrowgetlazy\genb : x \arrow\genb Bool \\
-	&\arrowgetlazy\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~\pi~j
+	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\genc' &\ :\equiv\
+		\arrowif\genc'~
+			\meaningof{\mathit{e_c}}\genc~
+			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_t}}\genc})~
+			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_f}}\genc})
+\\
+	\meaningof{\mathit{e}}\genc' &\ :\equiv\ \meaningof{\mathit{e}}\genc
 \end{aligned}
 \end{equation}
 
+\subsection{Correctness}
+
+\begin{theorem}[natural transformation]
+Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$ and $x \arrow\gend y ::= AStore~s~(x \arrow\gend y)$.
+Let $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ be an arrow+choice homomorphism, and define
 \begin{equation}
 \begin{aligned}
-	&random\genb : x \arrow\genb [0,1] \\
-	&random\genb~j \ := \ \arrowarr\gen~fst~\arrowcomp\gen~\arrowarr\gen~snd~\arrowcomp\gen~\arrowarr\gen~(\pi~j)
+	&\arrowlift\gend : (x \arrow\genc y) \tto (x \arrow\gend y) \\
+	&\arrowlift\gend~f~j \ := \ \arrowlift\genb~(f~j)
 \end{aligned}
 \end{equation}
+Then the following diagram commutes:
+\begin{equation}
+\begin{CD}
+	x \arrow\gen y @>{\arrowlift\genb}>> x \arrow\genb y \\
+	@V{\arrowtrans\genc}VV   @VV{\arrowtrans\gend}V \\
+	x \arrow\genc y @>>{\arrowlift\gend}> x \arrow\gend y
+\end{CD}
+\end{equation}
+or for all $f : x \arrow\gen y$, $\arrowtrans\gend~(\arrowlift\genb~f) \equiv \arrowlift\gend~(\arrowtrans\genc~f)$.
+Further, $\arrowlift\gend$ is an arrow+choice homomorphism.
+\end{theorem}
+\begin{proof}
+Starting from the right side of the equivalence, expand definitions and apply homomorphism identities~\eqref{eqn:lift-distributes-over-comp} and~\eqref{eqn:lift-distributes-over-arr} for $\arrowlift\genb$:
+\begin{align*}
+	\arrowlift\gend~(\arrowtrans\genc~f)
+	&\ \equiv\ \fun{j}{\arrowlift\genb~(\arrowarr\gen~snd~\arrowcomp\gen~f)}
+\\
+	&\ \equiv\ \fun{j}{\arrowlift\genb~(\arrowarr\gen~snd)~\arrowcomp\genb~\arrowlift\genb~f}
+\\
+	&\ \equiv\ \fun{j}{\arrowarr\genb~snd~\arrowcomp\genb~\arrowlift\genb~f}
+\\
+	&\ \equiv\ \arrowtrans\gend~(\arrowlift\genb~f)
+\end{align*}
+Lastly, because $\arrowtrans\genc$, $\arrowtrans\gend$, and $\arrowlift\genb$ are homomorphisms, $\arrowlift\gend$ is a homomorphism by composition.
+
+XXX: not sure I'm allowed to invoke converse of composition of homomorphisms without extra conditions
+\end{proof}
+
+\begin{corollary}[semantic correctness]
+The following diagram commutes:
+\begin{equation}
+\begin{CD}
+X \botto Y   @>\liftpre \circ \liftmap>> X \preto Y \\
+@V{\eta_\pbot}VV            @VV{\eta\ppre}V\\
+X \pbotto Y  @>>\liftppre \circ \liftpmap>  X \ppreto Y
+\end{CD}
+\end{equation}
+Further, $\liftppre \circ \liftpmap$ is an arrow+choice homomorphism.
+\end{corollary}
+
+In particular, $\meaningof{\mathit{e}}\ppre'$ correctly computes preimages under the interpretation of $\mathit{e}$ as a partial function from an infinite random source.
 
 
 \section{Approximating Preimage Arrow}
@@ -1743,7 +1859,7 @@ XXX: figure out a good way to present the following info
 Figure~\ref{fig:mapping-arrow-defs}:
 \begin{itemize}
 	\item $pre$: can't implement
-	\item $pre@ap$: need $\i$
+	\item $pre!ap$: need $\i$
 	\item $\pair{\cdot,\cdot}\pre$: approximate; need $\times$ and $\i$
 	\item $\circ\pre$: no change
 	\item $\uplus\pre$: approximate; need join

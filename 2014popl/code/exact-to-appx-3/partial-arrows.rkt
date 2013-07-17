@@ -60,20 +60,20 @@
     (define ((pair/out f1 f2) j)
       (pair/in (f1 (left j)) (f2 (right j))))
     
-    (: lazy*/out (All (X Y) ((-> (Out-Arrow X Y)) -> (Out-Arrow X Y))))
-    (define ((lazy*/out f) j) (lazy/in (λ () ((f) j))))
+    (: lazy/out (All (X Y) ((-> (Out-Arrow X Y)) -> (Out-Arrow X Y))))
+    (define ((lazy/out f) j) (lazy/in (λ () ((f) j))))
     
-    (: if/out (All (X Y) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y) -> (Out-Arrow X Y))))
-    (define ((if/out f1 f2 f3) j)
+    (: if*/out (All (X Y) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y) -> (Out-Arrow X Y))))
+    (define ((if*/out f1 f2 f3) j)
       (if/in (f1 (left j)) (f2 (left (right j))) (f3 (right (right j)))))
     
     (: branch/out (All (X) (Out-Arrow X Boolean)))
     (define (branch/out j)
       (>>>/in (inst fst/in Branches X) (π/in j)))
     
-    (: lazy/out (All (X Y) ((-> (Out-Arrow X Y)) -> (Out-Arrow X Y))))
-    (define (lazy/out f)
-      (lazy*/out (λ () (if/out (inst branch/out X) (f) ((inst lift/out X Y) error/in)))))
+    (: lazy*/out (All (X Y) ((-> (Out-Arrow X Y)) -> (Out-Arrow X Y))))
+    (define (lazy*/out f)
+      (lazy/out (λ () (if/out (inst branch/out X) (f) ((inst lift/out X Y) error/in)))))
     #;
     (define ((lazy/out f) j)
       (lazy/in (λ ()
@@ -81,8 +81,8 @@
                         ((f) j)
                         error/in))))
     
-    (: if*/out (All (X Y) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y) -> (Out-Arrow X Y))))
-    (define ((if*/out f1 f2 f3) j)
+    (: if/out (All (X Y) ((Out-Arrow X Boolean) (Out-Arrow X Y) (Out-Arrow X Y) -> (Out-Arrow X Y))))
+    (define ((if/out f1 f2 f3) j)
       (if/in (>>>/in (pair/in (f1 (left j)) ((inst branch/out X) j)) (inst assert=/in Boolean))
              (f2 (left (right j)))
              (f3 (right (right j)))))

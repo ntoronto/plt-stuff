@@ -7,6 +7,7 @@
 \usepackage{verbatim}
 \usepackage{amsmath, amssymb, amsthm}
 \usepackage{stmaryrd}
+\usepackage{amscd}
 \usepackage{caption}
 \DeclareCaptionType{copyrightbox}
 
@@ -207,7 +208,6 @@
 \def\mycodehook{\ttcodehook\small}
 \let\schemecodehook\mycodehook
 
-
 \DeclareMathVersion{sans}
 \SetSymbolFont{operators}{sans}{T1}{\sfdefault}{m}{n}
 \SetSymbolFont{letters}{sans}{T1}{\sfdefault}{m}{n}
@@ -262,9 +262,10 @@
 \DeclareMathSymbol{,}{\mathpunct}{fixpunct}{`,}
 \DeclareMathSymbol{.}{\mathord}{fixpunct}{`.}
 \DeclareMathSymbol{\ldotp}{\mathord}{fixpunct}{`.}
-\DeclareMathSymbol{@}{\mathord}{letters}{`-}
+\DeclareMathSymbol{!}{\mathord}{letters}{`-}
 \DeclareMathSymbol{/}{\mathpunct}{fixpunct}{`/}
 \DeclareMathSymbol{\rightharpoonup}{\mathrel}{fixpunctoml}{"2A}
+
 \renewcommand{\notin}{\not\in}
 
 \newcommand\mathtest[2]{\mathchoice{#1}{#2}{#2}{#2}}
