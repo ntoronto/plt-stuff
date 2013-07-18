@@ -89,8 +89,8 @@
 \newcommand{\ifpbot}{\arrowif_{\mspace{-2mu}\pbot}}
 \newcommand{\lazypbot}{\arrowlazy_{\mspace{-2mu}\pbot}}
 
-\newcommand{\pmap}{_\mathrm{map^*}}
-\DeclareMathOperator{\pmapto}{\arrow_{\mspace{-21mu}\pmap}}
+\newcommand{\pmap}{_\mathrm{map^{\mspace{-2mu}*}}}
+\DeclareMathOperator{\pmapto}{\arrow_{\mspace{-22mu}_{\mathrm{map*}}}}
 \newcommand{\liftpmap}{\arrowlift\pmap}
 \newcommand{\arrpmap}{\arrowarr\pmap}
 \newcommand{\comppmap}{\arrowcomp\pmap}
@@ -98,7 +98,7 @@
 \newcommand{\ifpmap}{\arrowif\pmap}
 \newcommand{\lazypmap}{\arrowlazy\pmap}
 
-\newcommand{\ppre}{_\mathrm{pre^*}}
+\newcommand{\ppre}{_\mathrm{pre^{\mspace{-2mu}*}}}
 \DeclareMathOperator{\ppreto}{\arrow_{\mspace{-19mu}_{\mathrm{pre*}}}}
 \newcommand{\liftppre}{\arrowlift\ppre}
 \newcommand{\arrppre}{\arrowarr\ppre}
@@ -144,34 +144,30 @@ XXX, XXX
 
 \section{Introduction}
 
-XXX: what we want to do, a bit about measure-theory's take on probability (especially preimage measure)
+XXX: conditional probability, measure-theory's take on probability (especially preimage measure)
 
-XXX: the paper starts with an overview of the insanely powerful $\lambda$-calculus we use, and an overview of arrows, the categorical construct we use to define the meaning of let-calculus expressions compositionally
-
-For the bulk of this paper, we
+In this paper, we
 \begin{enumerate}
 	\item Define the \emph{bottom arrow}, type $X \botto Y$, as a compilation target for first-order functions that may raise errors.
 	\item Derive the \emph{mapping arrow} from the bottom arrow, type $X \mapto Y$. Prove that its instances return extensional functions, or mappings, that compute the same values as corresponding bottom arrow computations.
 	\item Derive the \emph{preimage arrow} from the mapping arrow, type $X \preto Y$. Prove that its instances compute preimages under corresponding mapping (or bottom) arrow instances.
-	\item Extend the preimage arrow to handle partial functions.
-	\item Approximate the preimage arrow by operating on rectangles instead of generally uncomputable sets.
+	\item Define an arrow transformer via a natural transformation $\arrowtrans$ to thread random stores and avoid divergence.
+	\item Define a computable approximation of the transformed preimage arrow and report on its implementation.
 \end{enumerate}
-We report on our implementation of the bottom arrow and the approximating preimage arrow.
 
+Most of our correctness theorems can be described in terms of the following commutative diagram:
 \begin{equation}
 \begin{CD}
 X \botto Y   @>\liftmap>>   X \mapto Y   @>\liftpre>>   X \preto Y \\
-@V{\eta_\bot}VV             @VV{\eta\map}V              @VV{\eta\pre}V\\
-X \botto' Y  @>>\liftmap'>  X \mapto' Y  @>>\liftpre'>  X \preto' Y
+@V{\eta_\pbot}VV             @VV{\eta\pmap}V              @VV{\eta\ppre}V\\
+X \pbotto Y  @>>\liftpmap>  X \pmapto Y  @>>\liftppre>  X \ppreto Y
 \end{CD}
+\label{eqn:roadmap-diagram}
 \end{equation}
+We prove that all the functions between arrow types in~\eqref{eqn:roadmap-diagram} are homomorphisms, which implies that $X \preto Y$ and $X \ppreto Y$ instances compute preimages correctly.
 
-Formal goals:
-\begin{enumerate}
-	\item Preimages of pure, total functions computed using $X \preto' Y$ are the preimages under $X \botto Y$ (have this, by homomorphism)
-	\item Preimages computed using $X \preto' Y$ are the preimages under $X \botto' Y$ (need to prove $\liftmap'$ and $\liftpre'$ are homomorphisms)
-	\item Running $X \botto' Y$ and $X \preto' Y$ computations always converges
-\end{enumerate}
+XXX: something about how we know the approximations are correct
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -233,14 +229,14 @@ We write \lzfclang programs in heavily sugared $\lambda$-calculus syntax, with a
 		\powerset &: Set~x \tto Set~(Set~x) \\
 		\U &: Set~(Set~x) \tto Set~x \\
 		image &: (x \tto y) \tto Set~x \tto Set~y \\
-		card &: Set~x \tto Ord \\
+		|\cdot| &: Set~x \tto Ord \\
 	\end{aligned} \\
 \end{aligned}
 \label{eqn:lzfc-prims}
 \end{equation}
-Shortly, $\emptyset$ is the empty set, $\omega$ is the cardinality of the natural numbers, $take$ removes the member from a singleton set, $(\in)$ is an infix operator that decides membership, $\powerset$ returns all the subsets of a set, $\U$ returns the union of a set of sets, $image$ applies a function to each member of a set and returns the set of return values, and $card$ returns the cardinality of a set.
+Shortly, $\emptyset$ is the empty set, $\omega$ is the cardinality of the natural numbers, $take~\set{x}$ reduces to $x$ and diverges for non-singleton sets, $x \in A$ decides membership, $\powerset~A$ reduces to the set of subsets of $A$, $\U\A$ reduces to the union of the sets in $\A$, $image~f~A$ applies $f$ to each member of $A$ and reduces to the set of results, and $|A|$ reduces to the cardinality of $A$.
 
-We assume literal set notation such as $\set{0,1,2}$ is already defined in terms of set primitives.
+We assume literal set notation such as $\set{0,1,2}$ is already defined in terms of the set primitives.
 
 \subsection{Internal and External Equality}
 
@@ -256,7 +252,8 @@ which means
 \begin{equation}
 	(=) \ := \ \fun{x}\fun{y}{x \in \set{y}}
 \end{equation}
-Thus, $1 = 1$ reduces to $1 \in \set{1}$, which reduces to $true$.\footnote{Technically, \lzfclang has a big-step semantics, and $1 \in \set{1}$ can be extracted from the derivation tree for $1 = 1$.}
+Thus, $1 = 1$ reduces to $1 \in \set{1}$, which reduces to $true$.\footnote{Technically, \lzfclang has a big-step semantics, and
+the derivation tree for $1 = 1$ contains the derivation tree for $1 \in \set{1}$.}
 Because of the particular way \lzfclang's lambda terms are defined, for two lambda terms $f$ and $g$, $f = g$ reduces to $true$ when $f$ and $g$ are structurally identical modulo renaming.
 For example, $(\fun{x}{x}) = (\fun{y}{y})$ reduces to $true$, but $(\fun{x}{2}) = (\fun{x}{1+1})$ reduces to $false$.
 
@@ -278,20 +275,18 @@ We therefore introduce type-specific notions of equivalence as needed.
 
 \subsection{Additional Functions and Forms}
 
-XXX: lambda syntactic sugar: automatic currying (including the two-argument primitives $(\in)$ and $image$), matching, sectioning rules
+We assume a desugaring pass over \lzfclang expressions, which automatically curries (including for the two-argument primitives $(\in)$ and $image$), and interprets special binding forms such as indexed unions $\U_{\mathit{x} \in \mathit{e_A}}\mathit{e}$, destructuring binds as in $swap~\pair{x,y} := \pair{y,x}$, and comprehensions like $\setb{x \in A}{x \in B}$.
+(We may be rather informal with the latter two binding forms when the meaning is clear.)
+We assume we have logical operators, bounded quantifiers (unbounded quantifiers are not \lzfclang-definable), and typical set operations.
 
-XXX: set syntactic sugar: set comprehensions, cardinality, indexed unions
-
-XXX: functions: $\u$, $\i$, $\w$, $\subseteq$
-
+We define atypical set operations, such as disjoint union:
 \begin{equation}
 \begin{aligned}
 	&(\uplus) : Set~x \tto Set~x \tto Set~x \\
 	&A \uplus B \ := \ if~(A \i B = \emptyset)~(A \u B)~(take~\emptyset)
 \end{aligned}
 \end{equation}
-
-XXX: logic: logical operators and quantifiers
+which diverges when $A$ and $B$ overlap.
 
 In set theory, functions are encoded as sets of input-output pairs.
 The increment function for the natural numbers, for example, is $\set{\pair{0,1},\pair{1,2},\pair{2,3},...}$.
@@ -303,7 +298,7 @@ For example, $X \pto Y$ is the return type for the restriction function:
 \begin{equation}
 \begin{aligned}
 	&(\cdot)\restrict{(\cdot)}\ : (X \tto Y) \tto Set~X \tto (X \pto Y) \\
-	&f\restrict{A} \ := \ image~(\fun{x}{(x, f~x)})~A
+	&f\restrict{A} \ := \ image~(\fun{x}{\pair{x, f~x}})~A
 \end{aligned}
 \end{equation}
 which converts a lambda or a mapping to a mapping with domain $A \subseteq X$.
@@ -362,23 +357,19 @@ To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e
 Figure~\ref{fig:mapping-defs} defines more operations on partial mappings: $domain$, $range$, $preimage$, pairing, composition, and disjoint union.
 The latter three are particularly important in the preimage arrow's derivation, and $preimage$ is critical in measure theory's account of probability.
 
-XXX: lazy mappings
-
-XXX: total mappings are infinite vectors
-
-XXX: projection functions
-\begin{align}
-&\begin{aligned}
+The set $X \to Y$ contains all the \emph{total} mappings from $X$ to $Y$.
+We think of these as possibly infinite vectors, with application for indexing.
+Projections are produced by
+\begin{equation}
+\begin{aligned}
 	&\pi : J \tto (J \to X) \tto X \\
 	&\pi~j~f \ := \ f~j
-\end{aligned} \\
-\nonumber \\[-6pt]
-&\begin{aligned}
-	&proj : J \tto (J \to X) \tto Set~X \\
-	&proj~j~A \ := \ image~(\pi~j)~A
 \end{aligned}
-\end{align}
+\end{equation}
+which will be useful when $f$ is unnamed.
 
+Pairs $\pair{A,f} : \pair{Set~x,x \tto y}$ are like functions with an observable domain and range; we call them \mykeyword{lazy mappings}.
+We do not use them in this paper, but we define a similar function-like type in Section~\ref{sec:lazy-preimage-mappings} for computing preimages.
 
 \begin{comment}
 \subsection{Ordinal Numbers and Transfinite Recursion}
@@ -628,7 +619,7 @@ Instead of $first\gen$, we define $(\arrowpair\gen)$---typically called \keyword
 Though $first\gen$ may be defined in terms of $(\arrowpair\gen)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair\gen)$ definitions in this paper because the applicable contemporary theorems are in terms of pairing functions.
 
 One way to strengthen an arrow $a$ is to define an additional combinator $left\gen$, which can be used to choose an arrow computation based on the result of another.
-Again, we define a different combinator, $\arrowif\gen$, to make it easier to apply contemporary theorems, which are in terms of disjoint unions of mappings instead of explicit disjoint union types.
+Again, we define a different combinator, $\arrowif\gen$, to make it easier to apply contemporary theorems.
 
 In a nonstrict $\lambda$-calculus, simply defining a choice combinator allows writing recursive functions using nothing but arrow combinators and lifted, pure functions.
 However, any strict $\lambda$-calculus (such as \lzfclang) requires an extra combinator to defer computations in conditional branches.
@@ -659,7 +650,7 @@ Using $\arrowlazy~f~a := f~0~a$, which receives thunks and returns arrow computa
 \end{equation}
 which diverges only when applied to $false$ in any $\lambda$-calculus.
 
-\begin{definition}[arrow+choice]A binary type constructor $(\arrow\gen)$ and the combinators
+\begin{definition}[arrow with choice]A binary type constructor $(\arrow\gen)$ and the combinators
 \begin{equation}
 \begin{aligned}
 	\arrowarr\gen &: (x \tto y) \tto (x \arrow\gen y)
@@ -679,15 +670,16 @@ The additional combinators
 	\arrowlazy\gen &: (1 \tto (x \arrow\gen y)) \tto (x \arrow\gen y)
 \end{aligned}
 \end{equation}
-define an \keyword{arrow+choice} if certain additional homomorphism and structural laws hold.
-(The $\arrowlazy\gen$ combinator may be omitted in nonstrict or strongly normalizing languages.)
+define an \keyword{arrow with choice} if certain additional homomorphism and structural laws hold.
 \end{definition}
+
+From here on, as all of our arrows are arrows with choice, we simply call them arrows.
 
 The necessary homomorphism laws ensure that $\arrowarr\gen$ distributes over function arrow combinators.
 These laws can be put in terms of more general homomorphism properties that deal with distributing an arrow-to-arrow lift, which we use extensively to prove correctness.
 
-\begin{definition}[arrow+choice homomorphism]
-A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeyword{arrow homomorphism} from arrow $\mathrm{a}$ to arrow $\mathrm{b}$ if the following distributive laws hold for appropriately typed $f$, $f_1$ and $f_2$:
+\begin{definition}[arrow homomorphism]
+A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeyword{arrow homomorphism} from arrow $\mathrm{a}$ to arrow $\mathrm{b}$ if the following distributive laws hold for appropriately typed $f$, $f_1$, $f_2$ and $f_3$:
 \begin{align}
 	lift\genb~(\arrowarr\gen~f) &\ \equiv \ \arrowarr\genb~f
 	\label{eqn:lift-distributes-over-arr}
@@ -697,9 +689,7 @@ A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeywor
 \\
 	lift\genb~(f_1~\arrowpair\gen~f_2) &\ \equiv \ (lift\genb~f_1)~\arrowpair\genb~(lift\genb~f_2)
 	\label{eqn:lift-distributes-over-pair}
-\end{align}
-It is an \mykeyword{arrow+choice homomorphism} if, additionally,
-\begin{align}
+\\
 	\arrowlift\genb~(\arrowif\gen~f_1~f_2~f_3) &\ \equiv \ 
 		\arrowif\genb~(lift\genb~f_1)~(lift\genb~f_2)~(lift\genb~f_3)
 	\label{eqn:lift-distributes-over-if}
@@ -708,15 +698,15 @@ It is an \mykeyword{arrow+choice homomorphism} if, additionally,
 		\arrowlazy\genb~\fun{0}{\arrowlift\genb~(f~0)}
 	\label{eqn:lift-distributes-over-lazy}
 \end{align}
-hold for appropriately typed $f$, $f_1$, $f_2$ and $f_3$.
 \label{def:arrow-homomorphism}
 \end{definition}
 
-The homomorphism laws state that $\arrowarr\gen$ must be a homomorphism from the function arrow+choice to arrow $a$.
+The homomorphism laws state that $\arrowarr\gen$ must be a homomorphism from the function arrow to arrow $a$.
 
 The monoid and structural arrow laws play little role in our semantics or its correctness.
 For the arrows we define, then, we elide the proofs of these arrow laws, and concentrate on homomorphisms.
 
+XXX: actually, need to prove some of them, to prove that the natural transformation for the applicative store-passing arrow transformer is a homomorphism
 
 \subsection{First-Order Let-Calculus Semantics}
 
@@ -787,7 +777,7 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 We are certain that the preimage arrow correctly computes preimages under some function $f$ because we ultimately \emph{derive} it from a simpler arrow used to construct $f$.
 
 One obvious candidate for the simpler arrow is the function arrow, defined in~\eqref{eqn:function-arrow}.
-However, it will be necessary to explicitly handle nonterminating functions, so we need a slightly more complicated arrow for which running computations may raise an error.
+However, we will need to explicitly handle divergence, so we need a slightly more complicated arrow for which running computations may raise an error.
 
 Figure~\ref{fig:bottom-arrow-defs} defines the \mykeyword{bottom arrow}.
 Its computations are of type $x \botto y ::= x \tto y_\bot$, where the inhabitants of $y_\bot$ are the error value $\bot$ as well as the inhabitants of $y$. The type $Bool_\bot$, for example, denotes the members of $Bool \u \set{\bot}$.
@@ -834,8 +824,7 @@ Its computations are of type $x \botto y ::= x \tto y_\bot$, where the inhabitan
 \end{figure*}
 
 \begin{theorem}
-$\arrbot$, $(\pairbot)$ and $(\compbot)$ define an arrow.
-With $\ifbot$ and $\lazybot$, they define an arrow+choice.
+$\arrbot$, $(\pairbot)$, $(\compbot)$, $\ifbot$ and $\lazybot$ define an arrow.
 \end{theorem}
 \begin{proof}
 The bottom arrow is the Maybe monad's Kleisli arrow with $Nothing = \bot$.
@@ -843,18 +832,18 @@ The bottom arrow is the Maybe monad's Kleisli arrow with $Nothing = \bot$.
 
 \subsection{Deriving the Mapping Arrow}
 
-Theorems in measure theory tend to be about mappings, not lambdas.
+Contemporary theorems about functions are about mappings, not lambdas.
 As in intermediate step toward the preimage arrow, then, we need an arrow whose computations produce mappings or are mappings themselves.
 
-It is tempting to try to define the mapping arrow's type constructor using $X \mapto Y ::= X \pto Y$, and define $f_1~\compmap~f_2 := f_2 \circ\map f_1$ and $(\pairmap) := \pair{\cdot,\cdot}\map$.
-Unfortunately, we run into a problem defining $\arrmap : (X \tto Y) \tto (X \pto Y)$: we cannot define it as $\arrmap~f := f\restrict{X}$. Although $X$ is a \lzfclang value, it is not in scope in $\arrmap$'s definition because it is only part of the type.
+It is tempting to try to define the mapping arrow's type constructor as $X \mapto Y ::= X \pto Y$, and define $f_1~\compmap~f_2 := f_2 \circ\map f_1$ and $(\pairmap) := \pair{\cdot,\cdot}\map$.
+Unfortunately, we run into a problem defining $\arrmap : (X \tto Y) \tto (X \pto Y)$: to define a mapping, we need a domain, but lambdas' domains are unobservable.
 
-We need to parameterize computations on a domain, so we define the \mykeyword{mapping arrow} computation type as
+To parameterize mapping arrow computations on a domain, we define the \mykeyword{mapping arrow} computation type as
 \begin{equation}
 	X \mapto Y \ ::= \ Set~X \tto (X \pto Y)
 \end{equation}
 Notice that $\bot$ is absent in $Set~X \tto (X \pto Y)$.
-This will make it easier to disregard nonterminating inputs when computing preimages further on. (XXX: section)
+This will make it easier to disregard diverging inputs when computing preimages further on. (XXX: section)
 
 To make the correspondence between bottom arrow and mapping arrow computations as clear as possible,
 we start by defining a function $\liftmap : (X \botto Y) \tto (X \mapto Y)$ to lift bottom arrow computations.
@@ -872,8 +861,8 @@ It is helpful to have a standalone function $domain_\bot$ that computes such dom
 	\end{aligned}
 \end{align}
 
-The clearest way to ensure that mapping arrow computations mean what we think they mean is to derive each combinator in a way that makes $\liftmap$ distribute over bottom arrow computations; i.e. it must be an arrow+choice homomorphism (Definition~\ref{def:arrow-homomorphism}).
-Less generally but more concretely, for any let-calculus expression $\mathit{e}$, we would like $\meaningof{\mathit{e}}\map \equiv \liftmap~\meaningof{\mathit{e}}_\bot$.
+The clearest way to ensure that mapping arrow computations mean what we think they mean is to derive each combinator in a way that makes $\liftmap$ distribute over bottom arrow computations; i.e. it must be an arrow homomorphism (Definition~\ref{def:arrow-homomorphism}).
+If $\liftmap$ is a homomorphism, then $\meaningof{\mathit{e}}\map \equiv \liftmap~\meaningof{\mathit{e}}_\bot$ for any let-calculus expression $\mathit{e}$, because $\liftmap$ distributes through its expansion.
 
 To meet the homomorphism laws, we need equivalence to be more extensional for mapping computations.
 
@@ -882,7 +871,7 @@ Two mapping arrow computations $g_1 : X \mapto Y$ and $g_2 : X \mapto Y$ are equ
 \end{definition}
 
 Clearly $\arrowarr\genb := lift\genb \circ \arrowarr\gen$ meets the first homomorphism identity~\eqref{eqn:lift-distributes-over-arr}, so we define $\arrmap$ as a composition.
-The following subsections derive $(\pairmap)$, $(\compmap)$, $\ifmap$ and $\lazymap$ from their corresponding bottom arrow combinators, in a way that ensures $\liftmap$ is an arrow+choice homomorphism.
+The following subsections derive $(\pairmap)$, $(\compmap)$, $\ifmap$ and $\lazymap$ from their corresponding bottom arrow combinators, in a way that ensures $\liftmap$ is an arrow homomorphism.
 Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 
 \begin{figure*}[t]\centering
@@ -1059,7 +1048,7 @@ Substituting $g~0$ for $\liftmap~(f~0)$ gives a definition for $\lazymap$ (Figur
 \subsection{Correctness}
 
 \begin{theorem}[mapping arrow correctness]
-$\liftmap$ is an arrow+choice homomorphism.
+$\liftmap$ is an arrow homomorphism.
 \end{theorem}
 \begin{proof}
 By construction.
@@ -1073,12 +1062,13 @@ If $\meaningof{\mathit{e}}_\bot : X \botto Y$, then $lift\map~\meaningof{\mathit
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Lazy Preimage Mappings}
+\label{sec:lazy-preimage-mappings}
 
 On a computer, we will not often have the luxury of testing each function input to see whether it belongs to a preimage set.
 Even for finite domains, doing so is often intractable.
 
 If we wish to compute with infinite sets in the language implementation, we will need an abstraction that makes it easy to replace computation on points with computation on sets.
-Therefore, in the preimage arrow, we will confine computation on points to \mykeyword{lazy preimage mappings}, or just \emph{preimage mappings}, for which application is like applying $preimage$ to a mapping.
+Therefore, in the preimage arrow, we will confine computation on points to \mykeyword{lazy preimage mappings}, or just \emph{preimage mappings}.
 Further on, we will need their ranges to be observable, so we define their type as
 \begin{equation}
 	X \prepto Y \ ::= \ \pair{Set~Y, Set~Y \tto Set~X}
@@ -1320,7 +1310,7 @@ $h_1~A \equiv h_2~A$ for all $A \subseteq X$.
 \end{definition}
 
 As with $\arrmap$, defining $\arrpre$ as a composition meets~\eqref{eqn:lift-distributes-over-arr}.
-The following subsections derive $(\pairpre)$, $(\comppre)$, $\ifpre$ and $\lazypre$ from their corresponding mapping arrow combinators, in a way that ensures $\liftpre$ is an arrow+choice homomorphism from the mapping arrow to the preimage arrow. Figure~\ref{fig:preimage-arrow-defs} contains the resulting definitions.
+The following subsections derive $(\pairpre)$, $(\comppre)$, $\ifpre$ and $\lazypre$ from their corresponding mapping arrow combinators, in a way that ensures $\liftpre$ is an arrow homomorphism from the mapping arrow to the preimage arrow. Figure~\ref{fig:preimage-arrow-defs} contains the resulting definitions.
 
 \begin{figure*}
 \begin{align*}
@@ -1474,7 +1464,7 @@ Substituting $h~0$ for $\liftpre~(g~0)$ and removing the application of $pre!ap$
 \subsection{Correctness}
 
 \begin{theorem}[preimage arrow correctness]
-$\liftpre$ is an arrow+choice homomorphism.
+$\liftpre$ is an arrow homomorphism.
 \label{thm:liftpre-homomorphism}
 \end{theorem}
 \begin{proof}
@@ -1509,7 +1499,7 @@ We could compute the probability of any output set $N \subseteq \Nat$ using $P~(
 	\item Determining how $random$ indexes numbers in $x$.
 	\item Ensuring each $x \in X$ contains enough random numbers.
 \end{enumerate}
-Ensuring $h~A$ converges is the most difficult, but doing the other two will provide enough structure to make it easy.
+Ensuring $h~A$ converges is the most difficult, but doing the other two will provide structure that makes it much easier.
 
 \subsection{Threading and Indexing}
 
@@ -1525,14 +1515,14 @@ each computation receives, but does not produce, a random source.
 Multi-argument combinators split the tree and pass sub-trees to sub-computations.
 
 We have tried both ways with arrows defined using pairing.
-In each case, the resulting definitions are large, conceptually difficult, and hard to formally manipulate.
+The resulting definitions are large, making them conceptually difficult and hard to manipulate.
 Fortunately, assigning each sub-computation a unique index into a tree-shaped random source, and passing it unchanged, is relatively easy.
 
-We first need a way to assign unique indexes.
+We need a way to assign unique indexes to expressions.
 
 \begin{definition}[binary indexing scheme]
 Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto J$ and $right : J \tto J$ be total functions.
-If for every finite composition $f$ of $left$ and $right$, $f~j_0$ is unique, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
+If for every finite composition $next$ of $left$ and $right$, $next~j_0$ is unique, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
 \end{definition}
 
 For example, let $J$ be the set of lists of booleans, $j_0$ the empty list, and define
@@ -1629,7 +1619,7 @@ Two $AStore$ arrow computations $k_1$ and $k_2$ are equivalent, or $k_1 \equiv k
 
 \begin{theorem}[$AStore$ arrow correctness]
 Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$.
-$\arrowtrans\genc$ is an arrow+choice homomorphism.
+Then $\arrowtrans\genc$ is an arrow homomorphism.
 \end{theorem}
 \begin{proof}
 Defining $\arrowarr\genc$ as a composition clearly meets the first homomorphism identity~\eqref{eqn:lift-distributes-over-arr}.
@@ -1709,14 +1699,15 @@ Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$. If $\meaningof{\mathit{e}}\
 \end{corollary}
 
 In particular, Corollary~\ref{cor:astore-semantic-correctness} implies that, if a pure let-calculus expression is interpreted as a computation $k : AStore~S~(X \preto Y)$, then $k~j_0$ correctly computes preimages.
-We still need to know that preimages under functions that use the store are computed correctly, which we will get to after defining stores and combinators that access them.
+We still need to know that preimages under functions that access the store are computed correctly, which we will get to after defining stores and combinators that access them.
 
 
 \subsection{Probabilistic Programs}
 
-Define $R := J \to [0,1]$ as the set of infinite random sources.
-Each $r \in R$ is a total mapping from an expression index to a random number.
-Equivalently, each $r \in R$ is an infinite vector of random numbers indexed by $J$.
+\begin{definition}[random source]
+Let $R := J \to [0,1]$.
+A \keyword{random source} is a total mapping $r \in R$; equivalently, an infinite vector of random numbers indexed by $J$.
+\end{definition}
 
 Let $x \arrow\genc y ::= AStore~R~(x \arrow\gen y)$.
 The following combinator returns the number at its own index in the random source:
@@ -1730,18 +1721,18 @@ We extend the let-calculus semantic function with
 \begin{equation}
 	\meaningof{random}\genc :\equiv random\genc
 \end{equation}
-for arrows $b$ for which $random\genc$ is defined.
+for arrows $a^*$ for which $random\genc$ is defined.
 
 \subsection{Partial Programs}
 
-Divergence is an applicative effect, so it should not be too surprising that it can be modeled using an applicative store.
-Roughly, the store determines which branch of each conditional, if any, is allowed to continue computing.
+%Divergence is an applicative effect, so it should not be too surprising that it can be modeled using an applicative store.
+The most effective and ultimately implementable way we have found to avoid divergence in computing preimages is to use the store to dictate which branch of each conditional, if any, is allowed to be taken.
 
 \begin{definition}[branch trace]
-A \mykeyword{branch trace} is a total mapping $t \in J \to Bool_\bot$ such that $t~j = true$ or $t~j = false$ for no more than finitely many $j \in J$.
+A \mykeyword{branch trace} is a total mapping (i.e. vector) $t \in J \to Bool_\bot$ such that $t~j = true$ or $t~j = false$ for no more than finitely many $j \in J$.
 \end{definition}
 
-Let $T$ be the largest subset of branch traces in $J \to Bool_\bot$, and $x \arrow\genc y ::= AStore~T~(x \arrow\gen y)$.
+Let $T \subset J \to Bool_\bot$ be the set of all branch traces, and $x \arrow\genc y ::= AStore~T~(x \arrow\gen y)$.
 The following combinator returns $t~j$ using its own index $j$:
 \begin{equation}
 \begin{aligned}
@@ -1749,11 +1740,11 @@ The following combinator returns $t~j$ using its own index $j$:
 	&branch\genc~j \ := \ \arrowarr\gen~(fst~\arrowcomp~\pi~j)
 \end{aligned}
 \end{equation}
-Using $branch\genc$, we define an additional if-then-else combinator, which checks to see whether its conditional expression agrees with the branch trace:
+Using $branch\genc$, we define an additional if-then-else combinator, which ensures its conditional expression agrees with the branch trace:
 \begin{align}
 	&\begin{aligned}
 		&agrees : \pair{Bool,Bool} \tto Bool_\bot \\
-		&agrees~\pair{a_1,a_2} \ := \ if~(a_1 = a_2)~a_1~\bot
+		&agrees~\pair{b_1,b_2} \ := \ if~(b_1 = b_2)~b_1~\bot
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
@@ -1764,12 +1755,24 @@ Using $branch\genc$, we define an additional if-then-else combinator, which chec
 \end{align}
 If the branch trace agrees with the conditional expression, it computes a branch; otherwise, it returns an error.
 
-We will prove that this correctly returns $\bot$ instead of diverging after defining the meaning of partial, probabilistic let-calculus programs.
+Every computation defined using the let-calculus semantic function $\meaningof{\cdot}\gen$, whose \emph{defining expression} converges, must have its recurrences guarded by an $if$.
+Thus, if we stick to well-defined let-calculus programs, we need only replace $\arrowif\genc$ with $\arrowif\genc'$ to ensure \emph{computations} always converge.
+Therefore, we can define a semantic function $\meaningof{\cdot}\genc'$ for let-calculus programs whose computations always converge by overriding only the $if$ rule:
+\begin{equation}
+\begin{aligned}
+	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\genc' &\ :\equiv\
+		\lzfcsplit{\arrowif\genc'~
+			&\meaningof{\mathit{e_c}}\genc \\
+			&(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_t}}\genc}) \\
+			&(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_f}}\genc})}
+\\
+	\meaningof{\mathit{e}}\genc' &\ :\equiv\ \meaningof{\mathit{e}}\genc
+\end{aligned}
+\end{equation}
 
 \subsection{Partial, Probabilistic Programs}
 
-Let $S ::= R \times T$ and $x \arrow\genc y ::= AStore~S~(x \arrow\gen y)$.
-Update the $random\genc$ and $branch\genc$ combinators to reflect that the store is now a pair:
+Let $S ::= R \times T$ and $x \arrow\genc y ::= AStore~S~(x \arrow\gen y)$, and update the $random\genc$ and $branch\genc$ combinators to reflect that the store is now a pair:
 \begin{align}
 	&\begin{aligned}
 		&random\genc : x \arrow\genc [0,1] \\
@@ -1783,31 +1786,20 @@ Update the $random\genc$ and $branch\genc$ combinators to reflect that the store
 \end{align}
 The $\arrowif\genc'$ combinator's definition remains the same.
 
-We define a new semantic function $\meaningof{\cdot}\genc'$ by extending $\meaningof{\cdot}\genc$:
-\begin{equation}
-\begin{aligned}
-	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\genc' &\ :\equiv\
-		\arrowif\genc'~
-			\meaningof{\mathit{e_c}}\genc~
-			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_t}}\genc})~
-			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_f}}\genc})
-\\
-	\meaningof{\mathit{e}}\genc' &\ :\equiv\ \meaningof{\mathit{e}}\genc
-\end{aligned}
-\end{equation}
+From here on, let $x \pbotto y ::= AStore~S~(x \botto y)$; similarly for $X \pmapto Y$ and $X \ppreto Y$.
 
 \subsection{Correctness}
 
 \begin{theorem}[natural transformation]
 Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$ and $x \arrow\gend y ::= AStore~s~(x \arrow\gend y)$.
-Let $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ be an arrow+choice homomorphism, and define
+Let $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ be an arrow homomorphism, and define
 \begin{equation}
 \begin{aligned}
 	&\arrowlift\gend : (x \arrow\genc y) \tto (x \arrow\gend y) \\
 	&\arrowlift\gend~f~j \ := \ \arrowlift\genb~(f~j)
 \end{aligned}
 \end{equation}
-Then the following diagram commutes:
+The following diagram commutes:
 \begin{equation}
 \begin{CD}
 	x \arrow\gen y @>{\arrowlift\genb}>> x \arrow\genb y \\
@@ -1815,8 +1807,8 @@ Then the following diagram commutes:
 	x \arrow\genc y @>>{\arrowlift\gend}> x \arrow\gend y
 \end{CD}
 \end{equation}
-or for all $f : x \arrow\gen y$, $\arrowtrans\gend~(\arrowlift\genb~f) \equiv \arrowlift\gend~(\arrowtrans\genc~f)$.
-Further, $\arrowlift\gend$ is an arrow+choice homomorphism.
+i.e. for all $f : x \arrow\gen y$, $\arrowtrans\gend~(\arrowlift\genb~f) \equiv \arrowlift\gend~(\arrowtrans\genc~f)$.
+Further, $\arrowlift\gend$ is an arrow homomorphism.
 \end{theorem}
 \begin{proof}
 Starting from the right side of the equivalence, expand definitions and apply homomorphism identities~\eqref{eqn:lift-distributes-over-comp} and~\eqref{eqn:lift-distributes-over-arr} for $\arrowlift\genb$:
@@ -1830,27 +1822,94 @@ Starting from the right side of the equivalence, expand definitions and apply ho
 \\
 	&\ \equiv\ \arrowtrans\gend~(\arrowlift\genb~f)
 \end{align*}
-Lastly, because $\arrowtrans\genc$, $\arrowtrans\gend$, and $\arrowlift\genb$ are homomorphisms, $\arrowlift\gend$ is a homomorphism by composition.
+Further, because $\arrowtrans\genc$, $\arrowtrans\gend$, and $\arrowlift\genb$ are homomorphisms, $\arrowlift\gend$ is a homomorphism by composition.
 
 XXX: not sure I'm allowed to invoke converse of composition of homomorphisms without extra conditions
 \end{proof}
 
-\begin{corollary}[semantic correctness]
+\begin{corollary}[mapping* and preimage* arrow correctness]
 The following diagram commutes:
 \begin{equation}
 \begin{CD}
-X \botto Y   @>\liftpre \circ \liftmap>> X \preto Y \\
-@V{\eta_\pbot}VV            @VV{\eta\ppre}V\\
-X \pbotto Y  @>>\liftppre \circ \liftpmap>  X \ppreto Y
+X \botto Y   @>\liftmap>>   X \mapto Y   @>\liftpre>>   X \preto Y \\
+@V{\eta_\pbot}VV             @VV{\eta\pmap}V              @VV{\eta\ppre}V\\
+X \pbotto Y  @>>\liftpmap>  X \pmapto Y  @>>\liftppre>  X \ppreto Y
 \end{CD}
 \end{equation}
-Further, $\liftppre \circ \liftpmap$ is an arrow+choice homomorphism.
+Further, $\liftpmap$ and $\liftppre$ are arrow homomorphisms.
 \end{corollary}
 
-In particular, $\meaningof{\mathit{e}}\ppre'$ correctly computes preimages under the interpretation of $\mathit{e}$ as a partial function from an infinite random source.
+\begin{corollary}[semantic correctness]
+If $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$, then $\liftpmap~\meaningof{\mathit{e}}_\pbot \equiv \meaningof{\mathit{e}}\pmap$ and $\liftppre~\meaningof{\mathit{e}}\pmap \equiv \meaningof{\mathit{e}}\ppre$.
+\end{corollary}
 
+\begin{corollary}[semantic$'$ correctness]
+If $\meaningof{\mathit{e}}_\pbot' : X \pbotto Y$, then $\liftpmap~\meaningof{\mathit{e}}_\pbot' \equiv \meaningof{\mathit{e}}\pmap'$ and $\liftppre~\meaningof{\mathit{e}}\pmap' \equiv \meaningof{\mathit{e}}\ppre'$.
+\end{corollary}
 
-\section{Approximating Preimage Arrow}
+In particular, $\meaningof{\mathit{e}}\ppre$ and $\meaningof{\mathit{e}}\ppre'$ correctly compute preimages under the interpretation of $\mathit{e}$ as a function from an implicit random source.
+We will make stronger statements about $\meaningof{\cdot}\ppre'$ after proving its computations always converge.
+
+\begin{theorem}[divergence implies error]
+Let $f := \meaningof{\mathit{e}}_\pbot$ and $f' := \meaningof{\mathit{e}}_\pbot'$ converge, where $f : x \pbotto y$.
+For all $r \in R$, $t \in T$ and $a : x$,
+\begin{enumerate}
+	\item If $~f~\pair{\pair{r,t},a} = b$, then $f'~\pair{\pair{r,t'},a} = b$ for some $t' \in T$.
+	\item If $~f~\pair{\pair{r,t},a}$ diverges, $f'~\pair{\pair{r,t'},a} = \bot$ for all $t' \in T$.
+\end{enumerate}
+\end{theorem}
+\begin{proof}
+Let $m : J \tto J$ invertibly map sub-computation indexes in $f'$ to corresponding sub-computation indexes in $f$.
+(Defining $m$ formally is tedious and unilluminating.)
+
+\emph{Case 1.}
+Define $t' \in J \to Bool_\bot$ such that $t'~j = z$ if the sub-computation with index $m~j$ in $f$ is an $if$ condition that returns $z$, otherwise $t'~j = \bot$.
+Because $f~\pair{\pair{r,t},a}$ converges, $t'~j \neq \bot$ for at most finitely many $j$, so $t' \in T$.
+Exists $t'$.
+
+\emph{Case 2.}
+Let $t' \in T$.
+There exists an infinite \emph{suffix} $J' \subset J$ closed under $left$ and $right$, such that for all $j' \in J'$, $t'~j' = \bot$.
+Because $f~\pair{\pair{r,t},a}$ diverges, the indexes of its $if$ conditions are unbounded; there is therefore a condition with index $j$ such that $m^{-1}~j \in J'$.
+It returns $\bot$, so $f'~\pair{\pair{r,t'},a} = \bot$.
+\end{proof}
+
+\begin{definition}[halting set]
+A halting set $A^*$ can be defined for any bottom*, mapping* or preimage* arrow computation.
+In all cases, $A^* \subseteq (R \times T) \times X$, defined by
+\begin{itemize}
+	\item $f : X \pbotto Y$: largest $A^*$ for which $f~j_0~x \neq \bot$ (which implies convergence) for all $x \in A^*$.
+	\item $g : X \pmapto Y$: largest $A^*$ for which $domain~(g~j_0~A^*) = A^*$ (which implies convergence).
+	\item $h : X \ppreto Y$: largest $A^*$ for which $pre!ap~(h~j_0~A^*)~Y = A^*$.
+\end{itemize}
+\end{definition}
+
+That $\liftpmap$ and $\liftppre$ are arrow homomorphisms allows transporting halting set definitions and theorems between arrow types.
+
+\begin{corollary}[halting set equality]
+Let $f : X \pbotto Y$, and $g : X \pmapto Y$ and $h : X \ppreto Y$ such that $g \equiv \liftpmap~f$ and $h \equiv \liftppre~g$.
+Then $f$, $g$ and $h$ have the same halting set.
+\end{corollary}
+
+\begin{definition}[halting probability]
+Let $f : X \pbotto Y$ and $A^*$ be its halting set.
+Let $P \in \powerset~R \pto [0,1]$ be a probability measure over random stores.
+The \keyword{halting probability} of $f$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
+\end{definition}
+
+\begin{corollary}[computed halting set]
+Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge.
+Then $A^* = pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~(S \times X))~Y$.
+\end{corollary}
+
+\begin{corollary}[semantic correctness (final)]
+Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge, with halting set $A^*$.
+For $A \subseteq X$ and $B \subseteq Y$, $pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~A)~B = preimage~(\meaningof{\mathit{e}}\pmap~j_0~(A \i A^*))~B$.
+\end{corollary}
+
+In other words, preimages computed using $\meaningof{\cdot}\ppre'$ always converge and never include inputs that give rise to errors or divergence.
+
+\section{Implementable Approximation}
 
 XXX: $\arrpre$ is generally uncomputable, but we don't need that many lifts; Figure~\ref{fig:extra-preimage-arrow-defs} has the rest of the non-arithmetic ones we'll need
 
