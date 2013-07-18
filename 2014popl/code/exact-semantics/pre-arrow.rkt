@@ -1,8 +1,7 @@
 #lang typed/racket
 
-(require "../set-ops.rkt"
-         "mapping.rkt"
-         "preimage.rkt"
+(require "../branch-trace.rkt"
+         "preimage-mapping.rkt"
          "map-arrow.rkt")
 
 (provide (all-defined-out))
@@ -59,10 +58,10 @@
 (define (snd/pre A)
   (((inst lift/pre (Pair X Y) Y) snd/map) A))
 
-(: error/pre (All (X Y) (Pre-Arrow X Y)))
-(define (error/pre A)
-  (((inst lift/pre X Y) error/map) A))
+(: agrees/pre (Pre-Arrow (Pair Boolean Boolean) Boolean))
+(define agrees/pre
+  (lift/pre agrees/map))
 
-(: assert=/pre (All (X) (Pre-Arrow (Pair X X) X)))
-(define (assert=/pre A)
-  (((inst lift/pre (Pair X X) X) assert=/map) A))
+(: π/pre (Tree-Index -> (Pre-Arrow Branch-Trace Boolean)))
+(define (π/pre j)
+  (lift/pre (π/map j)))

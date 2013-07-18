@@ -1,7 +1,8 @@
 #lang typed/racket
 
-(require "../set-ops.rkt"
-         "types.rkt"
+(require "../types.rkt"
+         "../set-ops.rkt"
+         "../branch-trace.rkt"
          "mapping.rkt"
          "bot-arrow.rkt")
 
@@ -67,10 +68,10 @@
 (define (snd/map A)
   (((inst arr/map (Pair X Y) Y) cdr) A))
 
-(: error/map (All (X Y) (Map-Arrow X Y)))
-(define (error/map A)
-  (((inst lift/map X Y) error/bot) A))
+(: agrees/map (Map-Arrow (Pair Boolean Boolean) Boolean))
+(define agrees/map
+  (lift/map agrees/bot))
 
-(: assert=/map (All (X) (Map-Arrow (Pair X X) X)))
-(define (assert=/map A)
-  (((inst lift/map (Pair X X) X) assert=/bot) A))
+(: π/map (Tree-Index -> (Map-Arrow Branch-Trace Boolean)))
+(define (π/map j)
+  (lift/map (π/bot j)))

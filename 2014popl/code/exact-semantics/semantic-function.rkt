@@ -1,13 +1,14 @@
 #lang typed/racket
 
 (require typed/rackunit
-         "types.rkt"
+         "../types.rkt"
+         "../set-ops.rkt"
+         "../branch-trace.rkt"
          "bot-arrow.rkt"
          "map-arrow.rkt"
          "pre-arrow.rkt"
          "partial-arrows.rkt"
-         "branches.rkt"
-         "../set-ops.rkt")
+         )
 
 (define-type (Arrow X Y) (PBot-Arrow X Y))
 (define arr arr/pbot)

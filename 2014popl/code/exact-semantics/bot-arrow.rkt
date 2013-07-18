@@ -1,13 +1,14 @@
 #lang typed/racket
 
-(require "types.rkt")
+(require "../types.rkt"
+         "../branch-trace.rkt")
 
 (provide (all-defined-out))
 
 ;; ===================================================================================================
 ;; Bottom arrow
 
-(define-type (Bot-Arrow X Y) (X -> (U (just Y) Bottom)))
+(define-type (Bot-Arrow X Y) (X -> (Maybe Y)))
 
 (: arr/bot (All (X Y) ((X -> Y) -> (Bot-Arrow X Y))))
 (define ((arr/bot f) x) (just (f x)))
@@ -49,9 +50,11 @@
 (define (snd/bot xy)
   (((inst arr/bot (Pair X Y) Y) cdr) xy))
 
-(: error/bot (All (X Y) (Bot-Arrow X Y)))
-(define (error/bot x) bottom)
-
-(: assert=/bot (All (X) (Bot-Arrow (Pair X X) X)))
-(define (assert=/bot xy)
+(: agrees/bot (Bot-Arrow (Pair Boolean Boolean) Boolean))
+(define (agrees/bot xy)
   (if (equal? (car xy) (cdr xy)) (just (car xy)) bottom))
+
+(: π/bot (Tree-Index -> (Bot-Arrow Branch-Trace Boolean)))
+(define ((π/bot j) b)
+  (define x ((π j) b))
+  (if (bottom? x) bottom (just x)))

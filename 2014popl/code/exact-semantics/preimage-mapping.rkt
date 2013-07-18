@@ -5,9 +5,6 @@
 
 (provide (all-defined-out))
 
-(: pmapping-approx? (Parameterof Boolean))
-(define pmapping-approx? (make-parameter #f))
-
 ;; ===================================================================================================
 ;; Preimage mappings
 
@@ -30,16 +27,10 @@
   (match-define (pmapping Y1 p1) h1)
   (match-define (pmapping Y2 p2) h2)
   (define Y (set-product Y1 Y2))
-  (define p
-    (cond [(pmapping-approx?)
-           (λ: ([B : (Setof (Pair Y Z))])
-             (set-intersect (p1 (set-image (inst car Y Z) B))
-                            (p2 (set-image (inst cdr Y Z) B))))]
-          [else
-           (λ: ([B : (Setof (Pair Y Z))])
-             (set-bind B (λ: ([y : (Pair Y Z)])
-                           (match-define (cons y1 y2) y)
-                           (set-intersect (p1 (set y1)) (p2 (set y2))))))]))
+  (define p (λ: ([B : (Setof (Pair Y Z))])
+              (set-bind B (λ: ([y : (Pair Y Z)])
+                            (match-define (cons y1 y2) y)
+                            (set-intersect (p1 (set y1)) (p2 (set y2)))))))
   (pmapping Y p))
 
 (: pmapping-compose (All (X Y Z) ((pmapping Y Z) (pmapping X Y)
@@ -54,13 +45,8 @@
   (define Y1 (pmapping-range h1))
   (define Y2 (pmapping-range h2))
   (define Y (set-union Y1 Y2))
-  (define p
-    (cond [(pmapping-approx?)
-           (λ: ([B : (Setof Y)])
-             (set-union (pmapping-ap h1 B) (pmapping-ap h2 B)))]
-          [else
-           (λ: ([B : (Setof Y)])
-             (set-disjoint-union (pmapping-ap h1 B) (pmapping-ap h2 B)))]))
+  (define p (λ: ([B : (Setof Y)])
+              (set-disjoint-union (pmapping-ap h1 B) (pmapping-ap h2 B))))
   (pmapping Y p))
 
 (: pmapping-equal? (All (X Y) ((pmapping X Y) (pmapping X Y) -> Boolean)))
@@ -68,9 +54,3 @@
   (define B (set-union (pmapping-range h1) (pmapping-range h2)))
   (for/and: ([B  (in-list (set->list (set-power B)))])
     (equal? (pmapping-ap h1 B) (pmapping-ap h2 B))))
-
-(: pmapping-subset? (All (X Y) ((pmapping X Y) (pmapping X Y) -> Boolean)))
-(define (pmapping-subset? h1 h2)
-  (define B (set-union (pmapping-range h1) (pmapping-range h2)))
-  (for/and: ([B  (in-list (set->list (set-power B)))])
-    (subset? (pmapping-ap h1 B) (pmapping-ap h2 B))))
