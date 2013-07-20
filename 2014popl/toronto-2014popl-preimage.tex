@@ -146,6 +146,8 @@ XXX, XXX
 
 XXX: conditional probability, measure-theory's take on probability (especially preimage measure)
 
+XXX: One of the strengths of measure-theoretic probability is that it can be used to factor the definition of a random process into an entirely deterministic part and an assumed-random part
+
 In this paper, we
 \begin{enumerate}
 	\item Define the \emph{bottom arrow}, type $X \botto Y$, as a compilation target for first-order functions that may raise errors.
@@ -237,6 +239,8 @@ We write \lzfclang programs in heavily sugared $\lambda$-calculus syntax, with a
 Shortly, $\emptyset$ is the empty set, $\omega$ is the cardinality of the natural numbers, $take~\set{x}$ reduces to $x$ and diverges for non-singleton sets, $x \in A$ decides membership, $\powerset~A$ reduces to the set of subsets of $A$, $\U\A$ reduces to the union of the sets in $\A$, $image~f~A$ applies $f$ to each member of $A$ and reduces to the set of results, and $|A|$ reduces to the cardinality of $A$.
 
 We assume literal set notation such as $\set{0,1,2}$ is already defined in terms of the set primitives.
+
+We import contemporary theorems as lemmas.
 
 \subsection{Internal and External Equality}
 
@@ -1506,11 +1510,11 @@ Ensuring $h~A$ converges is the most difficult, but doing the other two will pro
 We clearly need a new arrow that threads a random source through its computations.
 To ensure it contains enough random numbers, the source should be infinite.
 
-In a pure $\lambda$-calculus, random sources are typically infinite lists, threaded monadically: each computation receives and produces a random source.
+In a pure $\lambda$-calculus, random sources are typically infinite streams, threaded monadically: each computation receives and produces a random source.
 A new combinator is defined that removes the head of the random source and passes the tail along.
 This is likely preferred because pseudorandom number generators are almost universally monadic.
 
-A little-used alternative is for the random source to be an infinite tree, threaded applicatively:
+A little-used alternative is for the random source to be a tree, threaded applicatively:
 each computation receives, but does not produce, a random source.
 Multi-argument combinators split the tree and pass sub-trees to sub-computations.
 
@@ -1525,12 +1529,12 @@ Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto
 If for every finite composition $next$ of $left$ and $right$, $next~j_0$ is unique, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
 \end{definition}
 
-For example, let $J$ be the set of lists of booleans, $j_0$ the empty list, and define
+For example, let $J$ be the set of lists of $\set{0,1}$, $j_0$ the empty list, and define
 \begin{equation}
 \begin{aligned}
-	left~xs &\ := \ \pair{true,xs}
+	left~xs &\ := \ \pair{0,xs}
 \\
-	right~xs &\ := \ \pair{false,xs}
+	right~xs &\ := \ \pair{1,xs}
 \end{aligned}
 \end{equation}
 Alternatively, let $J$ be the set of dyadic rationals in $(0,1)$ (i.e. those with power-of-two denominators), $j_0 := \tfrac{1}{2}$ and
@@ -1860,7 +1864,7 @@ For all $r \in R$, $t \in T$ and $a : x$,
 \end{theorem}
 \begin{proof}
 Let $m : J \tto J$ invertibly map sub-computation indexes in $f'$ to corresponding sub-computation indexes in $f$.
-(Defining $m$ formally is tedious and unilluminating.)
+(Defining $m$ formally is tedious and unilluminating. XXX: check this)
 
 \emph{Case 1.}
 Define $t' \in J \to Bool_\bot$ such that $t'~j = z$ if the sub-computation with index $m~j$ in $f$ is an $if$ condition that returns $z$, otherwise $t'~j = \bot$.
@@ -1874,28 +1878,27 @@ Because $f~\pair{\pair{r,t},a}$ diverges, the indexes of its $if$ conditions are
 It returns $\bot$, so $f'~\pair{\pair{r,t'},a} = \bot$.
 \end{proof}
 
+To compare preimages computed by arrow instances produced by $\meaningof{\cdot}\ppre$ and $\meaningof{\cdot}\ppre'$, we need a set of inputs on which they should obviously always agree.
+
 \begin{definition}[halting set]
-A halting set $A^*$ can be defined for any bottom*, mapping* or preimage* arrow computation.
-In all cases, $A^* \subseteq (R \times T) \times X$, defined by
+A computation's \mykeyword{halting set} is the largest $A^* \subseteq (R \times T) \times X$ for which
 \begin{itemize}
-	\item $f : X \pbotto Y$: largest $A^*$ for which $f~j_0~x \neq \bot$ (which implies convergence) for all $x \in A^*$.
-	\item $g : X \pmapto Y$: largest $A^*$ for which $domain~(g~j_0~A^*) = A^*$ (which implies convergence).
-	\item $h : X \ppreto Y$: largest $A^*$ for which $pre!ap~(h~j_0~A^*)~Y = A^*$.
+	\item For $f : X \pbotto Y$, $f~j_0~x \neq \bot$ for all $x \in A^*$.
+	\item For $g : X \pmapto Y$, $domain~(g~j_0~A^*) = A^*$.
+	\item For $h : X \ppreto Y$, $pre!ap~(h~j_0~A^*)~Y = A^*$.
 \end{itemize}
+Recall truth statements like $f~j_0~x \neq \bot$ imply convergence.
 \end{definition}
 
 That $\liftpmap$ and $\liftppre$ are arrow homomorphisms allows transporting halting set definitions and theorems between arrow types.
 
-\begin{corollary}[halting set equality]
+\begin{theorem}[halting set equality]
 Let $f : X \pbotto Y$, and $g : X \pmapto Y$ and $h : X \ppreto Y$ such that $g \equiv \liftpmap~f$ and $h \equiv \liftppre~g$.
 Then $f$, $g$ and $h$ have the same halting set.
-\end{corollary}
-
-\begin{definition}[halting probability]
-Let $f : X \pbotto Y$ and $A^*$ be its halting set.
-Let $P \in \powerset~R \pto [0,1]$ be a probability measure over random stores.
-The \keyword{halting probability} of $f$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
-\end{definition}
+\end{theorem}
+\begin{proof}
+XXX: do this
+\end{proof}
 
 \begin{corollary}[computed halting set]
 Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge.
@@ -1907,7 +1910,177 @@ Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge, with halting set $A^*
 For $A \subseteq X$ and $B \subseteq Y$, $pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~A)~B = preimage~(\meaningof{\mathit{e}}\pmap~j_0~(A \i A^*))~B$.
 \end{corollary}
 
-In other words, preimages computed using $\meaningof{\cdot}\ppre'$ always converge and never include inputs that give rise to errors or divergence.
+In other words, preimages computed using $\meaningof{\cdot}\ppre'$ always converge, never include inputs that give rise to errors or divergence, and are correct.
+
+\section{Measurability}
+
+We have not assigned probabilities to any sets yet.
+
+Recall that, for a mapping $g : X \pto Y$, the probability of an output set $B \subseteq Y$ is
+\begin{equation}
+	P~(preimage~g~B)
+\end{equation}
+where $P \in \powerset~X \pto [0,1]$ is a probability measure on $X$.
+This was the motivation for defining arrows to compute preimages in the first place.
+Note again that $P$ is a \emph{partial} function.
+We had left $domain~P$, and which $B \subseteq Y$ have preimages in $domain~P$, as technical conditions to be proved later.
+Now we determine those conditions.
+
+To save space, we assume readers are familiar with either topology or measure theory.
+
+\begin{definition}[topology, open set]
+A collection of sets $\A \subseteq \powerset~X$ is called a \keyword{topology} on $X$ if it contains $\emptyset$ and $X$, and is closed under finite intersections and arbitrary unions.
+The sets in $\A$ are called \keyword{open sets}.
+\end{definition}
+
+\begin{definition}[$\sigma$-algebra, measurable set]
+A collection of sets $\A \subseteq \powerset~X$ is called a \keyword{$\sigma$-algebra} on $X$ if it contains $X$ and is closed under complements and countable unions.
+The sets in $\A$ are called \keyword{measurable sets}.
+\end{definition}
+
+$X \w X = \emptyset$, so $\emptyset \in \A$.
+It follows from De Morgan's law that $\A$ is closed under countable intersections.
+
+Many concepts in measure theory can be understood by their analogues in topology.
+The measure-theoretic analogue of continuity, for example, is measurability.
+
+\begin{definition}[continuous/measurable mapping]
+Let $\A$ and $\B$ be topologies/$\sigma$-algebras on $X$ and $Y$ respectively.
+A mapping $g : X \pto Y$ is $\A!\B$-\keyword{continuous/measurable} if for all $B \in \B$, $preimage~g~B \in \A$.
+\end{definition}
+
+%Note that $domain~g = preimage~g~Y$, so $domain~g \in \A$.
+
+Measurability is usually a weaker condition than continuity.
+Measurable $\Re \pto \Re$ functions, for example, may have countably many discontinuities.
+
+Topologies and $\sigma$-algebras on product spaces are defined the same way.
+
+\begin{definition}[finite product topology/$\sigma$-algebra]
+Let $\A_1$ and $\A_2$ be topologies/$\sigma$-algebras on $X_1$ and $X_2$, and $X := \pair{X_1,X_2}$.
+The \keyword{product topology/$\sigma$-algebra} $\A_1 \otimes \A_2$ is the smallest topology/$\sigma$-algebra for which $fst\restrict{X}$ and $snd\restrict{X}$ are continuous/measurable mappings.
+\end{definition}
+
+\begin{definition}[arbitrary product topology/$\sigma$-algebra]
+Let $\A$ be a topology/$\sigma$-algebra on $X$.
+The \keyword{product topology/ $\sigma$-algebra} $\A^{\otimes J}$ is the smallest topology/$\sigma$-algebra for which, for all $j \in J$, $(\pi~j)\restrict{J \to X}$ is a continuous/measurable mapping.
+\end{definition}
+
+\begin{definition}[measurable computation]
+Let $\A$ and $\B$ be $\sigma$-algebras for $X$ and $Y$ respectively.
+A mapping arrow computation $g : X \mapto Y$ is $\A!\B$-\keyword{measurable} if for all $A \subseteq A^*$, $g~A$ is an $\A!\B$-measurable mapping, where $A^*$ is $g$'s halting set.
+\end{definition}
+
+Notice that the $A$ in $g~A$ need not be measurable, but $domain~(g~A)$ must be.
+XXX: this implies $\arrmap~fst$ is not measurable!
+
+\subsection{Case: Composition}
+
+\begin{lemma}[measurability under $\circ\map$]
+If $g_1 : X \pto Y$ is $\A!\B$-measurable and $g_2 : Y \pto Z$ is $\B!\C$-measurable, then $g_2 \circ\map g_1$ is $\A!\C$-measurable.
+\label{lem:compositions-are-measurable}
+\end{lemma}
+
+\begin{theorem}[measurability under $(\compmap)$]
+If $g_1 : X \mapto Y$ is $\A!\B$-measurable and $g_2 : Y \mapto Z$ is $\B!\C$-measurable, then $g_1~\compmap~g_2$ is $\A!\C$-measurable.
+\end{theorem}
+\begin{proof}
+Recall the definition of $(\compmap)$:
+\begin{equation}
+	(g_1~\compmap~g_2)~A \ := \ 
+		\lzfclet{
+			g_1' & g_1~A \\
+			g_2' & g_2~(range~g_1')
+		}{g_2' \circ\map g_1'}
+\end{equation}
+By definition, $g_1~A$ is an $\A!\B$-measurable mapping; likewise for $g_2~(range~g_1')$.
+Apply Lemma~\ref{lem:compositions-are-measurable}.
+\end{proof}
+
+\subsection{Case: Pairing}
+
+\begin{lemma}[measurability under $\pair{\cdot,\cdot}\map$]
+If $g_1 : X \pto Y_1$ is $\A!\B_1$-measurable and $g_2 : X \pto Y_2$ is $\A!\B_2$-measurable, then $\pair{g_1,g_2}\map$ is $\A!\B_1 \otimes \B_2$-measurable.
+\label{lem:pairings-are-measurable}
+\end{lemma}
+
+\begin{theorem}[measurability under $(\pairmap)$]
+If $g_1 : X \mapto Y_1$ is $\A!\B_1$-measurable and $g_2 : X \mapto Y_2$ is $\A!\B_2$-measurable, then $g_1~\pairmap~g_2$ is $\A!\B_1 \otimes \B_2$-measurable.
+\end{theorem}
+\begin{proof}
+Recall the definition of $(\pairmap)$:
+\begin{equation}
+	(g_1~\pairmap~g_2)~A \ := \ \pair{g_1~A,g_2~A}\map
+\end{equation}
+By definition, $g_1~A$ is an $\A!\B_1$-measurable mapping; likewise for $g_2~A$.
+Apply Lemma~\ref{lem:pairings-are-measurable}.
+\end{proof}
+
+\subsection{Case: Conditional}
+
+\begin{lemma}[measurability under $\uplus\map$]
+If $g_1 : X \pto Y$ and $g_2 : X \pto Y$ are $\A!\B$-measurable and have disjoint domains, $g_1 \uplus\map g_2$ is $\A!\B$-measurable.
+\label{lem:disjoint-unions-are-measurable}
+\end{lemma}
+
+\begin{theorem}[measurability under $\ifmap$]
+If $g_1 : X \mapto Bool$ is $\A!(\powerset~Bool)$-measurable, and $g_2 : X \mapto Y$ and $g_3 : X \mapto Y$ are $\A!\B$-measurable, then $\ifmap~g_1~g_2~g_3$ is $\A!\B$-measurable.
+\end{theorem}
+\begin{proof}
+Recall the definition of $\ifmap$:
+\begin{equation}
+	\ifmap~g_1~g_2~g_3~A \ := \ 
+		\lzfclet{
+			g_1' & g_1~A \\
+			g_2' & g_2~(preimage~g_1'~\set{true}) \\
+			g_3' & g_3~(preimage~g_1'~\set{false})
+		}{g_2' \uplus\map g_3'}
+\end{equation}
+Clearly $g_1'$, $g_2'$ and $g_3'$ are measurable mappings, and $g_2'$ and $g_3'$ have disjoint domains.
+Apply Lemma~\ref{lem:disjoint-unions-are-measurable}.
+
+XXX: this assumes $domain~g_2' \subseteq preimage~g_1'~\set{true}$, similarly for $g_3'$
+\end{proof}
+
+\subsection{Case: Laziness}
+
+\begin{lemma}[measurability of $\emptyset$]
+For any $\sigma$-algebras $\A$ and $\B$, the empty mapping $\emptyset$ is $\A!\B$-measurable.
+\label{lem:empty-mapping-measurable}
+\end{lemma}
+
+\begin{theorem}[measurability under $\lazymap$]
+Let $g : 1 \tto (X \mapto Y)$. If $g~0$ is $\A!\B$-measurable, then $\lazymap~g$ is $\A!\B$-measurable.
+\end{theorem}
+\begin{proof}
+Recall the definition of $\lazymap$:
+\begin{equation}
+	\lazymap~g~A \ := \ if~(A = \emptyset)~\emptyset~(g~0~A)
+\end{equation}
+Let $A \subseteq A^*$.
+If $A = \emptyset$, then $\lazymap~g~A = \emptyset$; apply Lemma~\ref{lem:empty-mapping-measurable}.
+If $A \neq \emptyset$, then $\lazymap~g = g~0$, which is $\A!\B$-measurable.
+\end{proof}
+
+
+\subsection{Every Program Is Measurable}
+
+\begin{definition}[standard $\sigma$-algebra]
+For $X$ used in a type, $\Sigma~X$ denotes its \mykeyword{standard $\sigma$-algebra}, defined by
+\begin{align}
+	\Sigma~Bool &\ := \ \powerset~Bool \\
+	\Sigma~\pair{X_1,X_2} &\ := \ \Sigma~X_1 \otimes \Sigma~X_2
+\end{align}
+\end{definition}
+
+XXX: assume every lifted function is measurable
+
+\begin{definition}[halting probability]
+Let $f : X \pbotto Y$ and $A^*$ be its halting set.
+Let $P \in \powerset~R \pto [0,1]$ be a probability measure over random stores.
+If $A^*$ is measurable, the \keyword{halting probability} of $f$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
+\end{definition}
+
 
 \section{Implementable Approximation}
 
