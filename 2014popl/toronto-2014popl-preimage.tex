@@ -131,7 +131,13 @@
 \maketitle
 
 \begin{abstract}
-XXX
+Problem: doesn't exist: Turing-equivalent, probabilistic programming language with a semantics and implementation that supports any kind of probability measure and---critically---can do probabilistic conditioning
+
+Why problem:
+
+Solution:
+
+Why solution:
 \end{abstract}
 
 \category{XXX-CR-number}{XXX-subcategory}{XXX-third-level}
@@ -144,9 +150,40 @@ XXX, XXX
 
 \section{Introduction}
 
-XXX: conditional probability, measure-theory's take on probability (especially preimage measure)
 
-XXX: One of the strengths of measure-theoretic probability is that it can be used to factor the definition of a random process into an entirely deterministic part and an assumed-random part
+
+XXX: motivate conditional probability
+
+XXX: densities fail:
+\begin{enumerate}
+	\item infinite or variable-length data
+	\item discontinuities in random variables
+	\item nonlinear conditions
+\end{enumerate}
+
+XXX: measures instead of densities, preimage measure
+
+Purely functional languages do not allow effects, including randomness.
+(Of course, to be Turing-equivalent, ``pure'' languages usually allow divergence, which is an applicative effect.)
+Programmers must write probabilistic programs as functions from a random source to outputs.
+Monads and other categorical classes such as idioms and arrows can make doing so easier.
+The strength of this approach lies in how it factors each probabilistic program into an effectful part and a pure part.
+
+It seems this approach should make interpreting probabilistic programs in measure theory easy.
+For a probabilistic program $f : X \tto Y$, the probability measure over output sets $B \subseteq Y$ should be defined by preimages of $B$ under $f$ and the probability measure over $X$.
+Unfortunately, it is difficult to make a compositional semantics from this simple-sounding idea, for the following reasons.
+\begin{itemize}
+	\item ``Preimage under $f$'' is a senseless phrase unless $f$ has an observable domain of definition. Lambdas do not. Hash tables do, but their domains are finite.
+	\item Probability measures can be defined only for \emph{measurable} subsets of $X$ and of $Y$. Thus, $f$ is constrained: preimages of measurable subsets of $Y$ must be measurable subsets of $X$. Proving the conditions under which this is true is difficult, especially when $f$ may diverge.
+	\item Probability measures cannot be defined for function types without imposing difficult restrictions.
+\end{itemize}
+Implementing a language based on such a semantics is complicated by these facts:
+\begin{itemize}
+	\item Contemporary mathematics is unlike any implementation's host language.
+	\item It requires running programs backward, efficiently, on possibly infinite sets of outputs.
+\end{itemize}
+
+XXX: rewrite the following
 
 In this paper, we
 \begin{enumerate}
@@ -283,30 +320,29 @@ We assume a desugaring pass over \lzfclang expressions, which automatically curr
 (We may be rather informal with the latter two binding forms when the meaning is clear.)
 We assume we have logical operators, bounded quantifiers (unbounded quantifiers are not \lzfclang-definable), and typical set operations.
 
-We define atypical set operations, such as disjoint union:
+A less typical set operation we use is disjoint union:
 \begin{equation}
 \begin{aligned}
 	&(\uplus) : Set~x \tto Set~x \tto Set~x \\
 	&A \uplus B \ := \ if~(A \i B = \emptyset)~(A \u B)~(take~\emptyset)
 \end{aligned}
 \end{equation}
-which diverges when $A$ and $B$ overlap.
+$A \uplus B$ diverges when $A$ and $B$ overlap.
 
 In set theory, functions are encoded as sets of input-output pairs.
 The increment function for the natural numbers, for example, is $\set{\pair{0,1},\pair{1,2},\pair{2,3},...}$.
-To distinguish these hash tables from lambdas, we call them \mykeyword{mappings}, and use the word \keyword{function} for either a lambda or a mapping.
-For convenience, as with lambdas, we use adjacency (i.e. $(f~x)$) to apply mappings.
+To distinguish these huge tables from lambdas, we call them \mykeyword{mappings}, and use the word \keyword{function} to mean a lambda or mapping.
 
-The set $X \pto Y$ contains all the \emph{partial} mappings from $X$ to $Y$.
-For example, $X \pto Y$ is the return type for the restriction function:
-\begin{equation}
-\begin{aligned}
-	&(\cdot)\restrict{(\cdot)}\ : (X \tto Y) \tto Set~X \tto (X \pto Y) \\
-	&f\restrict{A} \ := \ image~(\fun{x}{\pair{x, f~x}})~A
-\end{aligned}
-\end{equation}
-which converts a lambda or a mapping to a mapping with domain $A \subseteq X$.
-To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e_A}}{\mathit{e}}$ as shorthand for $(\fun{\mathit{x}}{\mathit{e}})\restrict{\mathit{e_A}}$.
+Syntax for defining unnamed mappings is defined by
+\begin{align}
+	&\fun{\mathit{x_a} \in \mathit{e_A}}{\mathit{e_b}} \ :\equiv\ mapping~(\fun{\mathit{x_a}}\mathit{e_b})~\mathit{e_A} \\
+\nonumber\\[-6pt]
+	&\begin{aligned}
+		&mapping : (X \tto Y) \tto Set~X \tto (X \pto Y) \\
+		&mapping~f~A \ := \ image~(\fun{a}{\pair{a,f~a}})~A
+	\end{aligned}
+\end{align}
+For convenience, as with lambdas, we use adjacency (e.g. $(f~x)$) to apply mappings.
 
 \begin{figure*}[t]\centering
 \begin{align*}
@@ -323,8 +359,13 @@ To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e
 \\[-6pt]
 	&\begin{aligned}[t]
 		&preimage : (X \pto Y) \tto Set~Y \tto Set~X \\
-		&preimage~f~B \ :=\ \setb{x \in domain~f}{f~x \in B}
+		&preimage~f~B \ :=\ \setb{a \in domain~f}{f~a \in B}
 	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&restrict : (X \pto Y) \tto Set~X \tto (X \pto Y) \\
+		&restrict~f~A \ := \ \fun{a \in (A \i domain~f)}{f~a}
+	\end{aligned}
 \end{aligned}
 &\tab\tab\tab
 \begin{aligned}[t]
@@ -333,7 +374,7 @@ To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e
 		&\pair{g_1,g_2}\map \ := \ 
 			\lzfclet{
 				A & (domain~g_1) \i (domain~g_2)
-			}{\fun{x \in A}{\pair{g_1~x,g_2~x}}}
+			}{\fun{a \in A}{\pair{g_1~a,g_2~a}}}
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
@@ -341,7 +382,7 @@ To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e
 		&g_2 \circ\map g_1 \ := \ 
 			\lzfclet{
 				A & preimage~g_1~(domain~g_2)
-			}{\fun{x \in A}{g_2~(g_1~x)}}
+			}{\fun{a \in A}{g_2~(g_1~a)}}
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
@@ -349,7 +390,7 @@ To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e
 		&g_1 \uplus\map g_2 \ := \ 
 			\lzfclet{
 				A & (domain~g_1) \uplus (domain~g_2)
-			}{\fun{x \in A}{if~(x \in domain~g_1)~(g_1~x)~(g_2~x)}}
+			}{\fun{a \in A}{if~(a \in domain~g_1)~(g_1~a)~(g_2~a)}}
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -358,11 +399,12 @@ To create mappings using lambda syntax, we define $\fun{\mathit{x} \in \mathit{e
 \label{fig:mapping-defs}
 \end{figure*}
 
-Figure~\ref{fig:mapping-defs} defines more operations on partial mappings: $domain$, $range$, $preimage$, pairing, composition, and disjoint union.
+Figure~\ref{fig:mapping-defs} defines a few common operations on mappings: $domain$, $range$, $preimage$, $restrict$, pairing, composition, and disjoint union.
 The latter three are particularly important in the preimage arrow's derivation, and $preimage$ is critical in measure theory's account of probability.
+For symmetry with partial functions $x \tto y$, they are defined on $X \pto Y$, where $X \pto Y$ is the set of all partial mappings from any domain set $X$ to any codomain set $Y$.
 
 The set $X \to Y$ contains all the \emph{total} mappings from $X$ to $Y$.
-We think of these as possibly infinite vectors, with application for indexing.
+We use total mappings as possibly infinite vectors, with application for indexing.
 Projections are produced by
 \begin{equation}
 \begin{aligned}
@@ -725,31 +767,26 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 \begin{figure*}[t]\centering
 \begin{align*}
 \begin{aligned}[t]
-	\meaningof{\mathit{x} := \mathit{e};\ \cdots}\gen &\ :\equiv\
-		\mathit{x} := \meaningof{\mathit{e}}\gen;\ \cdots \\
+	\meaningof{\mathit{x} := \mathit{e};\ \cdots\ ; \mathit{e_{body}}}\gen &\ :\equiv\
+		\mathit{x} := \meaningof{\mathit{e}}\gen;\ \cdots \ ; \meaningof{\mathit{e_{body}}}\gen \\
 	\meaningof{\mathit{x}~\mathit{e}}\gen &\ :\equiv\
-		\meaningof{\pair{\mathit{e},0}}\gen~\arrowcomp\gen~\mathit{x}
+		\meaningof{\pair{\mathit{e},\pair{}}}\gen~\arrowcomp\gen~\mathit{x}
+\\
+	\meaningof{let~\mathit{e}~\mathit{e_{body}}}\gen &\ :\equiv\ 
+		(\meaningof{\mathit{e}}\gen~\arrowpair\gen~(\arrowarr\gen~id))~
+			\arrowcomp\gen~
+		\meaningof{\mathit{e_{body}}}\gen
+\\
+	\meaningof{env~0}\gen &\ :\equiv\ \arrowarr\gen~fst
+\\
+	\meaningof{env~(\mathit{n}+1)}\gen &\ :\equiv\ \arrowarr\gen~snd~\arrowcomp\gen~\meaningof{env~\mathit{n}}\gen
+\end{aligned}
+&\tab
+\begin{aligned}[t]
+	\meaningof{\mathit{v}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\underline{\ \ }}{\mathit{v}}
 \\
 	\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}_1}\gen~\arrowpair\gen~\meaningof{\mathit{e}_2}\gen
-\\
-	\meaningof{let~\mathit{e}_0~\mathit{e_b}}\gen &\ :\equiv\ 
-		(\meaningof{\mathit{e}_0}\gen~\arrowpair\gen~(\arrowarr\gen~id))~
-			\arrowcomp\gen~
-		\meaningof{\mathit{e_b}}\gen
-\\
-	\meaningof{env~\mathit{n}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{list!ref~\gamma~\mathit{n}}
-\\
-	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
-		\arrowif\gen~
-			\meaningof{\mathit{e_c}}\gen~
-			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_t}}\gen})~
-			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_f}}\gen})
-\\
-\end{aligned}
-&\tab\tab\tab
-\begin{aligned}[t]
-	\meaningof{\mathit{v}}\gen &\ :\equiv\ \arrowarr\gen~\fun{\gamma}{\mathit{v}}
 \\
 	\meaningof{fst~\mathit{e}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}}\gen~\arrowcomp\gen~(\arrowarr\gen~fst)
@@ -757,14 +794,11 @@ Variables are referenced using $(env~\mathit{n})$ with $(env~0)$ referring to th
 	\meaningof{snd~\mathit{e}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}}\gen~\arrowcomp\gen~(\arrowarr\gen~snd)
 \\
-	\meaningof{\mathit{e}_1 + \mathit{e}_2}\gen &\ :\equiv\
-		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x + y})
-\\
-	\meaningof{\mathit{e}_1 < \mathit{e}_2}\gen &\ :\equiv\
-		\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen~\arrowcomp\gen~(\arrowarr\gen~\fun{\pair{x,y}}{x < y})
-\\
-	&\ \cdots\ 
-\\
+	\meaningof{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\gen &\ :\equiv\
+		\arrowif\gen~
+			\meaningof{\mathit{e_c}}\gen~
+			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_t}}\gen})~
+			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_f}}\gen})
 \end{aligned}
 \end{align*}
 \hrule
@@ -800,25 +834,25 @@ Its computations are of type $x \botto y ::= x \tto y_\bot$, where the inhabitan
 \\[-6pt]
 	&\begin{aligned}[t]
 		&(\compbot) : (x \botto y) \tto (y \botto z) \tto (x \botto z) \\
-		&(f_1~\compbot~f_2)~x \ := \ if~(f_1~x = \bot)~\bot~(f_2~(f_1~x))
+		&(f_1~\compbot~f_2)~a \ := \ if~(f_1~a = \bot)~\bot~(f_2~(f_1~a))
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
 		&(\pairbot) : (x \botto {y_1}) \tto (x \botto {y_2}) \tto (x \botto \pair{y_1,y_2}) \\
-		&(f_1~\pairbot~f_2)~x \ := \ if~(f_1~x = \bot~or~f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}
+		&(f_1~\pairbot~f_2)~a \ := \ if~(f_1~a = \bot~or~f_2~a = \bot)~\bot~{\pair{f_1~a,f_2~a}}
 	\end{aligned}
 \end{aligned}
 &\tab\tab\tab
 \begin{aligned}[t]
 	&\begin{aligned}[t]
 		&\ifbot : (x \botto Bool) \tto (x \botto y) \tto (x \botto y) \tto (x \botto y) \\
-		&\ifbot~f_1~f_2~f_3~x \ := \
-			\lzfccase{f_1~x}{true & f_2~x \\ false & f_3~x \\ else & \bot}
+		&\ifbot~f_1~f_2~f_3~a \ := \
+			\lzfccase{f_1~a}{true & f_2~a \\ false & f_3~a \\ else & \bot}
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
 		&\lazybot : (1 \tto (x \botto y)) \tto (x \botto y) \\
-		&\lazybot~f~x \ := \ f~0~x
+		&\lazybot~f~a \ := \ f~0~a
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -849,6 +883,14 @@ To parameterize mapping arrow computations on a domain, we define the \mykeyword
 Notice that $\bot$ is absent in $Set~X \tto (X \pto Y)$.
 This will make it easier to disregard diverging inputs when computing preimages further on. (XXX: section)
 
+A computation $g : X \mapto Y$ must meet the following \mykeyword{restriction law}.
+For all $A \subseteq X$ for which $g~A$ converges, and for all $A' \subseteq A$,
+\begin{equation}
+	g~A' \ = \ restrict~(g~A)~A'
+\label{eqn:mapping-arrow-restriction-law}
+\end{equation}
+Roughly, $g$ must act as if it returns restricted mappings.
+
 To make the correspondence between bottom arrow and mapping arrow computations as clear as possible,
 we start by defining a function $\liftmap : (X \botto Y) \tto (X \mapto Y)$ to lift bottom arrow computations.
 It must restrict its argument $f$'s domain to a subset of $X$ for which $f$ does not return $\bot$.
@@ -856,12 +898,12 @@ It is helpful to have a standalone function $domain_\bot$ that computes such dom
 \begin{align}
 	&\begin{aligned}
 		&domain_\bot : (X \botto Y) \tto Set~X \tto Set~X \\
-		&domain_\bot~f~A \ := \ preimage~f\restrict{A}~((image~f~A) \w \set{\bot})
+		&domain_\bot~f~A \ := \ \setb{a \in A}{f~a \neq \bot}
 	\end{aligned} \\
 \nonumber \\[-6pt]
 	&\begin{aligned}
 		&\liftmap : (X \botto Y) \tto (X \mapto Y) \\
-		&\liftmap~f~A \ := \ \lzfclet{A' & domain_\bot~f~A}{f\restrict{A'}}
+		&\liftmap~f~A \ := \ mapping~f~(domain_\bot~f~A)
 	\end{aligned}
 \end{align}
 
@@ -925,7 +967,7 @@ Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 \\[-6pt]
 	&\begin{aligned}[t]
 		&\liftmap : (X \botto Y) \tto (X \mapto Y) \\
-		&\liftmap~f~A \ := \ \setb{\pair{x,y} \in f\restrict{A}}{y \neq \bot}
+		&\liftmap~f~A \ := \ \setb{\pair{a,b} \in mapping~f~A}{b \neq \bot}
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -941,13 +983,12 @@ For any $f_1 : X \botto Y$, $f_2 : X \botto Z$, and $A \subseteq X$,
 \begin{align*}
 	&\liftmap~(f_1~\pairbot~f_2)~A
 \\
-	&\tab \equiv \ \liftmap~(\fun{x}{if~(f_1~x = \bot~or~f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}})~A
+	&\tab \equiv \ \liftmap~(\fun{a}{if~(f_1~a = \bot~or~f_2~a = \bot)~\bot~{\pair{f_1~a,f_2~a}}})~A
 \\
 	&\tab \equiv \ 
 		\lzfclet{
-			f & \fun{x}{if~(f_1~x = \bot~or~f_2~x = \bot)~\bot~{\pair{f_1~x,f_2~x}}} \\
-			A' & domain_\bot~f~A
-		}{f\restrict{A'}}
+			f & \fun{a}{if~(f_1~a = \bot~or~f_2~a = \bot)~\bot~{\pair{f_1~a,f_2~a}}}
+		}{mapping~f~(domain_\bot~f~A)}
 \numberthis
 \end{align*}
 Next, we replace the definition of $A'$ with one that does not depend on $f$, and rewrite in terms of $\liftmap~f_1$ and $\liftmap~f_2$:
@@ -959,14 +1000,14 @@ Next, we replace the definition of $A'$ with one that does not depend on $f$, an
 			A_1 & (domain_\bot~f_1~A) \\
 			A_2 & (domain_\bot~f_2~A) \\
 			A' & A_1 \i A_2
-		}{\fun{x \in A'}{\pair{f_1~x,f_2~x}}}
+		}{\fun{a \in A'}{\pair{f_1~a,f_2~a}}}
 \\
 	&\tab \equiv \ 
 		\lzfclet{
 			g_1 & \liftmap~f_1~A \\
 			g_2 & \liftmap~f_2~A \\
 			A' & (domain~g_1) \i (domain~g_2)
-		}{\fun{x \in A'}{\pair{g_1~x,g_2~x}}}
+		}{\fun{a \in A'}{\pair{g_1~a,g_2~a}}}
 \\
 	&\tab \equiv \ \pair{\liftmap~f_1~A, \liftmap~f_2~A}\map
 \numberthis
@@ -981,21 +1022,20 @@ XXX: include it?
 
 \subsection{Case: Conditional}
 
-Starting with the left side of~\eqref{eqn:lift-distributes-over-if}, we expand definitions, and simplify $f$ by restricting it to a domain for which $f_1~x$ cannot be $\bot$:
+Starting with the left side of~\eqref{eqn:lift-distributes-over-if}, we expand definitions, and simplify $f$ by restricting it to a domain for which $f_1~a \neq \bot$:
 \begin{align*}
 	&\liftmap~(\ifbot~f_1~f_2~f_3)~A \\
 	&\tab \equiv \ 
 		\lzfclet{
-			f & \fun{x}{\lzfccase{f_1~x}{true & f_2~x \\ false & f_3~x \\ else & \bot}} \\
-			A' & domain_\bot~f~A
-		}{f\restrict{A'}} \\
+			f & \fun{a}{\lzfccase{f_1~a}{true & f_2~a \\ false & f_3~a \\ else & \bot}}
+		}{mapping~f~(domain_\bot~f~A)} \\
 	&\tab \equiv \ 
 		\lzfclet{
-			A_2 & preimage~f_1\restrict{A}~\set{true} \\
-			A_3 & preimage~f_1\restrict{A}~\set{false} \\
-			f & \fun{x}{if~(f_1~x)~(f_2~x)~(f_3~x)} \\
-			A' & domain_\bot~f~(A_2 \uplus A_3)
-		}{f\restrict{A'}}
+			g_1 & mapping~f~A \\
+			A_2 & preimage~g_1~\set{true} \\
+			A_3 & preimage~g_1~\set{false} \\
+			f & \fun{a}{if~(f_1~a)~(f_2~a)~(f_3~a)}
+		}{mapping~f~(domain_\bot~f~(A_2 \uplus A_3))}
 \numberthis
 \end{align*}
 We finish by converting bottom arrow computations to the mapping arrow and rewriting in terms of $(\uplus\map)$:
@@ -1008,7 +1048,7 @@ We finish by converting bottom arrow computations to the mapping arrow and rewri
 		g_2 & \liftmap~f_2~(preimage~g_1~\set{true}) \\
 		g_3 & \liftmap~f_3~(preimage~g_1~\set{false}) \\
 		A' & (domain~g_2) \uplus (domain~g_3)
-	}{\fun{x \in A'}{if~(x \in domain~g_2)~(g_2~x)~(g_3~x)}}
+	}{\fun{a \in A'}{if~(a \in domain~g_2)~(g_2~a)~(g_3~a)}}
 \\
 	&\tab \equiv \
 	\lzfclet{
@@ -1027,22 +1067,19 @@ Starting with the left side of~\eqref{eqn:lift-distributes-over-lazy}, we first 
 \\
 	&\tab \equiv \
 		\lzfclet{
-			A' & domain_\bot~(\fun{x}{f~0~x})~A
-		}{(\fun{x}{f~0~x})\restrict{A'}}
+			A' & domain_\bot~(\fun{a}{f~0~a})~A
+		}{mapping~(\fun{a}{f~0~a})~A'}
 \end{align*}
-\lzfclang does not have an $\eta$ rule (i.e. $\fun{x}{e~x} \not\equiv e$ because $e$ may diverge), but we can use weaker facts.
-If $A \neq \emptyset$, then $domain_\bot~(\fun{x}{f~0~x})~A \equiv domain_\bot~(f~0)~A$.
-Further, it diverges iff $f~0$ diverges, which diverges iff $(f~0)\restrict{A'}$ diverges.
-Therefore, if $A \neq \emptyset$, we can replace $\fun{x}{f~0~x}$ with $f~0$.
+\lzfclang does not have an $\eta$ rule (i.e. $\fun{\mathit{x}}{\mathit{e}~\mathit{x}} \not\equiv \mathit{e}$ because $\mathit{e}$ may diverge), but we can use weaker facts.
+If $A \neq \emptyset$, then $domain_\bot~(\fun{a}{f~0~a})~A \equiv domain_\bot~(f~0)~A$.
+Further, it diverges iff $f~0$ diverges, and iff $mapping~(f~0)~A'$ diverges.
+Therefore, if $A \neq \emptyset$, we can replace $\fun{a}{f~0~a}$ with $f~0$.
 If $A = \emptyset$, then $\liftmap~(\lazybot~f)~A = \emptyset$ (the empty mapping), so
 \begin{align*}
 	&\liftmap~(\lazybot~f)~A
 \\
 	&\tab \equiv \
-		if~(A = \emptyset)~\emptyset~
-		\lzfclet{
-			A' & domain_\bot~(f~0)~A
-		}{(f~0)\restrict{A'}}
+		if~(A = \emptyset)~\emptyset~(mapping~(f~0)~(domain_\bot~(f~0)~A))
 \\
 	&\tab \equiv \
 		if~(A = \emptyset)~\emptyset~(\liftmap~(f~0)~A)
@@ -1109,8 +1146,8 @@ Expand definitions and apply Lemma~\ref{lem:preimage-restricted-range} with $Y' 
 \end{proof}
 
 Figure~\ref{fig:preimage-mapping-defs} defines more operations on preimage mappings, including pairing, composition, and disjoint union operations corresponding to the mapping operations in Figure~\ref{fig:mapping-defs}.
-Roughly, the correspondence is that $pre$ distributes over mapping operations to yield preimage mapping operations.
-The precise correspondence is the subject of the next three theorems, which will be used to derive the preimage arrow from the mapping arrow.
+The next three theorems establish that $pre$ is a homomorphism (though not an arrow homomorphism): it distributes over mapping operations to yield preimage mapping operations.
+We will use these facts to derive the preimage arrow from the mapping arrow.
 
 \begin{figure*}
 \begin{align*}
@@ -1141,7 +1178,7 @@ The precise correspondence is the subject of the next three theorems, which will
 		&\pair{\pair{Y_1',p_1},\pair{Y_2',p_2}}\pre \ := \ 
 		\lzfclet{
 			Y' & Y_1' \times Y_2' \\
-			p & \fun{B}{\U\limits_{\pair{y_1,y_2} \in B}(p_1~\set{y_1}) \i (p_2~\set{y_2})} \\
+			p & \fun{B}{\U\limits_{\pair{b_1,b_2} \in B}(p_1~\set{b_1}) \i (p_2~\set{b_2})} \\
 		}{\pair{Y',p}}
 	\end{aligned} \\
 \\[-6pt]
@@ -1487,7 +1524,7 @@ In particular, $\meaningof{\mathit{e}}\pre$ correctly computes preimages under t
 Probabilistic functions that may diverge, but converge with probability 1, are common.
 They come up not only when practitioners want to build data with random size or structure, but in simpler circumstances as well.
 
-Suppose $random$ retrieves a number $x_j \in [0,1]$ from a uniform random source $x$.
+Suppose $random$ retrieves a number $r~j \in [0,1]$ from a uniform random source $r$.
 The following recursive function, which defines the well-known \keyword{geometric distribution} with parameter $p$, counts the number of times $random < p$ is $false$:
 \begin{equation}
 	geometric~p \ := \ if~(random < p)~0~(1 + geometric~p)
@@ -1496,14 +1533,14 @@ The following recursive function, which defines the well-known \keyword{geometri
 For any $p > 0$, $geometric~p$ may diverge, but the probability of always taking the false branch is $(1-p) \times (1-p) \times (1-p) \times \cdots = 0$.
 Divergence with probability $0$ simply does not happen in practice.
 
-Suppose we interpret~\eqref{eqn:geometric-def} as $h : X \preto \Nat$, a preimage arrow computation from random sources in $X$ to natural numbers, and that we have a probability measure $P \in \powerset~X \pto [0,1]$.
-We could compute the probability of any output set $N \subseteq \Nat$ using $P~(h~A~N)$, where $A \subseteq X$ and $P~A = 1$. We have three hurdles to overcome:
+Suppose we interpret~\eqref{eqn:geometric-def} as $h : R \preto \Nat$, a preimage arrow computation from random sources in $R$ to natural numbers, and that we have a probability measure $P \in \powerset~R \pto [0,1]$.
+We could compute the probability of any output set $N \subseteq \Nat$ using $P~(h~R'~N)$, where $R' \subseteq R$ and $P~R' = 1$. We have three hurdles to overcome:
 \begin{enumerate}
-	\item Ensuring $h~A$ converges.
-	\item Determining how $random$ indexes numbers in $x$.
-	\item Ensuring each $x \in X$ contains enough random numbers.
+	\item Ensuring $h~R'$ converges.
+	\item Ensuring each $r \in R$ contains enough random numbers.
+	\item Determining how $random$ indexes numbers in $r$.
 \end{enumerate}
-Ensuring $h~A$ converges is the most difficult, but doing the other two will provide structure that makes it much easier.
+Ensuring $h~R'$ converges is the most difficult, but doing the other two will provide structure that makes it much easier.
 
 \subsection{Threading and Indexing}
 
@@ -1526,17 +1563,15 @@ We need a way to assign unique indexes to expressions.
 
 \begin{definition}[binary indexing scheme]
 Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto J$ and $right : J \tto J$ be total functions.
-If for every finite composition $next$ of $left$ and $right$, $next~j_0$ is unique, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
+These define a \mykeyword{binary indexing scheme} if
+\begin{itemize}
+	\item Every finite composition $next$ of $left$ and $right$ is injective.
+	\item For all $j \in J$, $j = next~j_0$ for some finite composition $next$.
+\end{itemize}
 \end{definition}
 
-For example, let $J$ be the set of lists of $\set{0,1}$, $j_0$ the empty list, and define
-\begin{equation}
-\begin{aligned}
-	left~xs &\ := \ \pair{0,xs}
-\\
-	right~xs &\ := \ \pair{1,xs}
-\end{aligned}
-\end{equation}
+For example, let $J$ be the set of lists of $\set{0,1}$, $j_0 := \pair{}$, and $left~j := \pair{0,j}$ and $right~j := \pair{1,j}$.
+
 Alternatively, let $J$ be the set of dyadic rationals in $(0,1)$ (i.e. those with power-of-two denominators), $j_0 := \tfrac{1}{2}$ and
 \begin{equation}
 \begin{aligned}
@@ -1546,6 +1581,8 @@ Alternatively, let $J$ be the set of dyadic rationals in $(0,1)$ (i.e. those wit
 \end{aligned}
 \end{equation}
 With this alternative, left-to-right evaluation order can be made to correspond with the natural order $(<)$ over $J$.
+
+In any case, $J$ is always countable.
 
 \subsection{Applicative, Associative Store}
 
@@ -1620,6 +1657,8 @@ Again, to do so, we need to extend equivalence to be more extensional for arrows
 \begin{definition}[$AStore$ arrow equivalence]
 Two $AStore$ arrow computations $k_1$ and $k_2$ are equivalent, or $k_1 \equiv k_2$, when $k_1~j \equiv k_2~j$ for all $j \in J$.
 \end{definition}
+
+XXX: need to define equivalence for the bottom arrow for this to make sense
 
 \begin{theorem}[$AStore$ arrow correctness]
 Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$.
@@ -1796,7 +1835,7 @@ From here on, let $x \pbotto y ::= AStore~S~(x \botto y)$; similarly for $X \pma
 
 \begin{theorem}[natural transformation]
 Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$ and $x \arrow\gend y ::= AStore~s~(x \arrow\gend y)$.
-Let $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ be an arrow homomorphism, and define
+Let $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ be an arrow homomorphism, and
 \begin{equation}
 \begin{aligned}
 	&\arrowlift\gend : (x \arrow\genc y) \tto (x \arrow\gend y) \\
@@ -1927,11 +1966,10 @@ We had left $domain~P$, and which $B \subseteq Y$ have preimages in $domain~P$, 
 Now we determine those conditions.
 
 To save space, we assume readers are familiar with either topology or measure theory.
+(Readers unfamiliar with both may wish to skip to the next section.)
+Many concepts in measure theory can be understood by analogy to topology.
 
-\begin{definition}[topology, open set]
-A collection of sets $\A \subseteq \powerset~X$ is called a \keyword{topology} on $X$ if it contains $\emptyset$ and $X$, and is closed under finite intersections and arbitrary unions.
-The sets in $\A$ are called \keyword{open sets}.
-\end{definition}
+The analogue of a topology is a $\sigma$-algebra.
 
 \begin{definition}[$\sigma$-algebra, measurable set]
 A collection of sets $\A \subseteq \powerset~X$ is called a \keyword{$\sigma$-algebra} on $X$ if it contains $X$ and is closed under complements and countable unions.
@@ -1939,42 +1977,105 @@ The sets in $\A$ are called \keyword{measurable sets}.
 \end{definition}
 
 $X \w X = \emptyset$, so $\emptyset \in \A$.
-It follows from De Morgan's law that $\A$ is closed under countable intersections.
+Additionally, it follows from De Morgan's law that $\A$ is closed under countable intersections.
 
-Many concepts in measure theory can be understood by their analogues in topology.
-The measure-theoretic analogue of continuity, for example, is measurability.
+The analogue of continuity is measurability.
 
-\begin{definition}[continuous/measurable mapping]
-Let $\A$ and $\B$ be topologies/$\sigma$-algebras on $X$ and $Y$ respectively.
-A mapping $g : X \pto Y$ is $\A!\B$-\keyword{continuous/measurable} if for all $B \in \B$, $preimage~g~B \in \A$.
+\begin{definition}[measurable mapping]
+Let $\A$ and $\B$ be $\sigma$-algebras respectively on $X$ and $Y$.
+A mapping $g : X \pto Y$ is $\A!\B$-\keyword{measurable} if for all $B \in \B$, $preimage~g~B \in \A$.
 \end{definition}
-
-%Note that $domain~g = preimage~g~Y$, so $domain~g \in \A$.
 
 Measurability is usually a weaker condition than continuity.
-Measurable $\Re \pto \Re$ functions, for example, may have countably many discontinuities.
+For example, with respect to the $\sigma$-algebra generated from $\Re$'s standard topology, measurable $\Re \pto \Re$ functions may have countably many discontinuities.
+Likewise, real equality and inequality functions are measurable.
 
-Topologies and $\sigma$-algebras on product spaces are defined the same way.
+Product spaces are defined the same way as in topology.
 
-\begin{definition}[finite product topology/$\sigma$-algebra]
-Let $\A_1$ and $\A_2$ be topologies/$\sigma$-algebras on $X_1$ and $X_2$, and $X := \pair{X_1,X_2}$.
-The \keyword{product topology/$\sigma$-algebra} $\A_1 \otimes \A_2$ is the smallest topology/$\sigma$-algebra for which $fst\restrict{X}$ and $snd\restrict{X}$ are continuous/measurable mappings.
+\begin{definition}[finite product $\sigma$-algebra]
+Let $\A_1$ and $\A_2$ be $\sigma$-algebras on $X_1$ and $X_2$, and $X := \pair{X_1,X_2}$.
+The \keyword{product $\sigma$-algebra} $\A_1 \otimes \A_2$ is the smallest $\sigma$-algebra for which $mapping~fst~X$ and $mapping~snd~X$ are measurable.
+\label{def:finite-product-sigma-algebra}
 \end{definition}
 
-\begin{definition}[arbitrary product topology/$\sigma$-algebra]
-Let $\A$ be a topology/$\sigma$-algebra on $X$.
-The \keyword{product topology/ $\sigma$-algebra} $\A^{\otimes J}$ is the smallest topology/$\sigma$-algebra for which, for all $j \in J$, $(\pi~j)\restrict{J \to X}$ is a continuous/measurable mapping.
+\begin{definition}[arbitrary product $\sigma$-algebra]
+Let $\A$ be a $\sigma$-algebra on $X$.
+The \keyword{product $\sigma$-algebra} $\A^{\otimes J}$ is the smallest $\sigma$-algebra for which, for all $j \in J$, $mapping~(\pi~j)~(J \to X)$ is measurable.
+\label{def:arbitrary-product-sigma-algebra}
 \end{definition}
 
-\begin{definition}[measurable computation]
-Let $\A$ and $\B$ be $\sigma$-algebras for $X$ and $Y$ respectively.
-A mapping arrow computation $g : X \mapto Y$ is $\A!\B$-\keyword{measurable} if for all $A \subseteq A^*$, $g~A$ is an $\A!\B$-measurable mapping, where $A^*$ is $g$'s halting set.
+\subsection{Measurable Pure Computations}
+
+It is easier to prove measurability of pure computations than to prove measurability of probabilistic ones.
+Further, we can use the resulting theorems to prove that probabilistic computations are measurable.
+
+A single mapping arrow computation can produce many mappings, which, it seems, could complicate proving measurability.
+Fortunately, we need only consider the mapping produced when applying a computation to its halting set.
+
+\begin{definition}[halting set]
+Let $g : X \mapto Y$. Its \keyword{halting set} is the largest $A^* \subseteq X$ for which $domain~(g~A^*) = A^*$.
 \end{definition}
 
-Notice that the $A$ in $g~A$ need not be measurable, but $domain~(g~A)$ must be.
-XXX: this implies $\arrmap~fst$ is not measurable!
+\begin{definition}[measurable mapping arrow computation]
+Let $\A$ and $\B$ be $\sigma$-algebras on $X$ and $Y$.
+A computation $g : X \mapto Y$ is $\A!\B$-\keyword{measurable} if $g~A^*$ is an $\A!\B$-measurable mapping, where $A^*$ is $g$'s halting set.
+\end{definition}
 
-\subsection{Case: Composition}
+The definition of halting set implies $preimage~(g~A^*)~Y = A^*$.
+Because $Y \in \B$, $A^* \in \A$.
+
+\begin{lemma}
+Let $g : X \pto Y$ be an $\A!\B$-measurable mapping.
+For any $A \in \A$, $restrict~g~A$ is $\A!\B$-measurable.
+\label{lem:restricted-mappings-are-measurable}
+\end{lemma}
+
+\begin{theorem}
+Let $g : X \mapto Y$ be an $\A!\B$-measurable mapping arrow computation.
+Then for all $A \in \A$, $g~A$ is an $\A!\B$-measurable mapping.
+\label{thm:restricted-computations-are-measurable}
+\end{theorem}
+\begin{proof}
+Use the mapping arrow restriction law~\eqref{eqn:mapping-arrow-restriction-law} and Lemma~\ref{lem:restricted-mappings-are-measurable}.
+\end{proof}
+
+Roughly, if the largest mapping that can be produced by a computation is measurable, any mapping it can produce that we care about is measurable.
+
+That all programs interpreted by $\meaningof{\cdot}\gen$ are measurable will be proved by structural induction.
+We therefore need a case for each arrow combinator.
+
+\subsubsection{Case: Composition}
+
+Proving compositions are measurable takes the most work.
+The main complication is that, under measurable mappings, while \emph{preimages} of measurable sets are measurable, \emph{images} of measurable sets may not be.
+We need the following four extra theorems to get around this.
+
+\begin{lemma}[images of preimages]
+Let $g : X \pto Y$ and $B \subseteq Y$. Then $image~g~(preimage~g~B) \subseteq B$.
+\label{lem:images-of-preimages}
+\end{lemma}
+
+\begin{lemma}[expanded post-composition]
+Let $g_1 : X \pto Y$ and $g_2 : Y \pto Z$ such that $range~g_1 \subseteq domain~g_2$, and let $g_2' : Y \pto Z$ such that $g_2 \subseteq g_2'$.
+Then $g_2 \circ\map g_1 = g_2' \circ\map g_1$.
+\label{lem:composition-expansion}
+\end{lemma}
+
+\begin{theorem}[mapping arrow monotonicity]
+Let $g : X \mapto Y$.
+For any $A \subseteq X$, $domain~(g~A) \subseteq A$.
+For any $A' \subseteq A$, $g~A' \subseteq g~A$.
+\label{thm:mapping-arrow-monotonicity}
+\end{theorem}
+\begin{theorem}[halting subsets]
+Let $g : X \mapto Y$ with halting set $A^*$. For any $A \subseteq A^*$, $domain~(g~A) = A$.
+\label{thm:halting-subsets}
+\end{theorem}
+\begin{proof}
+Use the mapping arrow restriction law~\eqref{eqn:mapping-arrow-restriction-law}.
+\end{proof}
+
+Now we can prove measurability.
 
 \begin{lemma}[measurability under $\circ\map$]
 If $g_1 : X \pto Y$ is $\A!\B$-measurable and $g_2 : Y \pto Z$ is $\B!\C$-measurable, then $g_2 \circ\map g_1$ is $\A!\C$-measurable.
@@ -1985,38 +2086,52 @@ If $g_1 : X \pto Y$ is $\A!\B$-measurable and $g_2 : Y \pto Z$ is $\B!\C$-measur
 If $g_1 : X \mapto Y$ is $\A!\B$-measurable and $g_2 : Y \mapto Z$ is $\B!\C$-measurable, then $g_1~\compmap~g_2$ is $\A!\C$-measurable.
 \end{theorem}
 \begin{proof}
-Recall the definition of $(\compmap)$:
+Let $A^* \in \A$ and $B^* \in \B$ be respectively $g_1$'s and $g_2$'s halting sets.
+The halting set of $g_1~\compmap~g_2$ is $A^{**} := preimage~(g_1~A^*)~B^*$, which is in $\A$.
+By definition,
 \begin{equation}
-	(g_1~\compmap~g_2)~A \ := \ 
+	(g_1~\compmap~g_2)~A^{**} \ = \ 
 		\lzfclet{
-			g_1' & g_1~A \\
+			g_1' & g_1~A^{**} \\
 			g_2' & g_2~(range~g_1')
 		}{g_2' \circ\map g_1'}
 \end{equation}
-By definition, $g_1~A$ is an $\A!\B$-measurable mapping; likewise for $g_2~(range~g_1')$.
-Apply Lemma~\ref{lem:compositions-are-measurable}.
+By Theorem~\ref{thm:restricted-computations-are-measurable}, $g_1'$ is an $\A!\B$-measurable mapping.
+Unfortunately, $g_2'$ may not be $\B!\C$-measurable when $range~g_1' \not\in \B$.
+
+Let $g_2'' := g_2~B^*$, which is a $\B!\C$-measurable mapping.
+By Lemma~\ref{lem:compositions-are-measurable}, $g_2'' \circ\map g_1'$ is $\A!\C$-measurable.
+We need only show that $g_2' \circ\map g_1' = g_2'' \circ\map g_1'$, which by Lemma~\ref{lem:composition-expansion} is true if $range~g_1' \subseteq domain~g_2'$ and $g_2' \subseteq g_2''$.
+
+By Theorem~\ref{thm:halting-subsets}, $A^{**} \subseteq A^*$ implies $domain~g_1' = A^{**}$.
+By Theorem~\ref{thm:mapping-arrow-monotonicity} and Lemma~\ref{lem:images-of-preimages},
+\begin{align*}
+	range~g_1'
+		%&\ =\ image~g_1'~A^{**} \\
+		&\ =\ image~(g_1~A^{**})~(preimage~(g_1~A^*)~B^*) \\
+		&\ =\ image~(g_1~A^*)~(preimage~(g_1~A^*)~B^*) \\
+		&\ \subseteq\ B^*
+\end{align*}
+$range~g_1' \subseteq B^*$ implies (by Theorem~\ref{thm:halting-subsets}) that $domain~g_2' = range~g_1'$, and (by Theorem~\ref{thm:mapping-arrow-monotonicity}) that $g_2' \subseteq g_2''$.
 \end{proof}
 
-\subsection{Case: Pairing}
+\subsubsection{Case: Pairing}
 
 \begin{lemma}[measurability under $\pair{\cdot,\cdot}\map$]
-If $g_1 : X \pto Y_1$ is $\A!\B_1$-measurable and $g_2 : X \pto Y_2$ is $\A!\B_2$-measurable, then $\pair{g_1,g_2}\map$ is $\A!\B_1 \otimes \B_2$-measurable.
+If $g_1 : X \pto Y_1$ is $\A!\B_1$-measurable and $g_2 : X \pto Y_2$ is $\A!\B_2$-measurable, then $\pair{g_1,g_2}\map$ is $\A!(\B_1 \otimes \B_2)$-measurable.
 \label{lem:pairings-are-measurable}
 \end{lemma}
 
 \begin{theorem}[measurability under $(\pairmap)$]
-If $g_1 : X \mapto Y_1$ is $\A!\B_1$-measurable and $g_2 : X \mapto Y_2$ is $\A!\B_2$-measurable, then $g_1~\pairmap~g_2$ is $\A!\B_1 \otimes \B_2$-measurable.
+If $g_1 : X \mapto Y_1$ is $\A!\B_1$-measurable and $g_2 : X \mapto Y_2$ is $\A!\B_2$-measurable, then $g_1~\pairmap~g_2$ is $\A!(\B_1 \otimes \B_2)$-measurable.
 \end{theorem}
 \begin{proof}
-Recall the definition of $(\pairmap)$:
-\begin{equation}
-	(g_1~\pairmap~g_2)~A \ := \ \pair{g_1~A,g_2~A}\map
-\end{equation}
-By definition, $g_1~A$ is an $\A!\B_1$-measurable mapping; likewise for $g_2~A$.
-Apply Lemma~\ref{lem:pairings-are-measurable}.
+Let $A_1^*$ and $A_2^*$ be respectively $g_1$'s and $g_2$'s halting sets.
+The halting set of $g_1~\pairmap~g_2$ is $A^{**} := A_1^* \i A_2^*$, which is in $\A$.
+By definition, $(g_1~\pairmap~g_2)~A^{**} = \pair{g_1~A^{**},g_2~A^{**}}\map$, which by Lemma~\ref{lem:pairings-are-measurable} is $\A!(\B_1 \otimes \B_2)$-measurable.
 \end{proof}
 
-\subsection{Case: Conditional}
+\subsubsection{Case: Conditional}
 
 \begin{lemma}[measurability under $\uplus\map$]
 If $g_1 : X \pto Y$ and $g_2 : X \pto Y$ are $\A!\B$-measurable and have disjoint domains, $g_1 \uplus\map g_2$ is $\A!\B$-measurable.
@@ -2027,22 +2142,30 @@ If $g_1 : X \pto Y$ and $g_2 : X \pto Y$ are $\A!\B$-measurable and have disjoin
 If $g_1 : X \mapto Bool$ is $\A!(\powerset~Bool)$-measurable, and $g_2 : X \mapto Y$ and $g_3 : X \mapto Y$ are $\A!\B$-measurable, then $\ifmap~g_1~g_2~g_3$ is $\A!\B$-measurable.
 \end{theorem}
 \begin{proof}
-Recall the definition of $\ifmap$:
+Let $\A_1^*$, $\A_2^*$ and $\A_3^*$ be respectively $g_1$'s, $g_2$'s and $g_3$'s halting sets.
+The halting set of $\ifmap~g_1~g_2~g_3$ is defined by
 \begin{equation}
-	\ifmap~g_1~g_2~g_3~A \ := \ 
+\begin{aligned}
+	A_2^{**} &\ :=\ A_2^* \i preimage~(g_1~\A_1^*)~\set{true} \\
+	A_3^{**} &\ :=\ A_3^* \i preimage~(g_1~\A_1^*)~\set{false} \\
+	A^{**} &\ :=\ A_2^{**} \uplus A_3^{**}
+\end{aligned}
+\end{equation}
+Because $preimage~(g_1~\A_1^*)~B \in \A$ for any $B \subseteq Bool$, $A^{**} \in \A$.
+By definition,
+\begin{equation}
+	\ifmap~g_1~g_2~g_3~A^{**} \ = \ 
 		\lzfclet{
-			g_1' & g_1~A \\
+			g_1' & g_1~A^{**} \\
 			g_2' & g_2~(preimage~g_1'~\set{true}) \\
 			g_3' & g_3~(preimage~g_1'~\set{false})
 		}{g_2' \uplus\map g_3'}
 \end{equation}
-Clearly $g_1'$, $g_2'$ and $g_3'$ are measurable mappings, and $g_2'$ and $g_3'$ have disjoint domains.
+By hypothesis, $g_1'$, $g_2'$ and $g_3'$ are measurable mappings, and the mapping arrow restriction law~\eqref{eqn:mapping-arrow-restriction-law} imples $g_2'$ and $g_3'$ have disjoint domains.
 Apply Lemma~\ref{lem:disjoint-unions-are-measurable}.
-
-XXX: this assumes $domain~g_2' \subseteq preimage~g_1'~\set{true}$, similarly for $g_3'$
 \end{proof}
 
-\subsection{Case: Laziness}
+\subsubsection{Case: Laziness}
 
 \begin{lemma}[measurability of $\emptyset$]
 For any $\sigma$-algebras $\A$ and $\B$, the empty mapping $\emptyset$ is $\A!\B$-measurable.
@@ -2053,33 +2176,142 @@ For any $\sigma$-algebras $\A$ and $\B$, the empty mapping $\emptyset$ is $\A!\B
 Let $g : 1 \tto (X \mapto Y)$. If $g~0$ is $\A!\B$-measurable, then $\lazymap~g$ is $\A!\B$-measurable.
 \end{theorem}
 \begin{proof}
-Recall the definition of $\lazymap$:
+The halting set $A^{**}$ of $\lazymap~g$ is the same as that of $g~0$.
+By definition,
 \begin{equation}
-	\lazymap~g~A \ := \ if~(A = \emptyset)~\emptyset~(g~0~A)
+	\lazymap~g~A^{**} \ = \ if~(A^{**} = \emptyset)~\emptyset~(g~0~A^{**})
 \end{equation}
-Let $A \subseteq A^*$.
-If $A = \emptyset$, then $\lazymap~g~A = \emptyset$; apply Lemma~\ref{lem:empty-mapping-measurable}.
-If $A \neq \emptyset$, then $\lazymap~g = g~0$, which is $\A!\B$-measurable.
+If $A^{**} = \emptyset$, then $\lazymap~g~A^{**} = \emptyset$; apply Lemma~\ref{lem:empty-mapping-measurable}.
+If $A^{**} \neq \emptyset$, then $\lazymap~g = g~0$, which is $\A!\B$-measurable.
 \end{proof}
 
+\subsection{Measurable Probabilistic Computations}
 
-\subsection{Every Program Is Measurable}
+We are now prepared to lift the previous theorems to probabilistic computations.
+
+\begin{definition}[measurable mapping* arrow computation]
+Let $\A$ and $\B$ be $\sigma$-algebras on $(R \times T) \times X$ and $Y$.
+A computation $g : X \pmapto Y$ is $\A!\B$-\keyword{measurable} if $g~j_0~A^*$ is an $\A!\B$-measurable mapping, where $A^*$ is $g$'s halting set.
+\end{definition}
+
+To make general measurability statements about computations, whether they have flat or product types, it helps to have a notion of a standard $\sigma$-algebra.
 
 \begin{definition}[standard $\sigma$-algebra]
-For $X$ used in a type, $\Sigma~X$ denotes its \mykeyword{standard $\sigma$-algebra}, defined by
+For a set $X$ used as a type, $\Sigma~X$ denotes its \mykeyword{standard $\sigma$-algebra}, which must be defined under the following constraints:
 \begin{align}
-	\Sigma~Bool &\ := \ \powerset~Bool \\
-	\Sigma~\pair{X_1,X_2} &\ := \ \Sigma~X_1 \otimes \Sigma~X_2
+	\Sigma~\pair{X_1,X_2} &\ = \ \Sigma~X_1 \otimes \Sigma~X_2
+	\label{eqn:standard-finite-product-rule}
+\\
+	\Sigma~(J \to X) &\ = \ (\Sigma~X)^{\otimes J}
+	\label{eqn:standard-arbitrary-product-rule}
+\\
+	|X| \le \omega \ \implies \ \Sigma~X &\ =\ \powerset~X
+	\label{eqn:standard-countable-rule}
+\\
+	X' \in \Sigma~X \ \implies \ \Sigma~X' &\ =\ \setb{X' \i A}{A \in \Sigma~X}
+	\label{eqn:standard-subset-rule}
 \end{align}
+The predicate ``is measurable'' means ``is measurable with respect to standard $\sigma$-algebras.''
+\label{def:standard-sigma-algebra}
 \end{definition}
+Examples: by~\eqref{eqn:standard-countable-rule}, $\Sigma~Bool = \powerset~Bool$.
+By both~\eqref{eqn:standard-finite-product-rule} and~\eqref{eqn:standard-countable-rule}, $\Sigma~\pair{Bool,Bool} = \powerset~(Bool \times Bool)$.
+By~\eqref{eqn:standard-subset-rule}, $\Sigma~[0,1]$ is a sub-$\sigma$-algebra of $\Sigma~\Re$.
 
-XXX: assume every lifted function is measurable
+\begin{theorem}
+$\arrpmap~fst$ and $\arrpmap~snd$ are measurable.
+\end{theorem}
+\begin{proof}
+Follows from~\eqref{eqn:standard-finite-product-rule} and Definition~\ref{def:finite-product-sigma-algebra}.
+\end{proof}
+
+\begin{theorem}[$AStore$ measurability transfer]
+Every $AStore$ arrow combinator produces measurable mapping* computations from measurable mapping* computations.
+\label{thm:astore-measurability-transfer}
+\end{theorem}
+\begin{proof}
+$AStore$'s combinators are defined in terms of the base arrow's combinators and $\arrpmap~fst$ and $\arrpmap~snd$.
+\end{proof}
+
+\begin{theorem}
+For all $j \in J$, $\arrpmap~(\pi~j)$ is measurable.
+\end{theorem}
+\begin{proof}
+Follows from~\eqref{eqn:standard-arbitrary-product-rule} and Definition~\ref{def:arbitrary-product-sigma-algebra}.
+\end{proof}
+
+\begin{corollary}
+$random\pmap$ and $branch\pmap$ are measurable.
+\end{corollary}
+
+\begin{theorem}
+$\ifpmap'$ is measurable.
+\end{theorem}
+\begin{proof}
+$branch\pmap$ is measurable, and $\arrpmap~agrees$ is measurable by~\eqref{eqn:standard-countable-rule}.
+\end{proof}
+
+\begin{theorem}[probabilistic programs are measurable]
+If $\meaningof{\mathit{e}}\pmap$ converges, it is measurable.
+If $\meaningof{\mathit{e}}\pmap'$ converges, it is measurable.
+\label{thm:everything-is-measurable}
+\end{theorem}
+\begin{proof}
+By structural induction over $\mathit{e}$ and the above measurability theorems.
+\end{proof}
+
+Of course, Theorem~\ref{thm:everything-is-measurable} remains true when $\meaningof{\cdot}\gen$ is extended with any rule whose right side is measurable.
+Examples include arithmetic, equalities and inequalities, and lambda expressions transformed into closures.
+
+\subsection{Random Store Probabilities}
+
+Preimages under probabilistic programs are measurable subsets of $(R \times T) \times X$.
+While it is possible to put probability measures on such domains, doing so would be surprising for end-users.
+For example, the probabilities of outputs of the $geometric$ function defined in~\eqref{eqn:geometric-def} would depend not only on the probability of $random < p$, but also on some arbitrary probability that each branch is taken.
+It would not define the geometric distribution.
+
+We therefore have to measure \emph{projections} of subsets of $(R \times T) \times X$.
+Unfortunately, projected sets are generally not measurable.
+Fortunately, ours is a special case: the excluded dimensions are countable.
+
+As previously, we start with measuring the halting set.
+
+\begin{definition}[standard probability measure]
+For a type $X$, a \mykeyword{standard probability measure} is a probability measure $P \in \powerset~X \pto [0,1]$ where $domain~P = \Sigma~X$.
+\end{definition}
 
 \begin{definition}[halting probability]
-Let $f : X \pbotto Y$ and $A^*$ be its halting set.
-Let $P \in \powerset~R \pto [0,1]$ be a probability measure over random stores.
-If $A^*$ is measurable, the \keyword{halting probability} of $f$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
+Let $g : X \pmapto Y$ be measurable, with $A^*$ its halting set.
+Let $P \in \powerset~R \pto [0,1]$ be a standard probability measure over random stores.
+The \keyword{halting probability} of $g$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
 \end{definition}
+
+\begin{theorem}[measurable finite projections]
+Let $A \in \Sigma~\pair{X_1,X_2}$.
+If $X_2$ is at most countable, $image~fst~A \in \A_1$.
+\label{thm:measurable-projections}
+\end{theorem}
+\begin{proof}
+Because $\Sigma~X_2 = \powerset~X_2$, $A$ is a countable union of rectangles of the form $A_1 \times \set{a_2}$, where $A_1 \in \Sigma~X_1$ and $a_2 \in X_2$.
+Because $image~fst$ distributes over unions, $image~fst~A$ is a countable union of sets in $\Sigma~X_1$.
+\end{proof}
+
+\begin{theorem}
+Let $g : X \pmapto Y$ be measurable.
+If $X$ is at most countable, $g$'s halting probability is well-defined.
+\end{theorem}
+\begin{proof}
+$T$ is countable; apply Theorem~\ref{thm:measurable-projections} twice.
+\end{proof}
+
+In particular, for programs interpreted using $\meaningof{\cdot}\pmap$, $X = \set{\pair{}}$ (the empty list/stack), so their halting probabilities are well-defined.
+
+\begin{corollary}
+Let $g : X \pmapto Y$ be measurable and $A \subseteq A^*$ a measurable set.
+$P~(image~(fst~\arrowcomp~fst)~A)$, the probability of $A$, is well-defined.
+\end{corollary}
+
+In particular, for any converging $g := \meaningof{\mathit{e}}\pmap'$, preimages $A$ of measurable subsets $B$ are measurable, and the random store component of $A$ has a well-defined probability.
 
 
 \section{Implementable Approximation}
