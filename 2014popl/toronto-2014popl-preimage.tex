@@ -150,27 +150,71 @@ XXX, XXX
 
 \section{Introduction}
 
-
-
-XXX: motivate conditional probability
-
-XXX: densities fail:
+There is currently no efficient probabilistic language implementation that simultaneously
 \begin{enumerate}
-	\item infinite or variable-length data
-	\item discontinuities in random variables
-	\item nonlinear conditions
+	\item Places no extraneous restrictions on legal programs.
+	\item Allows \keyword{conditioning}, or restricting the output in a way that preserves relative probabilities.
+	\item Has a formal semantics.
 \end{enumerate}
+In the field of programming languages, there are a few examples of languages that do not restrict legal programs and have a semantics (XXX: cite all).
+Unfortunately, most of the demand for probabilistic languages comes from Bayesian practice, which requires conditioning.
 
-XXX: measures instead of densities, preimage measure
+In Bayesian practice, many have implemented probabilistic languages with conditioning (XXX: cite all).
+Almost all lack a semantics, so it is impossible to distinguish between an implementation error and an opportunity to learn.
+Almost all place restrictions on programs, most commonly disallowing recursion, allowing only continuous distributions, and restricting conditioning statements to the form $X = c$, where $X$ is a primitive random value and $c$ is a constant.
 
-Purely functional languages do not allow effects, including randomness.
-(Of course, to be Turing-equivalent, ``pure'' languages usually allow divergence, which is an applicative effect.)
+These common restrictions arise from reasoning about probability using \keyword{densities}, which are functions from random values to \emph{changes} in probability.
+While simple and convenient, densities have many limitations.
+Densities for random values with different dimension are incomparable.
+Densities cannot be defined on infinite products.
+Densities can only be used to reason about conditioning in limited cases.
+
+Densities cannot define distributions of discontinuous functions of random variables.
+For example, suppose we want to model a thermometer that reports in the range $[0,100]$, and that the temperature it would report (if it could) is distributed according to a bell curve.
+We might encode the process like this:
+\begin{equation}
+	\lzfclet{t & normal~\mu~5}{max~0~(min~100~t)}
+\label{eqn:thermometer-example}
+\end{equation}
+The distribution of $t$ has a density (a bell curve with mean $\mu$ and standard deviation $5$), but the $let$ expression's distribution does not.
+Using densities, this program cannot have a meaning.
+Placing a condition on the $let$ expression, to discover how restricting its value to a smaller interval would affect $\mu$'s distribution---an activity that should be central to Bayesian practice---is unthinkable.
+
+The restrictions placed on legal programs are indeed onerous, if uses of such benign functions as $min$ and $max$ are suspect.
+We cannot even model measuring devices correctly.
+
+\subsection{Measure-Theoretic Probability}
+
+Measure-theoretic probability is widely believed to be able to define everything reasonable that densities cannot.
+It mainly does this by \emph{mapping sets to probabilities} instead of mapping values to changes in probability.
+
+If $P$ assigns probabilities to sets of $X$ and $f : X \to Y$, then the \keyword{preimage measure}
+\begin{equation}
+	P~(preimage~f~B)
+\end{equation}
+defines the distribution over subsets $B$ of $Y$.
+In the thermometer example~\eqref{eqn:thermometer-example}, $f$ would be an interpretation of the program as a function, $X$ would be the set of all random sources, and $Y$ would be the set of the program's possible outputs.
+For any $B \in Y$, $preimage~f~B$ would be well-defined, regardless of discontinuities.
+
+Defining a conditioned distribution over random sources simply requires intersecting and renormalizing.
+For example, $A' := preimage~f~[90,100]$ is the set of random sources for which the thermometer returns a value in $[90,100]$. Then
+\begin{equation}
+	P'~A \ :=\ P~(A \i A')~/~P~A'
+\end{equation}
+maps sets to probabilities under the condition $A'$.
+
+Unfortunately, there are complicated technical restrictions on which sets can be sensibly measured.
+Conditioning on zero-probability sets can also be quite complicated.
+These two facts in particular tend to drive practitioners toward densities, even though they are much more limited.
+
+\subsection{Measure-Theoretic Semantics}
+
+Purely functional languages do not allow effects (except usually divergence).
 Programmers must write probabilistic programs as functions from a random source to outputs.
 Monads and other categorical classes such as idioms and arrows can make doing so easier.
-The strength of this approach lies in how it factors each probabilistic program into an effectful part and a pure part.
 
-It seems this approach should make interpreting probabilistic programs in measure theory easy.
-For a probabilistic program $f : X \tto Y$, the probability measure over output sets $B \subseteq Y$ should be defined by preimages of $B$ under $f$ and the probability measure over $X$.
+It seems this approach should make it easy to interpret probabilistic programs measure-theoretically.
+For a probabilistic program $f : X \to Y$, the probability measure over output sets $B \subseteq Y$ should be defined by preimages of $B$ under $f$ and the probability measure over $X$.
 Unfortunately, it is difficult to make a compositional semantics from this simple-sounding idea, for the following reasons.
 \begin{itemize}
 	\item ``Preimage under $f$'' makes sense only if $f$ has an observable domain of definition. Lambdas do not.
@@ -1722,7 +1766,7 @@ It returns $\bot$, so $f'~\pair{\pair{r,t'},a} = \bot$.
 To compare preimages computed by arrow instances produced by $\meaningof{\cdot}\ppre$ and $\meaningof{\cdot}\ppre'$, we need a set of inputs on which they should obviously always agree.
 
 \begin{definition}[halting set]
-A computation's \mykeyword{halting set} is the largest $A^* \subseteq (R \times T) \times X$ for which
+A computation's \mykeyword{halting set} is the largest $A^* \subseteq S \times X$ for which
 \begin{itemize}
 	\item For $f : X \pbotto Y$, $f~j_0~x \neq \bot$ for all $x \in A^*$.
 	\item For $g : X \pmapto Y$, $domain~(g~j_0~A^*) = A^*$.
@@ -1748,7 +1792,7 @@ Then $A^* = pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~(S \times X))~Y$.
 
 \begin{corollary}[semantic correctness (final)]
 Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge, with halting set $A^*$.
-For $A \subseteq X$ and $B \subseteq Y$, $pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~A)~B = preimage~(\meaningof{\mathit{e}}\pmap~j_0~(A \i A^*))~B$.
+For $A \subseteq S \times X$ and $B \subseteq Y$, $pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~A)~B = preimage~(\meaningof{\mathit{e}}\pmap~j_0~(A \i A^*))~B$.
 \end{corollary}
 
 In other words, preimages computed using $\meaningof{\cdot}\ppre'$ always converge, never include inputs that give rise to errors or divergence, and are correct.
@@ -1809,7 +1853,7 @@ The \keyword{product $\sigma$-algebra} $\A^{\otimes J}$ is the smallest $\sigma$
 \subsection{Measurable Pure Computations}
 
 It is easier to prove measurability of pure computations than to prove measurability of probabilistic ones.
-Further, we can use the resulting theorems to prove that probabilistic computations are measurable.
+Further, we can use the resulting theorems to prove that all probabilistic programs are measurable.
 
 A single mapping arrow computation can produce many mappings, which, it seems, could complicate proving measurability.
 Fortunately, we need only consider the mapping produced when applying a computation to its halting set.
@@ -1987,7 +2031,7 @@ If $A^{**} = \emptyset$, then $\lazymap~g~A^{**} = \emptyset$; apply Lemma~\ref{
 If $A^{**} \neq \emptyset$, then $\lazymap~g = g~0$, which is $\A!\B$-measurable.
 \end{proof}
 
-\subsection{Measurable Probabilistic Computations}
+\subsection{Measurable Probabilistic Programs}
 
 We are now prepared to lift the previous theorems to probabilistic computations.
 
@@ -2007,18 +2051,21 @@ For a set $X$ used as a type, $\Sigma~X$ denotes its \mykeyword{standard $\sigma
 	\Sigma~(J \to X) &\ = \ (\Sigma~X)^{\otimes J}
 	\label{eqn:standard-arbitrary-product-rule}
 \\
-	|X| \le \omega \ \implies \ \Sigma~X &\ =\ \powerset~X
-	\label{eqn:standard-countable-rule}
-\\
 	X' \in \Sigma~X \ \implies \ \Sigma~X' &\ =\ \setb{X' \i A}{A \in \Sigma~X}
 	\label{eqn:standard-subset-rule}
 \end{align}
 The predicate ``is measurable'' means ``is measurable with respect to standard $\sigma$-algebras.''
 \label{def:standard-sigma-algebra}
 \end{definition}
-Examples: by~\eqref{eqn:standard-countable-rule}, $\Sigma~Bool = \powerset~Bool$.
-By both~\eqref{eqn:standard-finite-product-rule} and~\eqref{eqn:standard-countable-rule}, $\Sigma~\pair{Bool,Bool} = \powerset~(Bool \times Bool)$.
-By~\eqref{eqn:standard-subset-rule}, $\Sigma~[0,1]$ is a sub-$\sigma$-algebra of $\Sigma~\Re$.
+
+For $\ifpmap$ measurability and later proofs, we define
+\begin{align}
+	\Sigma~Bool &\ ::=\ \powerset~Bool
+	\label{eqn:standard-boolean-rule}
+\\
+	\Sigma~T &\ ::=\ \powerset~T
+	\label{eqn:standard-traces-rule}
+\end{align}
 
 \begin{theorem}
 $\arrpmap~fst$ and $\arrpmap~snd$ are measurable.
@@ -2042,28 +2089,61 @@ For all $j \in J$, $\arrpmap~(\pi~j)$ is measurable.
 Follows from~\eqref{eqn:standard-arbitrary-product-rule} and Definition~\ref{def:arbitrary-product-sigma-algebra}.
 \end{proof}
 
-\begin{corollary}
-$random\pmap$ and $branch\pmap$ are measurable.
-\end{corollary}
+In particular, $random\pmap$ and $branch\pmap$ are measurable.
 
 \begin{theorem}
 $\ifpmap'$ is measurable.
 \end{theorem}
 \begin{proof}
-$branch\pmap$ is measurable, and $\arrpmap~agrees$ is measurable by~\eqref{eqn:standard-countable-rule}.
+$branch\pmap$ is measurable, and $\arrpmap~agrees$ is measurable by~\eqref{eqn:standard-boolean-rule}.
 \end{proof}
 
-\begin{theorem}[probabilistic programs are measurable]
-If $\meaningof{\mathit{e}}\pmap$ converges, it is measurable.
+\begin{theorem}[all expressions are measurable]
+For any program $\mathit{e}$ lacking function definitions, $\meaningof{\mathit{e}}\pmap$ is measurable.
+\label{thm:nonrecursive-programs-are-measurable}
+\end{theorem}
+\begin{proof}
+By structural induction and the above theorems.
+\end{proof}
+
+\begin{theorem}[approximation with expressions]
+Let $g := \meaningof{\mathit{e}}\pmap'$ converge; $g : X \pmapto Y$.
+For all $t \in T$, let $A := (R \times \set{t}) \times X$.
+There is an expression $\mathit{e'}$ for which $\meaningof{\mathit{e'}}\pmap~j_0~A = g~j_0~A$.
+\label{thm:nonrecursive-approximation}
+\end{theorem}
+\begin{proof}
+Let $j \in J$ be the largest for which $t~j \neq \bot$.
+To construct $\mathit{e'}$, exhaustively apply first-order functions in $\mathit{e}$, but replace any $\ifpmap'$ whose condition's index is greater than $j$ with the equivalent expression $\bot$.
+Because $g$ converges, recurrences must be guarded by $if$, so this process terminates after finitely many applications.
+\end{proof}
+
+\begin{lemma}[union of disjoint, measurable mappings]
+Let $gs : Set~(X \pto Y)$ be a countable set of measurable mappings with disjoint domains.
+Then $U~gs$ is measurable.
+\label{lem:union-of-measurable-mappings}
+\end{lemma}
+
+\begin{theorem}[all probabilistic programs are measurable]
 If $\meaningof{\mathit{e}}\pmap'$ converges, it is measurable.
 \label{thm:everything-is-measurable}
 \end{theorem}
 \begin{proof}
-By structural induction over $\mathit{e}$ and the above measurability theorems.
+Let $g := \meaningof{\mathit{e}}\pmap'$ and $g' := g~j_0~((R \times T) \times X)$.
+Because $g' = g~j_0~A^*$ where $A^*$ is $g$'s halting set, we need only show that $g'$ is a measurable mapping.
+
+By mapping arrow monotonicity (Theorem~\ref{thm:mapping-arrow-monotonicity}),
+\begin{align*}
+	g' \ =\ \U\limits_{t \in T} g~j_0~((R \times \set{t}) \times X)
+\end{align*}
+By Theorem~\ref{thm:nonrecursive-approximation}, for every $t \in T$, there is a nonrecursive program that computes $g~((R \times \set{t}) \times X)$.
+By~\eqref{eqn:standard-traces-rule} and Theorem~\ref{thm:nonrecursive-programs-are-measurable}, each is measurable.
+By mapping arrow restriction~\eqref{eqn:mapping-arrow-restriction-law}, each is disjoint.
+By Lemma~\ref{lem:union-of-measurable-mappings}, their union is measurable.
 \end{proof}
 
-Of course, Theorem~\ref{thm:everything-is-measurable} remains true when $\meaningof{\cdot}\gen$ is extended with any rule whose right side is measurable.
-Examples include arithmetic, equalities and inequalities, and lambda expressions transformed into closures.
+Theorem~\ref{thm:everything-is-measurable} remains true when $\meaningof{\cdot}\gen$ is extended with any rule whose right side is measurable.
+Examples include real operations (arithmetic, equality, inequality, limits) and lambda expressions transformed into closures.
 
 \subsection{Random Store Probabilities}
 
@@ -2195,9 +2275,6 @@ Figure~\ref{fig:extra-preimage-arrow-defs}:
 \caption{Specific instances of $\arrpre~f$}
 \label{fig:extra-preimage-arrow-defs}
 \end{figure*}
-
-\section{Computable Approximation}
-
 
 
 
