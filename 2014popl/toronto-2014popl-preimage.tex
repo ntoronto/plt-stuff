@@ -159,9 +159,9 @@ There is currently no efficient probabilistic language implementation that simul
 In the field of programming languages, there are a few examples of languages that do not restrict legal programs and have a semantics (XXX: cite all).
 Unfortunately, most of the demand for probabilistic languages comes from Bayesian practice, which requires conditioning.
 
-In Bayesian practice, many have implemented probabilistic languages with conditioning (XXX: cite all).
+Bayesian practitioners have implemented many probabilistic languages with conditioning (XXX: cite all).
 Almost all lack a semantics, so it is impossible to distinguish between an implementation error and an opportunity to learn.
-Almost all place restrictions on programs, most commonly disallowing recursion, allowing only continuous distributions, and restricting conditioning statements to the form $X = c$, where $X$ is a primitive random value and $c$ is a constant.
+Almost all place restrictions on programs, most commonly disallowing recursion, allowing only continuous distributions, and allowing only very limited forms of conditioning.
 
 These common restrictions arise from reasoning about probability using \keyword{densities}, which are functions from random values to \emph{changes} in probability.
 While simple and convenient, densities have many limitations.
@@ -173,20 +173,20 @@ Densities cannot define distributions of discontinuous functions of random varia
 For example, suppose we want to model a thermometer that reports in the range $[0,100]$, and that the temperature it would report (if it could) is distributed according to a bell curve.
 We might encode the process like this:
 \begin{equation}
-	\lzfclet{t & normal~\mu~5}{max~0~(min~100~t)}
+	t'\ :=\ \lzfclet{t & normal~\mu~1}{max~0~(min~100~t)}
 \label{eqn:thermometer-example}
 \end{equation}
-The distribution of $t$ has a density (a bell curve with mean $\mu$ and standard deviation $5$), but the $let$ expression's distribution does not.
+While $t$'s distribution has a density (a standard bell curve at mean $\mu$), the distribution of $t'$ does not.
 Using densities, this program cannot have a meaning.
-Placing a condition on the $let$ expression, to discover how restricting its value to a smaller interval would affect $\mu$'s distribution---an activity that should be central to Bayesian practice---is unthinkable.
+Placing a condition on the value of $t'$ to discover how restricting its value would affect $\mu$'s distribution---an activity that should be central to Bayesian practice---is unfathomable.
 
 The restrictions placed on legal programs are indeed onerous, if uses of such benign functions as $min$ and $max$ are suspect.
 We cannot even model measuring devices correctly.
 
 \subsection{Measure-Theoretic Probability}
 
-Measure-theoretic probability is widely believed to be able to define everything reasonable that densities cannot.
-It mainly does this by \emph{mapping sets to probabilities} instead of mapping values to changes in probability.
+Measure-theoretic probability (XXX: cite) is widely believed to be able to define everything reasonable that densities cannot.
+It mainly does this by \emph{assigning probabilities to sets} instead of \emph{assigning changes in probability to values}.
 
 If $P$ assigns probabilities to sets of $X$ and $f : X \to Y$, then the \keyword{preimage measure}
 \begin{equation}
@@ -194,51 +194,51 @@ If $P$ assigns probabilities to sets of $X$ and $f : X \to Y$, then the \keyword
 \end{equation}
 defines the distribution over subsets $B$ of $Y$.
 In the thermometer example~\eqref{eqn:thermometer-example}, $f$ would be an interpretation of the program as a function, $X$ would be the set of all random sources, and $Y$ would be the set of the program's possible outputs.
-For any $B \in Y$, $preimage~f~B$ would be well-defined, regardless of discontinuities.
+For any $B \subseteq Y$, $preimage~f~B$ would be well-defined, regardless of discontinuities.
 
-Defining a conditioned distribution over random sources simply requires intersecting and renormalizing.
-For example, $A' := preimage~f~[90,100]$ is the set of random sources for which the thermometer returns a value in $[90,100]$. Then
-\begin{equation}
-	P'~A \ :=\ P~(A \i A')~/~P~A'
-\end{equation}
-maps sets to probabilities under the condition $A'$.
-
-Unfortunately, there are complicated technical restrictions on which sets can be sensibly measured.
-Conditioning on zero-probability sets can also be quite complicated.
-These two facts in particular tend to drive practitioners toward densities, even though they are much more limited.
+Unfortunately, there is a complicated technical restriction: only \emph{measurable} subsets of $X$ and $Y$ can be assigned probabilities.
+Conditioning on zero-probability sets can also be quite difficult.
+These complexities tend to drive practitioners to densities, even though they are so limited.
 
 \subsection{Measure-Theoretic Semantics}
 
-Purely functional languages do not allow effects (except usually divergence).
-Programmers must write probabilistic programs as functions from a random source to outputs.
+Because purely functional languages do not allow effects (except usually divergence), programmers must write probabilistic programs as functions from a random source to outputs.
 Monads and other categorical classes such as idioms and arrows can make doing so easier.
 
 It seems this approach should make it easy to interpret probabilistic programs measure-theoretically.
-For a probabilistic program $f : X \to Y$, the probability measure over output sets $B \subseteq Y$ should be defined by preimages of $B$ under $f$ and the probability measure over $X$.
-Unfortunately, it is difficult to make a compositional semantics from this simple-sounding idea, for the following reasons.
-\begin{itemize}
-	\item ``Preimage under $f$'' makes sense only if $f$ has an observable domain of definition. Lambdas do not.
-	\item Probability measures can be defined only for \emph{measurable} subsets of $X$ and of $Y$. Thus, $f$ is constrained: preimages of measurable subsets of $Y$ must be measurable subsets of $X$. Proving the conditions under which this is true is difficult, especially when $f$ may diverge.
-	\item Probability measures cannot be defined for arbitrary function spaces without imposing difficult restrictions.
-\end{itemize}
-Implementing a language based on such a semantics is complicated by these facts:
-\begin{itemize}
-	\item Contemporary mathematics is unlike any implementation's host language.
-	\item It requires running Turing-equivalent programs backward, efficiently, on possibly uncountable sets of outputs.
-\end{itemize}
-
-XXX: rewrite the following
-
-In this paper, we
+For a probabilistic program $f : X \to Y$, the probability measure on output sets $B \subseteq Y$ should be defined by preimages of $B$ under $f$ and the probability measure on $X$.
+Unfortunately, it is difficult to turn this simple-sounding idea into a compositional semantics, for the following reasons.
 \begin{enumerate}
-	\item Define the \emph{bottom arrow}, type $X \botto Y$, as a compilation target for first-order functions that may raise errors.
-	\item Derive the \emph{mapping arrow} from the bottom arrow, type $X \mapto Y$. Prove that its instances return extensional functions, or mappings, that compute the same values as corresponding bottom arrow computations.
-	\item Derive the \emph{preimage arrow} from the mapping arrow, type $X \preto Y$. Prove that its instances compute preimages under corresponding mapping (or bottom) arrow instances.
-	\item Define an arrow transformer via a natural transformation $\arrowtrans$ to thread random stores and avoid divergence.
-	\item Define a computable approximation of the transformed preimage arrow and report on its implementation.
+	\item Preimages are defined for extensional functions. \label{problem:observable-domain}
+	\item Requiring subsets of $X$ and $Y$ to be measurable constrains $f$: preimages of measurable subsets of $Y$ must be measurable subsets of $X$. Proving the conditions under which this is true is difficult, especially when $f$ may diverge. \label{problem:measurability}
+	\item Probability measures cannot be defined for arbitrary function spaces (XXX: cite). \label{problem:higher-orderness}
+\end{enumerate}
+Implementing a language based on such a semantics is complicated by these facts:
+\begin{enumerate}
+	\setcounter{enumi}{3}
+	\item It requires running Turing-equivalent programs backward, efficiently, on possibly uncountable sets of outputs.\label{problem:backward-efficient}
+	\item Contemporary mathematics is unlike any implementation's host language. \label{problem:different-language}
 \end{enumerate}
 
-Most of our correctness theorems can be described in terms of the following commutative diagram:
+We address both~\ref{problem:observable-domain} and~\ref{problem:different-language} by developing our semantics in \lzfclang~\cite{cit:toronto-2012flops-lzfc}, a $\lambda$-calculus with infinite sets, and both extensional and intensional functions.
+We address~\ref{problem:backward-efficient} by deriving and implementing a \emph{conservative approximation} of the semantics.
+
+There seems to be no way to simplify difficulty~\ref{problem:measurability}, so we work through it in Section~\ref{sec:measurability}.
+The outcome is worth it: we prove that all probabilistic programs are measurable, regardless of which inputs they diverge on.
+This includes uncomputable programs; for example, those that contain real equality tests and limits.
+We believe this result is the first of its kind, and is general enough to apply to almost all past and future work on probabilistic programming languages.
+
+For difficulty~\ref{problem:higher-orderness}, we have discovered that the ``first-orderness'' of arrows is a perfect fit for the ``first-orderness'' of measure theory.
+
+\subsection{Arrow Solution Overview}
+
+Using arrows, we define an \emph{exact} semantics and an \emph{approximating} semantics.
+Our exact semantics consists of
+\begin{itemize}
+	\item A semantic function which, like the semantic function for the arrow calculus~(XXX: cite Hughes or Lindley), transforms first-order programs into the computations of an arbitrary arrow.
+	\item Arrows for running programs in different ways.
+\end{itemize}
+This commutative diagram describes the relationships among the arrows used to define the exact semantics:
 \begin{equation}
 \begin{CD}
 X \botto Y   @>\liftmap>>   X \mapto Y   @>\liftpre>>   X \preto Y \\
@@ -247,44 +247,50 @@ X \pbotto Y  @>>\liftpmap>  X \pmapto Y  @>>\liftppre>  X \ppreto Y
 \end{CD}
 \label{eqn:roadmap-diagram}
 \end{equation}
-We prove that all the functions between arrow types in~\eqref{eqn:roadmap-diagram} are homomorphisms, which implies that $X \preto Y$ and $X \ppreto Y$ instances compute preimages correctly.
+From top-left to top-right, $X \botto Y$ computations are intensional functions that may raise errors, $X \mapto Y$ computations produce extensional functions, and $X \preto Y$ computations compute preimages.
+The computations of the arrows in the bottom row are equivalent to those in the top, except they always converge.
+We can do this because in \lzfclang, Turing-uncomputable programs are definable.
 
-XXX: something about how we know the approximations are correct
+Our approximating semantics consists of the same semantic function and an arrow $X \ppreto' Y$, derived from $X \ppreto Y$, for computing conservative approximations of preimages.
 
+An implementation implements the semantic function, and $X \botto Y$ and $X \ppreto' Y$ arrows.
+
+Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram} is a homomorphism.
+We use $\arrowlift$ and $\arrowtrans$ to define the correctness of one arrow in terms of an underlying arrow.
+Homomorphism properties allow $\arrowlift$ and $\arrowtrans$ to distribute over the underlying arrow's computations.
+
+From here on, significant terms are introduced in \keyword{bold}, with those we invent introduced in \mykeyword{bold italics}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Operational Metalanguage}
 
-From here on, significant terms are introduced in \keyword{bold}, and significant terms we invent are introduced in \mykeyword{bold italics}.
-
 We write all of the programs in this paper in \lzfclang~\cite{cit:toronto-2012flops-lzfc}, an untyped, call-by-value lambda calculus designed for deriving implementable programs from contemporary mathematics.
 
-Contemporary mathematics is generally done in \keyword{ZFC}: \keyword{Zermelo-Fraenkel} set theory extended with the axiom of \keyword{Choice} (equivalently unique \keyword{Cardinality}).
-ZFC has only first-order functions and no general recursion, which makes implementing a language defined by a transformation into contemporary mathematics quite difficult.
+Generally, contemporary mathematics---measure theory in particular---is done in \keyword{ZFC}: \keyword{Zermelo-Fraenkel} set theory extended with the axiom of \keyword{Choice} (equivalently unique \keyword{Cardinality}).
+ZFC has only first-order functions and no general recursion, which makes implementing a language defined by a transformation into ZFC quite difficult.
 The problem is exacerbated if implementing the language requires approximation.
 Targeting \lzfclang instead allows creating a precise mathematical specification and deriving an approximating implementation without changing languages.
 
 In \lzfclang, essentially every set is a value, as well as every lambda and every set of lambdas.
-All operations, including operations on infinite sets, are assumed to complete instantly if they terminate.\footnote{An
-example of a nonterminating \lzfclang function is one that attempts to decide whether other \lzfclang programs halt.}
+All operations, including operations on infinite sets, are assumed to complete instantly if they \keyword{converge} (i.e. terminate).\footnote{An example of a diverging \lzfclang function is one that attempts to decide whether arbitrary \lzfclang expressions converge.}
 
-Almost everything definable in contemporary mathematics can be formally defined by a finite \lzfclang program, except objects that most mathematicians would agree are nonconstructive.
-More precisely, any object that \emph{must} be defined by a statement of existence and uniqueness without giving a bounding set is not definable by a \emph{finite} \lzfclang program.
+Almost everything definable in ZFC can be formally defined by a finite \lzfclang program, except objects that most mathematicians would agree are nonconstructive.
+More precisely, any set that \emph{must} be defined by a statement of existence and uniqueness without giving a bounding set is not definable by a \emph{finite} \lzfclang program.
 
-Because \lzfclang includes an inner model of ZFC, essentially every contemporary theorem applies to \lzfclang's set values without alteration.
-Further, proofs about \lzfclang's set values apply to contemporary mathematical objects.\footnote{Assuming the existence of an inaccessible cardinal.}
+Because \lzfclang includes an inner model of ZFC, essentially every ZFC theorem applies to \lzfclang's set values without alteration.
+Further, proofs about \lzfclang's set values apply to ZFC sets.\footnote{Assuming the existence of an inaccessible cardinal.}
 
 In \lzfclang, algebraic data structures are encoded as sets; e.g. a \mykeyword{primitive ordered pair} of $x$ and $y$ is $\set{\set{x},\set{x,y}}$.
 Only the \emph{existence} of encodings into sets is important, as it means data structures inherit a defining characteristic of sets: strictness.
 More precisely, the lengths of paths to data structure leaves is unbounded, but each path must be finite.
 Less precisely, data may be ``infinitely wide'' (such as $\Re$) but not ``infinitely tall'' (such as infinite trees and lists).
 
-We assume data structures, including pairs, are encoded as \emph{primitive} ordered pairs with the first element a unique tag, so that they can be distinguished by checking tags.
+We assume data structures, including pairs, are encoded as \emph{primitive} ordered pairs with the first element a unique tag, so they can be distinguished by checking tags.
 Accessors such as $fst$ and $snd$ are trivial to define.
 
 \lzfclang is untyped so its users can define an auxiliary type system that best suits their application area.
-For this work, we use an informal, manually checked, polymorphic type system characterized by these rules:
+For this work, we use a manually checked, polymorphic type system characterized by these rules:
 \begin{itemize}
 	\item A free lowercase type variable is universally quantified.
 	\item A free uppercase type variable is a set.
@@ -321,7 +327,7 @@ Shortly, $\emptyset$ is the empty set, $\omega$ is the cardinality of the natura
 
 We assume literal set notation such as $\set{0,1,2}$ is already defined in terms of the set primitives.
 
-We import contemporary theorems as lemmas.
+We import applicable ZFC theorems as lemmas.
 
 \subsection{Internal and External Equality}
 
@@ -329,13 +335,12 @@ Set theory extends first-order logic with an axiom that defines equality to be e
 \lzfclang is defined the same way as any other operational $\lambda$-calculus: by (conservatively) extending the domain of discourse with expressions and defining a reduction relation.
 
 While \lzfclang does not have an equality primitive, set theory's extensional equality can be recovered internally using $(\in)$.
-\emph{Internal} extensional equality is defined by
+\emph{Internal} extensional equality is defined by either of the following equivalent statements:
 \begin{equation}
-	x = y \ := \ x \in \set{y}
-\end{equation}
-which means
-\begin{equation}
-	(=) \ := \ \fun{x}\fun{y}{x \in \set{y}}
+\begin{aligned}
+	x = y &\ := \ x \in \set{y} \\
+	(=) &\ := \ \fun{x}\fun{y}{x \in \set{y}}
+\end{aligned}
 \end{equation}
 Thus, $1 = 1$ reduces to $1 \in \set{1}$, which reduces to $true$.\footnote{Technically, \lzfclang has a big-step semantics, and
 the derivation tree for $1 = 1$ contains the derivation tree for $1 \in \set{1}$.}
@@ -415,8 +420,7 @@ However, we do not want internal equality and external equivalence to differ too
 \end{figure*}
 
 We assume a desugaring pass over \lzfclang expressions, which automatically curries (including for the two-argument primitives $(\in)$ and $image$), and interprets special binding forms such as indexed unions $\U_{\mathit{x} \in \mathit{e_A}}\mathit{e}$, destructuring binds as in $swap~\pair{x,y} := \pair{y,x}$, and comprehensions like $\setb{x \in A}{x \in B}$.
-(We may be rather informal with the latter two binding forms when the meaning is clear.)
-We assume we have logical operators, bounded quantifiers (unbounded quantifiers are not \lzfclang-definable), and typical set operations.
+We assume we have logical operators, bounded quantifiers, and typical set operations.
 
 A less typical set operation we use is disjoint union:
 \begin{equation}
@@ -427,9 +431,10 @@ A less typical set operation we use is disjoint union:
 \end{equation}
 $A \uplus B$ diverges when $A$ and $B$ overlap.
 
-In set theory, functions are encoded as sets of input-output pairs.
+In set theory, functions are extensional---everything about them is observable---because they are encoded as sets of input-output pairs.
 The increment function for the natural numbers, for example, is $\set{\pair{0,1},\pair{1,2},\pair{2,3},...}$.
-To distinguish these huge tables from lambdas, we call them \mykeyword{mappings}, and use the word \keyword{function} to mean a lambda or mapping.
+We call extensional functions \mykeyword{mappings} and intensional functions \keyword{lambdas}, and use the word \keyword{function} to mean either.
+For convenience, as with lambdas, we use adjacency (e.g. $(f~x)$) to apply mappings.
 
 Syntax for defining unnamed mappings is defined by
 \begin{align}
@@ -440,9 +445,7 @@ Syntax for defining unnamed mappings is defined by
 		&mapping~f~A \ := \ image~(\fun{a}{\pair{a,f~a}})~A
 	\end{aligned}
 \end{align}
-For convenience, as with lambdas, we use adjacency (e.g. $(f~x)$) to apply mappings.
-
-Figure~\ref{fig:mapping-defs} defines a few common operations on mappings: $domain$, $range$, $preimage$, $restrict$, pairing, composition, and disjoint union.
+Figure~\ref{fig:mapping-defs} defines more common operations on mappings: $domain$, $range$, $preimage$, $restrict$, pairing, composition, and disjoint union.
 The latter three are particularly important in the preimage arrow's derivation, and $preimage$ is critical in measure theory's account of probability.
 For symmetry with partial functions $x \tto y$, they are defined on $X \pto Y$, where $X \pto Y$ is the set of all partial mappings from any domain set $X$ to any codomain set $Y$.
 
@@ -455,7 +458,7 @@ Projections are produced by
 	&\pi~j~f \ := \ f~j
 \end{aligned}
 \end{equation}
-which is useful in combinators, when $f$ is unnamed.
+which is particularly useful when $f$ is unnamed.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -465,9 +468,9 @@ XXX: really short arrow intro (XXX: cite Hughes, Lindley et al)
 
 \subsection{Alternative Arrow Definitions}
 
-For every arrow $a$ in this paper, we do not give a typical minimal definition.
-Instead of $first\gen$, we define $(\arrowpair\gen)$---typically called \keyword{fanout}, but its use will be clearer if we call it \keyword{pairing}---which applies two functions to an input and returns the pair of their outputs.
-Though $first\gen$ may be defined in terms of $(\arrowpair\gen)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair\gen)$ definitions in this paper because the applicable contemporary theorems are in terms of pairing functions.
+We do not give typical minimal arrow definitions.
+For each arrow $a$, instead of $first\gen$, we define $(\arrowpair\gen)$---typically called \keyword{fanout}, but its use will be clearer if we call it \keyword{pairing}---which applies two functions to an input and returns the pair of their outputs.
+Though $first\gen$ may be defined in terms of $(\arrowpair\gen)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair\gen)$ definitions because the applicable theorems are in terms of pairing functions.
 
 One way to strengthen an arrow $a$ is to define an additional combinator $left\gen$, which can be used to choose an arrow computation based on the result of another.
 Again, we define a different combinator, $\arrowif\gen$, to make it easier to apply contemporary theorems.
@@ -912,7 +915,7 @@ Starting with the left side of~\eqref{eqn:lift-distributes-over-lazy}, we first 
 \end{align*}
 \lzfclang does not have an $\eta$ rule (i.e. $\fun{\mathit{x}}{\mathit{e}~\mathit{x}} \not\equiv \mathit{e}$ because $\mathit{e}$ may diverge), but we can use weaker facts.
 If $A \neq \emptyset$, then $domain_\bot~(\fun{a}{f~0~a})~A \equiv domain_\bot~(f~0)~A$.
-Further, it diverges iff $f~0$ diverges, and iff $mapping~(f~0)~A'$ diverges.
+Further, it diverges if and only if $mapping~(f~0)~A'$ diverges.
 Therefore, if $A \neq \emptyset$, we can replace $\fun{a}{f~0~a}$ with $f~0$.
 If $A = \emptyset$, then $\liftmap~(\lazybot~f)~A = \emptyset$ (the empty mapping), so
 \begin{align*}
@@ -1003,7 +1006,7 @@ For all programs $\mathit{e}$, $\meaningof{\mathit{e}}\map \equiv \liftmap~\mean
 On a computer, we do not often have the luxury of testing each function input to see whether it belongs to a preimage set.
 Even for finite domains, doing so is often intractable.
 
-If we wish to compute with infinite sets in the language implementation, we will need an abstraction that makes it easy to replace computation on points with computation on sets.
+If we wish to compute with infinite sets in the language implementation, we will need an abstraction that makes it easy to replace computation on points with computation on sets whose representations allow efficient operations.
 Therefore, in the preimage arrow, we will confine computation on points to instances of
 \begin{equation}
 	X \prepto Y \ ::= \ \pair{Set~Y, Set~Y \tto Set~X}
@@ -1370,8 +1373,8 @@ For all programs $\mathit{e}$, $\meaningof{\mathit{e}}\pre \equiv \liftpre~\mean
 Probabilistic functions that may diverge, but converge with probability 1, are common.
 They come up not only when practitioners want to build data with random size or structure, but in simpler circumstances as well.
 
-Suppose $random$ retrieves a number $r~j \in [0,1]$ from an implicit random source $r$.
-The following recursive function, which defines the well-known \keyword{geometric distribution} with parameter $p$, counts the number of times $random < p$ is $false$:
+Suppose $random$ retrieves a number $r~j \in [0,1]$ at index $j$ in an implicit random source $r$.
+The following function, which defines the well-known \keyword{geometric distribution} with parameter $p$, counts the number of times $random < p$ is $false$:
 \begin{equation}
 	geometric~p \ := \ if~(random < p)~0~(1 + geometric~p)
 \label{eqn:geometric-def}
@@ -1401,19 +1404,13 @@ A little-used alternative is for the random source to be a tree, threaded applic
 each computation receives, but does not produce, a random source.
 Multi-argument combinators split the tree and pass sub-trees to sub-computations.
 
-We have tried both ways with arrows defined using pairing.
-The resulting definitions are large, making them conceptually difficult and hard to manipulate.
+With either alternative, for arrows defined using pairing, the resulting definitions are large, conceptually difficult, and hard to manipulate.
 Fortunately, assigning each sub-computation a unique index into a tree-shaped random source, and passing it unchanged, is relatively easy.
 
 We need a way to assign unique indexes to expressions.
 
 \begin{definition}[binary indexing scheme]
-Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto J$ and $right : J \tto J$ be total functions.
-These define a \mykeyword{binary indexing scheme} if
-\begin{itemize}
-	\item Every finite composition $next$ of $left$ and $right$ is injective.
-	\item For all $j \in J$, $j = next~j_0$ for some finite composition $next$.
-\end{itemize}
+Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto J$ and $right : J \tto J$ be total, injective functions. If for all $j \in J$, $j = next~j_0$ for some finite composition $next$, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
 \end{definition}
 
 For example, let $J$ be the set of lists of $\set{0,1}$, $j_0 := \pair{}$, and $left~j := \pair{0,j}$ and $right~j := \pair{1,j}$.
@@ -1428,7 +1425,7 @@ Alternatively, let $J$ be the set of dyadic rationals in $(0,1)$ (i.e. those wit
 \end{equation}
 With this alternative, left-to-right evaluation order can be made to correspond with the natural order $(<)$ over $J$.
 
-In any case, $J$ is always countable.
+In any case, $J$ is always countable, and can be thought of as a set of indexes into an infinite binary tree.
 
 \subsection{Applicative, Associative Store}
 
@@ -1675,8 +1672,6 @@ Let $S ::= R \times T$ and $x \arrow\genc y ::= AStore~S~(x \arrow\gen y)$, and 
 \end{align}
 The $\arrowif\genc'$ combinator's definition remains the same.
 
-From here on, let $x \pbotto y ::= AStore~S~(x \botto y)$; similarly for $X \pmapto Y$ and $X \ppreto Y$.
-
 \subsection{Correctness}
 
 \begin{theorem}[natural transformation]
@@ -1716,6 +1711,8 @@ Further, because $\arrowtrans\genc$, $\arrowtrans\gend$, and $\arrowlift\genb$ a
 XXX: not sure I'm allowed to invoke converse of composition of homomorphisms without extra conditions
 \end{proof}
 
+From here on, let $x \pbotto y ::= AStore~(R \times T)~(x \botto y)$; similarly for $X \pmapto Y$ and $X \ppreto Y$.
+
 \begin{corollary}[mapping* and preimage* arrow correctness]
 The following diagram commutes:
 \begin{equation}
@@ -1748,25 +1745,25 @@ For all $r \in R$, $t \in T$ and $a : x$,
 \end{enumerate}
 \end{theorem}
 \begin{proof}
-Let $m : J \tto J$ invertibly map sub-computation indexes in $f'$ to corresponding sub-computation indexes in $f$.
-(Defining $m$ formally is tedious and unilluminating. XXX: check this)
+Let $m : J \tto J$ invertibly map sub-computation indexes in $f$ to corresponding sub-computation indexes in $f'$.
+(Defining $m$ formally is tedious and unilluminating.)
 
 \emph{Case 1.}
-Define $t' \in J \to Bool_\bot$ such that $t'~j = z$ if the sub-computation with index $m~j$ in $f$ is an $if$ condition that returns $z$, otherwise $t'~j = \bot$.
+Define $t' \in J \to Bool_\bot$ such that $t'~j = z$ if the sub-computation with index $m^{-1}~j$ in $f$ is an $if$ condition that returns $z$, otherwise $t'~j = \bot$.
 Because $f~\pair{\pair{r,t},a}$ converges, $t'~j \neq \bot$ for at most finitely many $j$, so $t' \in T$.
 Exists $t'$.
 
 \emph{Case 2.}
 Let $t' \in T$.
 There exists an infinite \emph{suffix} $J' \subset J$ closed under $left$ and $right$, such that for all $j' \in J'$, $t'~j' = \bot$.
-Because $f~\pair{\pair{r,t},a}$ diverges, the indexes of its $if$ conditions are unbounded; there is therefore a condition with index $j$ such that $m^{-1}~j \in J'$.
+Because $f~\pair{\pair{r,t},a}$ diverges, the indexes of its $if$ conditions are unbounded; there is therefore a condition with index $j$ such that $m~j \in J'$.
 It returns $\bot$, so $f'~\pair{\pair{r,t'},a} = \bot$.
 \end{proof}
 
 To compare preimages computed by arrow instances produced by $\meaningof{\cdot}\ppre$ and $\meaningof{\cdot}\ppre'$, we need a set of inputs on which they should obviously always agree.
 
 \begin{definition}[halting set]
-A computation's \mykeyword{halting set} is the largest $A^* \subseteq S \times X$ for which
+A computation's \mykeyword{halting set} is the largest $A^* \subseteq (R \times T) \times X$ for which
 \begin{itemize}
 	\item For $f : X \pbotto Y$, $f~j_0~x \neq \bot$ for all $x \in A^*$.
 	\item For $g : X \pmapto Y$, $domain~(g~j_0~A^*) = A^*$.
@@ -1787,29 +1784,29 @@ XXX: do this
 
 \begin{corollary}[computed halting set]
 Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge.
-Then $A^* = pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~(S \times X))~Y$.
+Then $A^* = domain~(\meaningof{\mathit{e}}\pmap'~j_0~((R \times T) \times X))$.
 \end{corollary}
 
 \begin{corollary}[semantic correctness (final)]
-Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge, with halting set $A^*$.
-For $A \subseteq S \times X$ and $B \subseteq Y$, $pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~A)~B = preimage~(\meaningof{\mathit{e}}\pmap~j_0~(A \i A^*))~B$.
+Let $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$ converge and have halting set $A^*$.
+For all $A \subseteq (R \times T) \times X$ and $B \subseteq Y$, $pre!ap~(\meaningof{\mathit{e}}\ppre'~j_0~A)~B = preimage~(\meaningof{\mathit{e}}\pmap~j_0~(A \i A^*))~B$.
 \end{corollary}
 
 In other words, preimages computed using $\meaningof{\cdot}\ppre'$ always converge, never include inputs that give rise to errors or divergence, and are correct.
 
 \section{Measurability}
+\label{sec:measurability}
 
 We have not assigned probabilities to any sets yet.
 
-Recall that, for a mapping $g : X \pto Y$, the probability of an output set $B \subseteq Y$ is
+For $g : X \pto Y$, the probability of an output set $B \subseteq Y$ is
 \begin{equation}
 	P~(preimage~g~B)
 \end{equation}
 where $P \in \powerset~X \pto [0,1]$ is a probability measure on $X$.
 This was the motivation for defining arrows to compute preimages in the first place.
-Note again that $P$ is a \emph{partial} function.
-We had left $domain~P$, and which $B \subseteq Y$ have preimages in $domain~P$, as technical conditions to be proved later.
-Now we determine those conditions.
+$P$ is a \emph{partial} function: $domain~P$ consists only of \emph{measurable} subsets of $X$.
+Before we can compute probabilities, we need to ensure $P$ is applied only to measurable sets, which requires preimages of measurable subsets under $g$ to be measurable.
 
 To save space, we assume readers are familiar with either topology or measure theory.
 (Readers unfamiliar with both may wish to skip to the next section.)
@@ -1856,7 +1853,7 @@ It is easier to prove measurability of pure computations than to prove measurabi
 Further, we can use the resulting theorems to prove that all probabilistic programs are measurable.
 
 A single mapping arrow computation can produce many mappings, which, it seems, could complicate proving measurability.
-Fortunately, we need only consider the mapping produced when applying a computation to its halting set.
+Fortunately, we need only consider the mapping produced by applying a computation to its halting set.
 
 \begin{definition}[halting set]
 Let $g : X \mapto Y$. Its \keyword{halting set} is the largest $A^* \subseteq X$ for which $domain~(g~A^*) = A^*$.
@@ -1887,7 +1884,7 @@ Use the mapping arrow restriction law~\eqref{eqn:mapping-arrow-restriction-law} 
 
 Roughly, if the largest mapping that can be produced by a computation is measurable, any mapping it can produce that we care about is measurable.
 
-That all programs interpreted by $\meaningof{\cdot}\gen$ are measurable will be proved by structural induction.
+That all programs interpreted by $\meaningof{\cdot}\gen$ are measurable will be proved by structural induction on terms.
 We therefore need a case for each arrow combinator.
 
 \subsubsection{Case: Composition}
@@ -1979,9 +1976,10 @@ By definition, $(g_1~\pairmap~g_2)~A^{**} = \pair{g_1~A^{**},g_2~A^{**}}\map$, w
 
 \subsubsection{Case: Conditional}
 
-\begin{lemma}[measurability under $\uplus\map$]
-If $g_1 : X \pto Y$ and $g_2 : X \pto Y$ are $\A!\B$-measurable and have disjoint domains, $g_1 \uplus\map g_2$ is $\A!\B$-measurable.
-\label{lem:disjoint-unions-are-measurable}
+\begin{lemma}[union of disjoint, measurable mappings]
+Let $gs : Set~(X \pto Y)$ be a countable set of measurable mappings with disjoint domains.
+Then $U~gs$ is measurable.
+\label{lem:union-of-measurable-mappings}
 \end{lemma}
 
 \begin{theorem}[measurability under $\ifmap$]
@@ -2008,7 +2006,7 @@ By definition,
 		}{g_2' \uplus\map g_3'}
 \end{equation}
 By hypothesis, $g_1'$, $g_2'$ and $g_3'$ are measurable mappings, and the mapping arrow restriction law~\eqref{eqn:mapping-arrow-restriction-law} imples $g_2'$ and $g_3'$ have disjoint domains.
-Apply Lemma~\ref{lem:disjoint-unions-are-measurable}.
+Apply Lemma~\ref{lem:union-of-measurable-mappings}.
 \end{proof}
 
 \subsubsection{Case: Laziness}
@@ -2107,7 +2105,7 @@ By structural induction and the above theorems.
 \end{proof}
 
 \begin{theorem}[approximation with expressions]
-Let $g := \meaningof{\mathit{e}}\pmap'$ converge; $g : X \pmapto Y$.
+Let $g := \meaningof{\mathit{e}}\pmap'$ converge, where $g : X \pmapto Y$.
 For all $t \in T$, let $A := (R \times \set{t}) \times X$.
 There is an expression $\mathit{e'}$ for which $\meaningof{\mathit{e'}}\pmap~j_0~A = g~j_0~A$.
 \label{thm:nonrecursive-approximation}
@@ -2117,12 +2115,6 @@ Let $j \in J$ be the largest for which $t~j \neq \bot$.
 To construct $\mathit{e'}$, exhaustively apply first-order functions in $\mathit{e}$, but replace any $\ifpmap'$ whose condition's index is greater than $j$ with the equivalent expression $\bot$.
 Because $g$ converges, recurrences must be guarded by $if$, so this process terminates after finitely many applications.
 \end{proof}
-
-\begin{lemma}[union of disjoint, measurable mappings]
-Let $gs : Set~(X \pto Y)$ be a countable set of measurable mappings with disjoint domains.
-Then $U~gs$ is measurable.
-\label{lem:union-of-measurable-mappings}
-\end{lemma}
 
 \begin{theorem}[all probabilistic programs are measurable]
 If $\meaningof{\mathit{e}}\pmap'$ converges, it is measurable.
