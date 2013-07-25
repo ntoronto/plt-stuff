@@ -188,7 +188,7 @@ We cannot even model measuring devices correctly.
 Measure-theoretic probability (XXX: cite) is widely believed to be able to define everything reasonable that densities cannot.
 It mainly does this by \emph{assigning probabilities to sets} instead of \emph{assigning changes in probability to values}.
 
-If $P$ assigns probabilities to sets of $X$ and $f : X \to Y$, then the \keyword{preimage measure}
+If $P$ assigns probabilities to subsets of $X$ and $f : X \to Y$, then the \keyword{preimage measure}
 \begin{equation}
 	P~(preimage~f~B)
 \end{equation}
@@ -216,8 +216,8 @@ Unfortunately, it is difficult to turn this simple-sounding idea into a composit
 Implementing a language based on such a semantics is complicated by these facts:
 \begin{enumerate}
 	\setcounter{enumi}{3}
-	\item It requires running Turing-equivalent programs backward, efficiently, on possibly uncountable sets of outputs.\label{problem:backward-efficient}
 	\item Contemporary mathematics is unlike any implementation's host language. \label{problem:different-language}
+	\item It requires running Turing-equivalent programs backward, efficiently, on possibly uncountable sets of outputs.\label{problem:backward-efficient}
 \end{enumerate}
 
 We address both~\ref{problem:observable-domain} and~\ref{problem:different-language} by developing our semantics in \lzfclang~\cite{cit:toronto-2012flops-lzfc}, a $\lambda$-calculus with infinite sets, and both extensional and intensional functions.
@@ -256,8 +256,8 @@ Our approximating semantics consists of the same semantic function and an arrow 
 An implementation implements the semantic function, and $X \botto Y$ and $X \ppreto' Y$ arrows.
 
 Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram} is a homomorphism.
-We use $\arrowlift$ and $\arrowtrans$ to define the correctness of one arrow in terms of an underlying arrow.
-Homomorphism properties allow $\arrowlift$ and $\arrowtrans$ to distribute over the underlying arrow's computations.
+We use $\arrowlift$ and $\arrowtrans$ to define the correctness of one arrow in terms of another arrow.
+Homomorphism properties allow $\arrowlift$ and $\arrowtrans$ to distribute over the other arrow's computations.
 
 From here on, significant terms are introduced in \keyword{bold}, with those we invent introduced in \mykeyword{bold italics}.
 
@@ -273,7 +273,7 @@ The problem is exacerbated if implementing the language requires approximation.
 Targeting \lzfclang instead allows creating a precise mathematical specification and deriving an approximating implementation without changing languages.
 
 In \lzfclang, essentially every set is a value, as well as every lambda and every set of lambdas.
-All operations, including operations on infinite sets, are assumed to complete instantly if they \keyword{converge} (i.e. terminate).\footnote{An example of a diverging \lzfclang function is one that attempts to decide whether arbitrary \lzfclang expressions converge.}
+All operations, including operations on infinite sets, are assumed to complete instantly if they converge.\footnote{An example of a diverging \lzfclang function is one that attempts to decide whether arbitrary \lzfclang expressions converge.}
 
 Almost everything definable in ZFC can be formally defined by a finite \lzfclang program, except objects that most mathematicians would agree are nonconstructive.
 More precisely, any set that \emph{must} be defined by a statement of existence and uniqueness without giving a bounding set is not definable by a \emph{finite} \lzfclang program.
@@ -2190,6 +2190,100 @@ In particular, for any converging $g := \meaningof{\mathit{e}}\pmap'$, preimages
 
 \section{Implementable Approximation}
 
+\begin{figure*}[t]\centering
+\begin{align*}
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		%&id\pre : X \preto X \\
+		&\arrpre~id~A \ \equiv \ \pair{A,\fun{B}{B}}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		%&fst\pre : \pair{X,Y} \preto X \\
+		&\arrpre~fst~A \ \equiv \ 
+			\lzfclet{
+				A_1 & image~fst~A \\
+				A_2 & image~snd~A
+			}{\pair{A_1,\fun{B}{A \i (B \times A_2)}}}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		%&snd\pre : \pair{X,Y} \preto Y \\
+		&\arrpre~snd~A \ \equiv \ 
+			\lzfclet{
+				A_1 & image~fst~A \\
+				A_2 & image~snd~A
+			}{\pair{A_2,\fun{B}{A \i (A_1 \times B)}}}
+	\end{aligned} \\
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		%&const\pre : Y \tto X \preto Y \\
+		&\arrpre~(\fun{\underline{\ \ }}{y})~A \ \equiv \ \pair{\set{y},\fun{B}{if~(B = \emptyset)~\emptyset~A}}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		%&\pi\pre : J \tto (J \to X) \preto X \\
+		&\arrpre~(\pi~j)~A \ \equiv \ 
+			\lzfclet{
+				B & image~(\pi~j)~A \\
+				p & \fun{B}{A \i \prod_{i \in J} if~(j = i)~B~(image~(\pi~j)~A)}
+			}{\pair{B,p}}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		%&agrees\pre : \pair{Bool,Bool} \preto Bool \\
+		&\arrpre~agrees~A \ \equiv \
+			\lzfclet{
+				B & \lzfcsplit{&(if~(\pair{true,true} \in A)~\set{true}~\emptyset)\ \uplus \\ &(if~(\pair{false,false} \in A)~\set{false}~\emptyset)} \\
+				p & \lzfcsplit{\fun{B}&(if~(true \in B)~\set{\pair{true,true}}~\emptyset)\ \uplus \\ &(if~(false \in B)~\set{\pair{false,false}}~\emptyset)}
+			}{\pair{B,p}}
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
+\caption{Specific instances of $\arrpre~f$}
+\label{fig:extra-preimage-arrow-defs}
+\end{figure*}
+
+If we were to confine preimage computation to countable sets, we could model them as lazy lists or streams and implement the preimage arrow almost directly.
+But we would like something more efficient, even if it means approximating, and we would like to be able to compute preimages of sets of real numbers.
+
+If instead we confine preimage computation to arbitrary \emph{rectangular} sets, only $preimage$ and functions that use it would be uncomputable: $pre$, and thus $\liftpre$, and thus $\arrpre$.
+It might seem that not being able to lift pure functions to preimage arrow computations would be a major handicap, but it is not.
+For pure first-order programs, we need only lift $id$, $\fun{\underline{\ \ }}{y}$, $fst$ and $snd$.
+For probabilistic, partial programs, we need to lift $\pi~j$ to index the random store and branch traces, and $agrees$ to implement $\ifppre'$.
+We of course need lifts of any other primitives that we would like to include in the language.
+
+Figure~\ref{fig:extra-preimage-arrow-defs} defines preimage arrow computations equivalent to the necessary lifts.
+All except $\arrpre~agrees$ preserve rectangularity.
+
+\begin{definition}[rectangular subset]
+For a set $X$ used as a type, $Rect~X$ denotes the \mykeyword{rectangular subsets} of $X$, which must be satisfy the following rules:
+\begin{align}
+	Rect~\pair{X_1,X_2} &\ = \ (Rect~X_1) \boxtimes (Rect~X_2)
+	\label{eqn:standard-rect-finite-product-rule}
+\\
+	Rect~(J \to X) &\ = \ (Rect~X)^{\boxtimes J}
+	\label{eqn:standard-rect-arbitrary-product-rule}
+%\\
+%	X' \in Rect~X \ \implies \ Rect~X' &\ =\ \setb{X' \i A}{A \in Rect~X}
+%	\label{eqn:standard-rect-subset-rule}
+\end{align}
+where
+\begin{align}
+	\A_1 \boxtimes \A_2 &\ := \ \setb{A_1 \times A_2}{A_1 \in \A_1, A_2 \in \A_2} \\
+	\A^{\boxtimes J} &\ := \ \setb{\textstyle\prod_{j \in J} A_j}{j \in J, A_j \in \A}
+\end{align}
+lift cartesian products to families of sets.
+\label{def:standard-rectangle}
+\end{definition}
+
+It is not difficult to show that $(\i) : Rect~X \tto Rect~X \tto Rect~X$, that $\set{a} \in Rect~X$ if $a \in X$
+
+
+
 XXX: $\arrpre$ is generally uncomputable, but we don't need that many lifts; Figure~\ref{fig:extra-preimage-arrow-defs} has the rest of the non-arithmetic ones we'll need
 
 XXX: figure out a good way to present the following info
@@ -2220,53 +2314,6 @@ Figure~\ref{fig:extra-preimage-arrow-defs}:
 	\item $\pi\pre$: need projections, $\i$, arbitrary products
 \end{itemize}
 
-\begin{figure*}[t]\centering
-\begin{align*}
-\begin{aligned}[t]
-	&\begin{aligned}[t]
-		&id\pre : X \preto X \\
-		&id\pre~A \ := \ \pair{A,\fun{B}{B}}
-	\end{aligned} \\
-\\[-6pt]
-	&\begin{aligned}[t]
-		&const\pre : Y \tto X \preto Y \\
-		&const\pre~y~A \ := \ \pair{\set{y},\fun{B}{if~(B = \emptyset)~\emptyset~A}}
-	\end{aligned} \\
-\\[-6pt]
-&\begin{aligned}
-	&\pi\pre : J \tto (J \to X) \preto X \\
-	&\pi\pre~j~A \ := \ 
-		\lzfclet{
-			A_j & proj~j~A \\
-			p & \fun{B}{A \i \prod_{i \in J} if~(j = i)~B~(proj~i~A)}
-		}{\pair{A_j,p}}
-\end{aligned}
-\end{aligned}
-&\tab\tab\tab
-\begin{aligned}[t]
-	&\begin{aligned}[t]
-		&fst\pre : \pair{X,Y} \preto X \\
-		&fst\pre~A \ := \ 
-			\lzfclet{
-				A_1 & image~fst~A \\
-				A_2 & image~snd~A
-			}{\pair{A_1,\fun{B}{A \i (B \times A_2)}}}
-	\end{aligned} \\
-\\[-6pt]
-	&\begin{aligned}[t]
-		&snd\pre : \pair{X,Y} \preto Y \\
-		&snd\pre~A \ := \ 
-			\lzfclet{
-				A_1 & image~fst~A \\
-				A_2 & image~snd~A
-			}{\pair{A_2,\fun{B}{A \i (A_1 \times B)}}}
-	\end{aligned}
-\end{aligned}
-\end{align*}
-\hrule
-\caption{Specific instances of $\arrpre~f$}
-\label{fig:extra-preimage-arrow-defs}
-\end{figure*}
 
 
 
