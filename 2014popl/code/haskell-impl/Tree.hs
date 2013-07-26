@@ -1,6 +1,7 @@
 module Tree where
 
-import Rect
+import Set
+import Interval
 
 
 type TreeIndex  =  [Bool]
@@ -48,34 +49,34 @@ instance Corner RTree where
   lte (RNode x1 l1 r1) (RNode x2 l2 r2)  =  x1 <= x2 && lte l1 l2 && lte r1 r2
   lte t1 t2  =  lte (rtreeExpand t1) (rtreeExpand t2)
 
-rtreeProj :: TreeIndex -> Rect RTree -> Rect Float
+rtreeProj :: TreeIndex -> Interval RTree -> Interval Float
 rtreeProj j Empty  =  Empty
-rtreeProj [] (Box t1 t2)  =  Box (rtreeRandom t1) (rtreeRandom t2)
-rtreeProj  (True:j) (Box t1 t2)  =  rtreeProj j (Box (rtreeLeft  t1) (rtreeLeft  t2))
-rtreeProj (False:j) (Box t1 t2)  =  rtreeProj j (Box (rtreeRight t1) (rtreeRight t2))
+rtreeProj [] (Ivl t1 t2)  =  Ivl (rtreeRandom t1) (rtreeRandom t2)
+rtreeProj  (True:j) (Ivl t1 t2)  =  rtreeProj j (Ivl (rtreeLeft  t1) (rtreeLeft  t2))
+rtreeProj (False:j) (Ivl t1 t2)  =  rtreeProj j (Ivl (rtreeRight t1) (rtreeRight t2))
 
-rtreeUnproj :: TreeIndex -> Rect RTree -> Rect Float -> Rect RTree
+rtreeUnproj :: TreeIndex -> Interval RTree -> Interval Float -> Interval RTree
 rtreeUnproj j Empty _  =  Empty
 rtreeUnproj j _ Empty  =  Empty
 
-rtreeUnproj [] (Box t1 t2) (Box y1 y2)  =
+rtreeUnproj [] (Ivl t1 t2) (Ivl y1 y2)  =
   let RNode x1 l1 r1 = rtreeExpand t1
       RNode x2 l2 r2 = rtreeExpand t2
-    in case meet (Box x1 x2) (Box y1 y2) of
-         Box z1 z2 -> Box (rnode z1 l1 r1) (rnode z2 l2 r2)
+    in case meet (Ivl x1 x2) (Ivl y1 y2) of
+         Ivl z1 z2 -> Ivl (rnode z1 l1 r1) (rnode z2 l2 r2)
          Empty -> Empty
 
-rtreeUnproj  (True:j) (Box t1 t2) (Box y1 y2)  =
+rtreeUnproj  (True:j) (Ivl t1 t2) (Ivl y1 y2)  =
   let RNode x1 l1 r1 = rtreeExpand t1
       RNode x2 l2 r2 = rtreeExpand t2
-    in case rtreeUnproj j (Box l1 l2) (Box y1 y2) of
-         Box l1 l2 -> Box (rnode x1 l1 r1) (rnode x2 l2 r2)
+    in case rtreeUnproj j (Ivl l1 l2) (Ivl y1 y2) of
+         Ivl l1 l2 -> Ivl (rnode x1 l1 r1) (rnode x2 l2 r2)
          Empty -> Empty
 
-rtreeUnproj (False:j) (Box t1 t2) (Box y1 y2)  =
+rtreeUnproj (False:j) (Ivl t1 t2) (Ivl y1 y2)  =
   let RNode x1 l1 r1 = rtreeExpand t1
       RNode x2 l2 r2 = rtreeExpand t2
-    in case rtreeUnproj j (Box r1 r2) (Box y1 y2) of
-         Box r1 r2 -> Box (rnode x1 l1 r1) (rnode x2 l2 r2)
+    in case rtreeUnproj j (Ivl r1 r2) (Ivl y1 y2) of
+         Ivl r1 r2 -> Ivl (rnode x1 l1 r1) (rnode x2 l2 r2)
          Empty -> Empty
 

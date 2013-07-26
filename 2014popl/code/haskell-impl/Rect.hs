@@ -1,86 +1,120 @@
---{-# LANGUAGE #-}
+{-# LANGUAGE
+    ConstraintKinds,
+    FlexibleInstances,
+    MultiParamTypeClasses,
+    TypeFamilies,
+    UndecidableInstances,
+    RankNTypes,
+    StandaloneDeriving #-}
 
-module Rect where
+--module Rect where
 
-class Corner x where
-  lte :: x -> x -> Bool
-  cmin :: x -> x -> x
-  cmax :: x -> x -> x
-  cmin a1 a2  =  if lte a1 a2 then a1 else a2
-  cmax a1 a2  =  if lte a1 a2 then a2 else a1
+import GHC.Prim
 
-instance Corner Float where
-  lte a1 a2  =  a1 <= a2
+class Firstable a where
+  type Fst a :: *
 
-instance Corner Integer where
-  lte a1 a2  =  a1 <= a2
+class Secondable a where
+  type Snd a :: *
 
-instance Corner Bool where
-  lte a1 a2  =  a1 <= a2
+instance Firstable (a,b) where
+  type Fst (a,b) = a
 
-instance (Corner x, Corner y) => Corner (x,y) where
-  lte (a1,b1) (a2,b2)  =  lte a1 a2 && lte b1 b2
-
-
-data Extended a  =  PosInf | NegInf | Finite a  deriving(Show,Eq)
-
-instance Corner x => Corner (Extended x) where
-  lte a PosInf  =  True
-  lte NegInf a  =  True
-  lte (Finite a1) (Finite a2)  =  lte a1 a2
+instance Secondable (a,b) where
+  type Snd (a,b) = b
 
 
-data Rect x  =  Box x x | Empty  deriving(Show,Eq)
+class Set s x where
+  contains :: s x -> x -> Bool
+  singleton :: x -> s x
+  empty :: s x
+  isEmpty :: s x -> Bool
+  meet :: s x -> s x -> s x
+  join :: s x -> s x -> s x
 
-box :: Corner x => x -> x -> Rect x
-box a1 a2  =  if lte a1 a2 then Box a1 a2 else Empty
+data Rect s1 s2 x  =  EmptyRect | Rect (s1 (Fst x)) (s2 (Snd x))
 
-meet :: Corner x => Rect x -> Rect x -> Rect x
-meet (Box a1 a2) (Box b1 b2)  =  box (cmax a1 b1) (cmin a2 b2)
-meet Empty _  =  Empty
-meet _ Empty  =  Empty
+rect :: (Set s1 x1, Set s2 x2) => s1 x1 -> s2 x2 -> Rect s1 s2 (x1,x2)
+rect a1 a2 = if (isEmpty a1 || isEmpty a2) then EmptyRect else Rect a1 a2
 
-join :: Corner x => Rect x -> Rect x -> Rect x
-join (Box a1 a2) (Box b1 b2)  =  box (cmin a1 b1) (cmax a2 b2)
-join Empty a  =  a
-join a Empty  =  a
+deriving instance (Show (s1 x1), Show (s2 x2)) => Show (Rect s1 s2 (x1,x2))
+deriving instance (Eq (s1 x1), Eq (s2 x2)) => Eq (Rect s1 s2 (x1,x2))
 
-contains :: Corner x => Rect x -> x -> Bool
-contains (Box a1 a2) a  =  lte a1 a && lte a a2
-contains Empty a  =  False
+instance Firstable (Rect s1 s2 (x1,x2)) where
+  type Fst (Rect s1 s2 (x1,x2)) = x1
 
-prod :: (Corner x, Corner y) => Rect x -> Rect y -> Rect (x,y)
-prod (Box a1 a2) (Box b1 b2)  =  box (a1,b1) (a2,b2)
-prod Empty _  =  Empty
-prod _ Empty  =  Empty
+instance Secondable (Rect s1 s2 (x1,x2)) where
+  type Snd (Rect s1 s2 (x1,x2)) = x2
 
-rect_fst :: Corner x => Rect (x,y) -> Rect x
-rect_fst (Box (a1,b1) (a2,b2))  =  box a1 a2
-rect_fst Empty  =  Empty
+instance (Set s1 x1, Set s2 x2) => Set (Rect s1 s2) (x1,x2) where
+  contains EmptyRect _ = False
+  contains (Rect a1 a2) (x1,x2) = contains a1 x1 && contains a2 x2
 
-rect_snd :: Corner y => Rect (x,y) -> Rect y
-rect_snd (Box (a1,b1) (a2,b2))  =  box b1 b2
-rect_snd Empty  =  Empty
+  singleton (x1,x2) = Rect (singleton x1) (singleton x2)
 
-singleton :: x -> Rect x
-singleton a  =  Box a a
+  empty = EmptyRect
 
-{-|
+  isEmpty EmptyRect = True
+  isEmpty (Rect _ _) = False
+
+  meet EmptyRect _ = EmptyRect
+  meet _ EmptyRect = EmptyRect
+  meet (Rect a1 a2) (Rect b1 b2) = rect (meet a1 b1) (meet a2 b2)
+
+  join EmptyRect b = b
+  join a EmptyRect = a
+  join (Rect a1 a2) (Rect b1 b2) = rect (join a1 b1) (join a2 b2)
+
+prod :: (Set s1 x1, Set s2 x2) => s1 x1 -> s2 x2 -> Rect s1 s2 (x1,x2)
+prod a b = rect a b
+
+projFst :: (Set s1 x1, Set s2 x2) => Rect s1 s2 (x1,x2) -> s1 x1
+projFst EmptyRect = empty
+projFst (Rect a1 a2) = a1
+
+projSnd :: (Set s1 x1, Set s2 x2) => Rect s1 s2 (x1,x2) -> s2 x2
+projSnd EmptyRect = empty
+projSnd (Rect a1 a2) = a2
+
+
+data Interval x  =  EmptyIvl | Ivl x x  deriving(Show,Eq)
+
+ivl :: Ord x => x -> x -> Interval x
+ivl a1 a2  =  if a1 <= a2 then Ivl a1 a2 else EmptyIvl
+
+
+instance Ord x => Set Interval x where
+  contains (Ivl a1 a2) a  =  a1 <= a && a <= a2
+  contains EmptyIvl a  =  False
+
+  singleton a  =  Ivl a a
+
+  empty  =  EmptyIvl
+
+  isEmpty EmptyIvl  =  True
+  isEmpty (Ivl a1 a2)  =  False
+
+  meet (Ivl a1 a2) (Ivl b1 b2)  =  ivl (max a1 b1) (min a2 b2)
+  meet EmptyIvl _  =  EmptyIvl
+  meet _ EmptyIvl  =  EmptyIvl
+
+  join (Ivl a1 a2) (Ivl b1 b2)  =  ivl (min a1 b1) (max a2 b2)
+  join EmptyIvl a  =  a
+  join a EmptyIvl  =  a
+
+
 main :: IO ()
 main = do
-  print (Box 1.0 4.0)
-  print (1.0, 4.0)
-  print (Box (1.0, 4.0) (0.0, 2.0))
-  print (meet (Box 1.0 3.0 :: Rect Float) (Box 2.0 4.0))
-  print (join (Box 1.0 3.0 :: Rect Float) (Box 2.0 4.0))
-  print (meet (Box 0.0 1.0 :: Rect Float) (Box 2.0 3.0))
-  print (box ((1.0,3.0) :: (Float,Float)) (2.0,2.0))
-  let a = (Box (0.0,1) (2.0,3) :: Rect (Float,Integer))
-      b = (Box (1.0,0) (3.0,2))
+  print (ivl 1.0 4.0 :: Interval Float)
+  print (meet (ivl 1.0 3.0 :: Interval Float) (ivl 2.0 4.0))
+  print (join (ivl 1.0 3.0 :: Interval Float) (ivl 2.0 4.0))
+  print (meet (ivl 0.0 1.0 :: Interval Float) (ivl 2.0 3.0))
+  print (rect (ivl 1.0 2.0) (ivl 3.0 4.0))
+  let a = (rect (ivl 0.0 2.0) (ivl 1 3))
+      b = (rect (ivl 1.0 3.0) (ivl 0 2))
     in print ((join a b), (meet a b))
-  let a = (Box (0.0,0.0) (2.0,2.0) :: Rect (Float,Float))
-      b = (Box (1.0,3.0) (4.0,4.0))
+  let a = (rect (ivl 0 2) (ivl 0.0 2.0))
+      b = (rect (ivl 1 4) (ivl 3.0 4.0))
     in  print ((join a b), (meet a b))
   print ()
-|-}
 
