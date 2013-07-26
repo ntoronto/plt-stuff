@@ -154,7 +154,7 @@ There is currently no efficient probabilistic language implementation that simul
 \begin{enumerate}
 	\item Places no extraneous restrictions on legal programs.
 	\item Allows \keyword{conditioning}, or restricting the output in a way that preserves relative probabilities.
-	\item Has a formal semantics.
+	\item Has a formal semantics. (XXX: implies Coq; change terminology---possibly ``mathematical specification'')
 \end{enumerate}
 In the field of programming languages, there are a few examples of languages that do not restrict legal programs and have a semantics (XXX: cite all).
 Unfortunately, most of the demand for probabilistic languages comes from Bayesian practice, which requires conditioning.
@@ -178,9 +178,9 @@ We might encode the process like this:
 \end{equation}
 While $t$'s distribution has a density (a standard bell curve at mean $\mu$), the distribution of $t'$ does not.
 Using densities, this program cannot have a meaning.
-Placing a condition on the value of $t'$ to discover how restricting its value would affect $\mu$'s distribution---an activity that should be central to Bayesian practice---is unfathomable.
+%Placing a condition on the value of $t'$ to discover how restricting its value would affect $\mu$'s distribution---an activity that should be central to Bayesian practice---is unfathomable.
 
-The restrictions placed on legal programs are indeed onerous, if uses of such benign functions as $min$ and $max$ are suspect.
+The restrictions placed on legal programs are indeed onerous, if uses of such benign functions as $min$ and $max$ are suspect. (XXX: that sentence bugs Jay for some reason)
 We cannot even model measuring devices correctly.
 
 \subsection{Measure-Theoretic Probability}
@@ -203,7 +203,7 @@ These complexities tend to drive practitioners to densities, even though they ar
 \subsection{Measure-Theoretic Semantics}
 
 Because purely functional languages do not allow effects (except usually divergence), programmers must write probabilistic programs as functions from a random source to outputs.
-Monads and other categorical classes such as idioms and arrows can make doing so easier.
+Monads and other categorical classes such as idioms and arrows can make doing so easier. (XXX: cite me, bunch of others)
 
 It seems this approach should make it easy to interpret probabilistic programs measure-theoretically.
 For a probabilistic program $f : X \to Y$, the probability measure on output sets $B \subseteq Y$ should be defined by preimages of $B$ under $f$ and the probability measure on $X$.
@@ -251,7 +251,7 @@ From top-left to top-right, $X \botto Y$ computations are intensional functions 
 The computations of the arrows in the bottom row are equivalent to those in the top, except they always converge.
 We can do this because in \lzfclang, Turing-uncomputable programs are definable.
 
-Our approximating semantics consists of the same semantic function and an arrow $X \ppreto' Y$, derived from $X \ppreto Y$, for computing conservative approximations of preimages.
+Our approximating semantics consists of the same semantic function and an arrow $X \ppreto' Y$, derived from $X \ppreto Y$, for computing conservative approximations of preimages. XXX: try to put a lift from $X \ppreto Y$ to $X \ppreto' Y$ on the diagram
 
 An implementation implements the semantic function, and $X \botto Y$ and $X \ppreto' Y$ arrows.
 
@@ -470,10 +470,10 @@ XXX: really short arrow intro (XXX: cite Hughes, Lindley et al)
 
 We do not give typical minimal arrow definitions.
 For each arrow $a$, instead of $first\gen$, we define $(\arrowpair\gen)$---typically called \keyword{fanout}, but its use will be clearer if we call it \keyword{pairing}---which applies two functions to an input and returns the pair of their outputs.
-Though $first\gen$ may be defined in terms of $(\arrowpair\gen)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair\gen)$ definitions because the applicable theorems are in terms of pairing functions.
+Though $first\gen$ may be defined in terms of $(\arrowpair\gen)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair\gen)$ definitions because the applicable measure-theoretic theorems are in terms of pairing functions.
 
 One way to strengthen an arrow $a$ is to define an additional combinator $left\gen$, which can be used to choose an arrow computation based on the result of another.
-Again, we define a different combinator, $\arrowif\gen$, to make it easier to apply contemporary theorems.
+Again, we define a different combinator, $\arrowif\gen$, to make it easier to apply measure-theoretic theorems.
 
 In a nonstrict $\lambda$-calculus, simply defining a choice combinator allows writing recursive functions using nothing but arrow combinators and lifted, pure functions.
 However, any strict $\lambda$-calculus (such as \lzfclang) requires an extra combinator to defer computations in conditional branches.
@@ -771,7 +771,7 @@ The bottom arrow is the Maybe monad's Kleisli arrow with $Nothing = \bot$.
 \label{fig:mapping-arrow-defs}
 \end{figure*}
 
-The contemporary theorems we need are about mappings, not about lambdas that may raise errors.
+Theorems about functions in set theory tend to be about mappings, not about lambdas that may raise errors.
 As in intermediate step, then, we need an arrow whose computations produce mappings or are mappings themselves.
 
 It is tempting to try to make the mapping arrow's computations mapping-valued; i.e. define it using $X \mapto Y ::= X \pto Y$, with $f_1~\compmap~f_2 := f_2 \circ\map f_1$ and $f_1~\pairmap~f_2 := \pair{f_1,f_2}\map$.
@@ -783,7 +783,7 @@ To parameterize mapping arrow computations on a domain, we define the \mykeyword
 \end{equation}
 Notice that $\bot$ is absent in $Set~X \tto (X \pto Y)$.
 This will make it easier to exclude diverging inputs further on.
-The absence of $\bot$ and the fact that the type parameters are sets will make it easier to apply contemporary theorems, which know nothing of error values and lambda types.
+The absence of $\bot$ and the fact that the type parameters are sets will make it easier to apply theorems from set theory, which know nothing of error values and lambda types.
 
 Further on, we will need every computation $g : X \mapto Y$ to meet the \mykeyword{mapping arrow restriction law}:
 for all $A \subseteq X$ and $A' \subseteq A$ for which $g~A$ converges,
@@ -861,7 +861,7 @@ Substituting $g_1$ for $\liftmap~f_1$ and $g_2$ for $\liftmap~f_2$ gives a defin
 
 The derivation of $(\compmap)$ is similar to that of $(\pairmap)$ but a little more involved.
 
-XXX: include it?
+XXX: add this, maybe cut later
 
 \subsubsection{Case: Conditional}
 
@@ -1370,6 +1370,8 @@ For all programs $\mathit{e}$, $\meaningof{\mathit{e}}\pre \equiv \liftpre~\mean
 
 \section{Preimages Under Partial Functions}
 
+XXX: diagram; YOU ARE HERE discussion
+
 Probabilistic functions that may diverge, but converge with probability 1, are common.
 They come up not only when practitioners want to build data with random size or structure, but in simpler circumstances as well.
 
@@ -1614,6 +1616,8 @@ for arrows $a^*$ for which $random\genc$ is defined.
 %Divergence is an applicative effect, so it should not be too surprising that it can be modeled using an applicative store.
 The most effective and ultimately implementable way we have found to avoid divergence in computing preimages is to use the store to dictate which branch of each conditional, if any, is allowed to be taken.
 
+XXX: update above; just say why it's GOOD instead of why it's BETTER (unless describing other approaches)
+
 \begin{definition}[branch trace]
 A \mykeyword{branch trace} is a total mapping (i.e. vector) $t \in J \to Bool_\bot$ such that $t~j = true$ or $t~j = false$ for no more than finitely many $j \in J$.
 \end{definition}
@@ -1847,13 +1851,15 @@ The \keyword{product $\sigma$-algebra} $\A^{\otimes J}$ is the smallest $\sigma$
 \label{def:arbitrary-product-sigma-algebra}
 \end{definition}
 
+XXX: remind readers that lemms are imported theorems
+
 \subsection{Measurable Pure Computations}
 
 It is easier to prove measurability of pure computations than to prove measurability of probabilistic ones.
 Further, we can use the resulting theorems to prove that all probabilistic programs are measurable.
 
 A single mapping arrow computation can produce many mappings, which, it seems, could complicate proving measurability.
-Fortunately, we need only consider the mapping produced by applying a computation to its halting set.
+Fortunately, we need only consider the mapping produced by applying a computation to its halting set. XXX: tie this sentence better to the theorem below
 
 \begin{definition}[halting set]
 Let $g : X \mapto Y$. Its \keyword{halting set} is the largest $A^* \subseteq X$ for which $domain~(g~A^*) = A^*$.
@@ -1884,7 +1890,7 @@ Use the mapping arrow restriction law~\eqref{eqn:mapping-arrow-restriction-law} 
 
 Roughly, if the largest mapping that can be produced by a computation is measurable, any mapping it can produce that we care about is measurable.
 
-That all programs interpreted by $\meaningof{\cdot}\gen$ are measurable will be proved by structural induction on terms.
+That all programs interpreted by $\meaningof{\cdot}\gen$ are measurable will be proved by structural induction on terms. (XXX: not really---we only do that for probabilistic programs)
 We therefore need a case for each arrow combinator.
 
 \subsubsection{Case: Composition}
@@ -1910,6 +1916,10 @@ For any $A \subseteq X$, $domain~(g~A) \subseteq A$.
 For any $A' \subseteq A$, $g~A' \subseteq g~A$.
 \label{thm:mapping-arrow-monotonicity}
 \end{theorem}
+\begin{proof}
+Use the mapping arrow restriction law~\eqref{eqn:mapping-arrow-restriction-law}.
+\end{proof}
+
 \begin{theorem}[halting subsets]
 Let $g : X \mapto Y$ with halting set $A^*$. For any $A \subseteq A^*$, $domain~(g~A) = A$.
 \label{thm:halting-subsets}
@@ -2015,6 +2025,8 @@ Apply Lemma~\ref{lem:union-of-measurable-mappings}.
 For any $\sigma$-algebras $\A$ and $\B$, the empty mapping $\emptyset$ is $\A!\B$-measurable.
 \label{lem:empty-mapping-measurable}
 \end{lemma}
+
+XXX: possibly make the lemma a theorem and prove
 
 \begin{theorem}[measurability under $\lazymap$]
 Let $g : 1 \tto (X \mapto Y)$. If $g~0$ is $\A!\B$-measurable, then $\lazymap~g$ is $\A!\B$-measurable.
