@@ -1,69 +1,42 @@
-{-# LANGUAGE ConstraintKinds, TypeFamilies, FlexibleInstances #-}
+{-# LANGUAGE
+    TypeFamilies,
+    FlexibleInstances,
+    FlexibleContexts,
+    UndecidableInstances,
+    MultiParamTypeClasses #-}
 
 module Interval where
 
-import GHC.Prim
 import Set
-import PMappable
 
 
-class Corner x where
-  lte :: x -> x -> Bool
-  cmin :: x -> x -> x
-  cmax :: x -> x -> x
-  cmin a1 a2  =  if lte a1 a2 then a1 else a2
-  cmax a1 a2  =  if lte a1 a2 then a2 else a1
+data Interval x  =  EmptyIvl | Ivl x x  deriving(Show,Eq)
 
-instance Corner Float where
-  lte a1 a2  =  a1 <= a2
+ivl :: Ord x => x -> x -> Interval x
+ivl a1 a2  =  if a1 <= a2 then Ivl a1 a2 else EmptyIvl
 
-instance Corner Integer where
-  lte a1 a2  =  a1 <= a2
+instance Ord x => Container Interval x where
+  contContains (Ivl a1 a2) a  =  a1 <= a && a <= a2
+  contContains EmptyIvl a  =  False
 
-instance Corner Bool where
-  lte a1 a2  =  a1 <= a2
+  contSingleton a  =  Ivl a a
 
-instance (Pairable p, Corner x, Corner y) => Corner (p x y) where
-  lte a1 a2  =  lte (pairFst a1) (pairFst a2) && lte (pairSnd a1) (pairSnd a2)
-
-
-data Interval x  =  Ivl x x | Empty  deriving(Show,Eq)
-
-ivl :: Corner x => x -> x -> Interval x
-ivl a1 a2  =  if lte a1 a2 then Ivl a1 a2 else Empty
-
-
-instance Set Interval where
-  type SetCtxt x = Corner x
-
-  empty  =  Empty
-
-  isEmpty Empty  =  True
-  isEmpty (Ivl a1 a2)  =  False
-
-  meet (Ivl a1 a2) (Ivl b1 b2)  =  ivl (cmax a1 b1) (cmin a2 b2)
-  meet Empty _  =  Empty
-  meet _ Empty  =  Empty
-
-  join (Ivl a1 a2) (Ivl b1 b2)  =  ivl (cmin a1 b1) (cmax a2 b2)
-  join Empty a  =  a
-  join a Empty  =  a
-
-  contains (Ivl a1 a2) a  =  lte a1 a && lte a a2
-  contains Empty a  =  False
-
-  prod (Ivl a1 a2) (Ivl b1 b2)  =  ivl (pair a1 b1) (pair a2 b2)
-  prod Empty _  =  Empty
-  prod _ Empty  =  Empty
-
-  projFst (Ivl a1 a2)  =  ivl (pairFst a1) (pairFst a2)
-  projFst Empty  =  Empty
-
-  projSnd (Ivl a1 a2)  =  ivl (pairSnd a1) (pairSnd a2)
-  projSnd Empty  =  Empty
+instance (Ord x, Container Interval x) => Set Interval x where
+  contains (Ivl a1 a2) a  =  a1 <= a && a <= a2
+  contains EmptyIvl a  =  False
 
   singleton a  =  Ivl a a
 
-instance PMappable Interval where
-  type PMappableCtxt x = Corner x
+  empty  =  EmptyIvl
+
+  isEmpty EmptyIvl  =  True
+  isEmpty (Ivl a1 a2)  =  False
+
+  meet (Ivl a1 a2) (Ivl b1 b2)  =  ivl (max a1 b1) (min a2 b2)
+  meet EmptyIvl _  =  EmptyIvl
+  meet _ EmptyIvl  =  EmptyIvl
+
+  join (Ivl a1 a2) (Ivl b1 b2)  =  ivl (min a1 b1) (max a2 b2)
+  join EmptyIvl a  =  a
+  join a EmptyIvl  =  a
 
