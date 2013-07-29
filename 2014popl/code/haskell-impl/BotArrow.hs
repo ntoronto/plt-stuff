@@ -1,20 +1,11 @@
-{-# LANGUAGE
-    TypeFamilies,
-    FlexibleInstances,
-    FlexibleContexts,
-    RankNTypes,
-    ConstraintKinds,
-    MultiParamTypeClasses #-}
-
 module BotArrow where
 
-import GHC.Prim
 import Control.Arrow
-import Pairable
-import AppxArrow
-import Control.Monad
 
 type BotArrow x y = Kleisli Maybe x y
+
+runBotArrow :: BotArrow x y -> x -> Maybe y
+runBotArrow f x = runKleisli f x
 
 pairToEither :: (Bool,x) -> Either x x
 pairToEither (a,b) = if a then Left b else Right b

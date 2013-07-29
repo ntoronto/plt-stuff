@@ -38,10 +38,10 @@ main = do
     in print (preAp g (prod (ivl 0 1) (ivl 0 2)))
 
   let f = arr fst &&& arr snd :: BotArrow (Integer,Integer) (Integer,Integer)
-    in print (runKleisli f (1,1))
+    in print (runBotArrow f (1,1))
 
   let haltOnTrue = ifte (arr id) (arr id) haltOnTrue :: BotArrow Bool Bool
-    in print (runKleisli haltOnTrue True)
+    in print (runBotArrow haltOnTrue True)
 {-|
   let a = (prod (ivl 0.0 2.0) (ivl 1 3))
       b = (prod (ivl 1.0 3.0) (ivl 0 2))

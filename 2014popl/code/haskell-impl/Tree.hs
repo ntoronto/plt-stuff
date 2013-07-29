@@ -13,12 +13,11 @@ indexRight :: TreeIndex -> TreeIndex
 indexRight j = False : j
 
 
-data RTree  =  MinRLeaf | MaxRLeaf | RNode !Float !RTree !RTree
+data RTree  =  REmpty | RFull | RNode !Float !RTree !RTree
   deriving(Show,Eq)
 
 rtreeRandom :: RTree -> Float
-rtreeRandom MinRLeaf  =  0.0
-rtreeRandom MaxRLeaf  =  1.0
+rtreeRandom RFull  =  0.0
 rtreeRandom (RNode x _ _)  =  x
 
 rtreeLeft :: RTree -> RTree

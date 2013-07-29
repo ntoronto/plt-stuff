@@ -1,8 +1,7 @@
 {-# LANGUAGE
-    TypeFamilies,
-    FlexibleInstances,
-    FlexibleContexts,
     StandaloneDeriving,
+    FlexibleContexts,
+    FlexibleInstances,
     MultiParamTypeClasses #-}
 
 module Rect where
@@ -12,24 +11,21 @@ import Pairable
 
 data Rect s1 s2 x  =  EmptyRect | Rect (s1 (Fst x)) (s2 (Snd x))
 
-deriving instance (Pairable x, Show (s1 (Fst x)), Show (s2 (Snd x))) => Show (Rect s1 s2 x)
-deriving instance (Pairable x, Eq (s1 (Fst x)), Eq (s2 (Snd x))) => Eq (Rect s1 s2 x)
+deriving instance (Set s1 x1, Set s2 x2, Show (s1 x1), Show (s2 x2)) => Show (Rect s1 s2 (x1,x2))
+deriving instance (Set s1 x1, Set s2 x2, Eq (s1 x1), Eq (s2 x2)) => Eq (Rect s1 s2 (x1,x2))
 
-instance Pairable x => Pairable (Rect s1 s2 x) where
-  type Fst (Rect s1 s2 x) = Fst x
-  type Snd (Rect s1 s2 x) = Snd x
-  -- Can't implement pairFst and pairSnd: get an occurrence check error, which has since
-  -- been fixed in 7.4.2
-  --pairFst (Rect x1 x2) = x1
-  --pairSnd (Rect x1 x2) = x2
+prod :: (Set s1 x1, Set s2 x2) => s1 x1 -> s2 x2 -> Rect s1 s2 (x1,x2)
+prod a1 a2 = if (isEmpty a1 || isEmpty a2) then EmptyRect else Rect a1 a2
 
-instance (Pairable x, Container s1 (Fst x), Container s2 (Snd x)) => Container (Rect s1 s2) x where
-  contContains EmptyRect _ = False
-  contContains (Rect a1 a2) x = contContains a1 (pairFst x) && contContains a2 (pairSnd x)
+projFst :: (Set s1 x1, Set s2 x2) => Rect s1 s2 (x1,x2) -> s1 x1
+projFst EmptyRect = empty
+projFst (Rect a1 a2) = a1
 
-  contSingleton x = Rect (contSingleton (pairFst x)) (contSingleton (pairSnd x))
+projSnd :: (Set s1 x1, Set s2 x2) => Rect s1 s2 (x1,x2) -> s2 x2
+projSnd EmptyRect = empty
+projSnd (Rect a1 a2) = a2
 
-instance (Pairable x, Set s1 (Fst x), Set s2 (Snd x)) => Set (Rect s1 s2) x where
+instance (Set s1 x1, Set s2 x2) => Set (Rect s1 s2) (x1,x2) where
   empty = EmptyRect
 
   isEmpty EmptyRect = True
@@ -43,17 +39,8 @@ instance (Pairable x, Set s1 (Fst x), Set s2 (Snd x)) => Set (Rect s1 s2) x wher
   join a EmptyRect = a
   join (Rect a1 a2) (Rect b1 b2) = prod (join a1 b1) (join a2 b2)
 
-class (Pairable x, Set s1 (Fst x), Set s2 (Snd x), Set (s s1 s2) x) => ProdSet s s1 s2 x where
-  prod :: s1 (Fst x) -> s2 (Snd x) -> s s1 s2 x
-  projFst :: s s1 s2 x -> s1 (Fst x)
-  projSnd :: s s1 s2 x -> s2 (Snd x)
+  contains EmptyRect _ = False
+  contains (Rect a1 a2) (b1,b2) = contains a1 b1 && contains a2 b2
 
-instance (Pairable x, Set s1 (Fst x), Set s2 (Snd x)) => ProdSet Rect s1 s2 x where
-  prod a1 a2 = if (isEmpty a1 || isEmpty a2) then EmptyRect else Rect a1 a2
-
-  projFst EmptyRect = empty
-  projFst (Rect a1 a2) = a1
-
-  projSnd EmptyRect = empty
-  projSnd (Rect a1 a2) = a2
+  singleton (a1,a2) = Rect (singleton a1) (singleton a2)
 

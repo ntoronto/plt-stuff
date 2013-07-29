@@ -1,17 +1,10 @@
-{-# LANGUAGE
-    ConstraintKinds,
-    TypeFamilies,
-    MultiParamTypeClasses #-}
-
 module PreArrow where
 
 import Set
 import Rect
+import Tree
 import PreMapping
-import Pairable
 import AppxArrow
-
-import GHC.Prim
 
 newtype PreArrow s1 s2 x1 x2  =  PreArrow { runPreArrow :: (s1 x1) -> PreMapping s1 s2 x1 x2 }
 
