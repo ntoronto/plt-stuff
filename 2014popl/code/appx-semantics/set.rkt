@@ -6,56 +6,96 @@
 
 (provide (all-defined-out))
 
-(define +inf '+∞)
-(define-type +Inf '+∞)
-(define-predicate +inf? +Inf)
+(define ∅ '∅)
+(define-type Empty-Set '∅)
+(define ∅? (λ (A) (equal? A ∅)))
 
-(define -inf '-∞)
-(define-type -Inf '-∞)
-(define-predicate -inf? -Inf)
+(define ⊤ '⊤)
+(define-type Universe '⊤)
+(define ⊤? (λ (A) (equal? A ⊤)))
 
-;(struct: (X) finite ([value : X]) #:transparent)
+(struct: (S X) set-ops ([meet : (S S -> (U Empty-Set S))]
+                        [join : (S S -> S)]
+                        [singleton : (X -> S)]
+                        [member? : (S X -> Boolean)]))
 
-(define-type (Extended X) (U +Inf -Inf X))
+(define set-meet set-ops-meet)
+(define set-join set-ops-join)
+(define set-member? set-ops-member?)
+(define set-singleton set-ops-singleton)
 
-(: generic<= (All (X) ((Extended X) (Extended X) -> Boolean)))
-(define (generic<= a1 a2)
-  (cond [(+inf? a2)  #t]
-        [(-inf? a1)  #t]
-        [(-inf? a2)  #f]
-        [(+inf? a1)  #f]
-        [(and (real? a1) (real? a2))  (<= a1 a2)]
-        [(and (pair? a1) (pair? a2))  (and (generic<= (car a1) (car a2))
-                                           (generic<= (cdr a1) (cdr a2)))]
-        [else  (error 'generic<= "expected comparable values; given ~e and ~e" a1 a2)]))
+(struct: interval ([min : Flonum] [max : Flonum])
+  #:transparent)
 
-(: pair-min (All (X1 X2) ((Pair (Extended X1) (Extended X2))
-                          (Pair (Extended X1) (Extended X2))
-                          -> (Pair (Extended X1) (Extended X2)))))
-(define (pair-min a1 a2)
-  (cons (generic-min (cons (car a1) (car a2)))
-        (generic-min (cons (cdr a1) (cdr a2)))))
+(: ivl (Flonum Flonum -> (U Empty-Set interval)))
+(define (ivl min max)
+  (if (min . <= . max) (interval min max) ∅))
 
-(define-predicate real-pair? (Pair Real Real))
-(define-predicate pair-pair? (Pair (Pair Any Any) (Pair Any Any)))
+(: ivl-ops (set-ops interval Flonum))
+(define ivl-ops
+  (set-ops (λ: ([A : interval] [B : interval])
+             (match-define (interval amin amax) A)
+             (match-define (interval bmin bmax) B)
+             (ivl (max amin bmin) (min amax bmax)))
+           (λ: ([A : interval] [B : interval])
+             (match-define (interval amin amax) A)
+             (match-define (interval bmin bmax) B)
+             (interval (min amin bmin) (max amax bmax)))
+           (λ: ([a : Flonum]) (interval a a))
+           (λ: ([A : interval] [a : Flonum])
+             (match-define (interval amin amax) A)
+             (<= amin a amax))))
 
-(: generic-min (All (X) ((Pair (U X -Inf +Inf) (U X -Inf +Inf)) -> (U X -Inf +Inf))))
-(define (generic-min a)
-  (match-define (cons a1 a2) a)
-  (cond [(or (-inf? a1) (-inf? a2))  -inf]
-        [(+inf? a1)  a2]
-        [(+inf? a2)  a1]
-        [(real-pair? a)  (if (generic<= a1 a2) a1 a2)]
-        [(and (pair? a1) (pair? a2))  (pair-min a1 a2)]
-        [else  (error 'generic-min "expected comparable values; given ~e and ~e" a1 a2)]))
+(define-type Bool-Set (U 'tf #t #f))
 
-#|
-(struct: (X1 X2) box ([min : X1] [max : X2]) #:transparent)
+(: bool-ops (set-ops Bool-Set Boolean))
+(define bool-ops
+  (set-ops (λ: ([A : Bool-Set] [B : Bool-Set])
+             (cond [(eq? A 'tf)  B]
+                   [(eq? B 'tf)  A]
+                   [(eq? A B)  A]
+                   [else  ∅]))
+           (λ: ([A : Bool-Set] [B : Bool-Set])
+             (cond [(eq? A 'tf)  A]
+                   [(eq? B 'tf)  B]
+                   [(eq? A B)  A]
+                   [else  'tf]))
+           (λ: ([a : Boolean]) a)
+           (λ: ([A : Bool-Set] [a : Boolean])
+             (cond [(eq? A 'tf)  #t]
+                   [else  (eq? A a)]))))
 
+(struct: (S1 S2) set-prod ([fst : S1] [snd : S2]) #:transparent)
 
-(: box-intersect (All (X1 X2) ((box X1 X2) (box X1 X2) -> (box X1 X2))))
-(define (box-intersect A1 A2)
-  (match-define (box A1-min A1-max) A1)
-  (match-define (box A2-min A2-max) A2)
-  (error 'unimplemented))
-|#
+(: set-ops-prod (All (S1 X1 S2 X2) ((set-ops S1 X1) (set-ops S2 X2)
+                                                    -> (set-ops (set-prod S1 S2) (Pair X1 X2)))))
+(define (set-ops-prod ops1 ops2)
+  (set-ops (λ: ([A : (set-prod S1 S2)] [B : (set-prod S1 S2)])
+             (define C1 ((set-ops-meet ops1) (set-prod-fst A) (set-prod-fst B)))
+             (cond [(∅? C1)  ∅]
+                   [else  (define C2 ((set-ops-meet ops2) (set-prod-snd A) (set-prod-snd B)))
+                          (cond [(∅? C2)  ∅]
+                                [else  (set-prod C1 C2)])]))
+           (λ: ([A : (set-prod S1 S2)] [B : (set-prod S1 S2)])
+             (set-prod ((set-ops-join ops1) (set-prod-fst A) (set-prod-fst B))
+                       ((set-ops-join ops2) (set-prod-snd A) (set-prod-snd B))))
+           (λ: ([a : (Pair X1 X2)])
+             (set-prod ((set-ops-singleton ops1) (car a))
+                       ((set-ops-singleton ops2) (cdr a))))
+           (λ: ([A : (set-prod S1 S2)] [a : (Pair X1 X2)])
+             (and ((set-ops-member? ops1) (set-prod-fst A) (car a))
+                  ((set-ops-member? ops2) (set-prod-snd A) (cdr a))))))
+                                                     
+(: set-ops-universal (All (S X) ((set-ops S X) -> (set-ops (U S Universe) X))))
+(define (set-ops-universal ops)
+  (set-ops (λ: ([A : (U S Universe)] [B : (U S Universe)])
+             (cond [(⊤? A)  B]
+                   [(⊤? B)  A]
+                   [else  ((set-meet ops) A B)]))
+           (λ: ([A : (U S Universe)] [B : (U S Universe)])
+             (cond [(⊤? A)  A]
+                   [(⊤? B)  B]
+                   [else  ((set-join ops) A B)]))
+           (set-singleton ops)
+           (λ: ([A : (U S Universe)] [a : X])
+             (if (⊤? A) #t ((set-member? ops) A a)))))
