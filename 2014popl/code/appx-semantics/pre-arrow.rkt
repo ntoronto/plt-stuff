@@ -47,7 +47,24 @@
                  (define Af ((pmapping-ap ops1 bops) c ((set-singleton bops) #f)))
                  ((pmapping-union ops1 ops2) (if (∅? At) ∅ (t At))
                                              (if (∅? Af) ∅ (f Af)))])))
-
+#|
+(: convif/pre (All (S S1 X1 S2 X2)
+                   ((set-ops S Boolean)
+                    (set-ops S1 X1)
+                    (set-ops S2 X2)
+                    -> ((Pre-Arrow S1 S) (Pre-Arrow S1 S2) (Pre-Arrow S1 S2) -> (Pre-Arrow S1 S2)))))
+(define (((convif/pre bops ops1 ops2) c t f) A)
+  (let ([c  (c A)])
+    (cond [(∅? c)  ∅]
+          [else  (define At ((pmapping-ap ops1 bops) c ((set-singleton bops) #t)))
+                 (define Af ((pmapping-ap ops1 bops) c ((set-singleton bops) #f)))
+                 (cond [(and (∅? At) (∅? Af))  ∅]
+                       [(∅? Af)  (t At)]
+                       [(∅? At)  (f Af)]
+                       [else  ((inst pmapping S1 S2)
+                               ((set-join ops1) At Af)
+                               (λ (B) ((set-join ops1) At Af)))])])))
+|#
 
 (: id/pre (All (S X) ((set-ops S X) -> (Pre-Arrow S S))))
 (define ((id/pre ops) A)

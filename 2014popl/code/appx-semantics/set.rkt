@@ -14,7 +14,7 @@
 (define-type Universe '⊤)
 (define ⊤? (λ (A) (equal? A ⊤)))
 
-(struct: (S X) set-ops ([meet : (S S -> (U Empty-Set S))]
+(struct: (S X) set-ops ([meet : (S S -> S)]
                         [join : (S S -> S)]
                         [singleton : (X -> S)]
                         [member? : (S X -> Boolean)]))

@@ -1,4 +1,7 @@
 {-# LANGUAGE
+    TypeFamilies,
+    StandaloneDeriving,
+    FlexibleInstances,
     MultiParamTypeClasses #-}
 
 module Tree where
@@ -17,14 +20,21 @@ indexRight :: TreeIndex -> TreeIndex
 indexRight j = False : j
 
 
+class Containable t where
+  type SetType t :: *
 
+data RSet x = RFull | RSetNode !(SetType x) !(RSet x) !(RSet x)
 
-
-data RSet x = RFull | RSetNode !(Interval Float) !(RSet x) !(RSet x)
-  deriving(Show,Eq)
 
 data RVal = RAny | RValNode !Float !RVal !RVal
   deriving(Show,Eq)
+
+instance Containable RVal where
+  type SetType RVal = Interval Float
+
+deriving instance Show (RSet RVal)
+deriving instance Eq (RSet RVal)
+
 
 instance Set RSet RVal where
   meet RFull a = Just a

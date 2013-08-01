@@ -311,6 +311,7 @@ For this work, we use a manually checked, polymorphic type system characterized 
 \end{itemize}
 The type $Set~X$ denotes the same values as the powerset $\powerset~X$, or \emph{subsets} of $X$.
 Similarly, the type $\pair{X,Y}$ denotes the same values as the product set $X \times Y$.
+There is no subtyping.
 
 We write \lzfclang programs in heavily sugared $\lambda$-calculus syntax, with an $if$ expression and these additional primitives:
 \begin{equation}
@@ -1762,7 +1763,7 @@ Further, $\liftpmap$ and $\liftppre$ are arrow homomorphisms.
 If $\meaningof{\mathit{e}}_\pbot : X \pbotto Y$, then $\liftpmap~\meaningof{\mathit{e}}_\pbot \equiv \meaningof{\mathit{e}}\pmap$ and $\liftppre~\meaningof{\mathit{e}}\pmap \equiv \meaningof{\mathit{e}}\ppre$.
 \end{corollary}
 
-\begin{corollary}[semantic$'$ correctness]
+\begin{corollary}[semantic$\conv$ correctness]
 If $\meaningofconv{\mathit{e}}_\pbot : X \pbotto Y$, then $\liftpmap~\meaningofconv{\mathit{e}}_\pbot \equiv \meaningofconv{\mathit{e}}\pmap$ and $\liftppre~\meaningofconv{\mathit{e}}\pmap \equiv \meaningofconv{\mathit{e}}\ppre$.
 \end{corollary}
 
@@ -2088,9 +2089,9 @@ For a set $X$ used as a type, $\Sigma~X$ denotes its \mykeyword{standard $\sigma
 \\
 	\Sigma~(J \to X) & = (\Sigma~X)^{\otimes J}
 	\label{eqn:standard-arbitrary-product-rule}
-\\
-	X' \in \Sigma~X \ \implies \ \Sigma~X' & = \setb{X' \i A}{A \in \Sigma~X}
-	\label{eqn:standard-subset-rule}
+%\\
+%	X' \in \Sigma~X \ \implies \ \Sigma~X' & = \setb{X' \i A}{A \in \Sigma~X}
+%	\label{eqn:standard-subset-rule}
 \end{align}
 The predicate ``is measurable'' means ``is measurable with respect to standard $\sigma$-algebras.''
 \label{def:standard-sigma-algebra}
@@ -2128,7 +2129,7 @@ $AStore$'s combinators are defined in terms of the base arrow's combinators and 
 \end{proof}
 
 \begin{theorem}
-$\ifpmap'$ is measurable.
+$\convifpmap$ is measurable.
 \end{theorem}
 \begin{proof}
 $branch\pmap$ is measurable, and $\arrmap~agrees$ is measurable by~\eqref{eqn:standard-boolean-rule}.
@@ -2290,10 +2291,10 @@ If we were to confine preimage computation to computably enumerable sets, we cou
 But we would like something more efficient, even if it means approximating.
 
 Trying to generalize all useful approximation methods would result in a specification that cannot be directly implemented.
-Instead, we focus on approximating product sets with covering rectangles.
-While this is a very specific treatment, we recover some generality by stating correctness theorems in terms of general properties such as monotonicity.
+Instead, we focus on a specific method: approximating product sets with covering rectangles.
+We recover some generality by stating correctness theorems in terms of general properties such as monotonicity.
 
-\subsection{Rectangular Approximation}
+\subsection{Implementable Lifts}
 
 We would like to be able to compute preimages of uncountable sets, such as real intervals.
 This would seem to be a show-stopper: $preimage~g~B$ is uncomputable for most uncountable sets $B$ no matter how cleverly they are represented.
@@ -2316,6 +2317,8 @@ the following are representable and can be computed in finite time:
 \end{itemize}
 Before worrying about computability, we need to define families of sets under which these operations are closed.
 
+\subsection{Rectangular Families}
+
 \begin{definition}[rectangular family]
 For a set $X$ used as a type, $Rect~X$ denotes the \mykeyword{rectangular family} of subsets of $X$, which must be satisfy the following rules:
 \begin{align}
@@ -2337,21 +2340,23 @@ lift cartesian products to sets of sets.
 \label{def:standard-rectangle}
 \end{definition}
 
-For example, if $Rect~\Re$ is the set of all closed intervals, then by~\eqref{eqn:standard-rect-finite-product-rule}, $[0,2] \times [1,\pi] \in Rect~\pair{\Re,\Re}$.
+For example, if $Rect~\Re$ contains all the closed real intervals, then by~\eqref{eqn:standard-rect-finite-product-rule}, $[0,2] \times [1,\pi] \in Rect~\pair{\Re,\Re}$.
 
-We also define $Rect~Bool = \powerset~Bool$, and assume $\set{b} \in Rect~Y$ for every $const~b$ and $\emptyset \in Rect~X$ for every $X$.
-It is not hard to show that rectangular families are closed under intersection, product, projections and $unproject$.
+For every non-product type $X$, we require $\emptyset \in Rect~X$, $X \in Rect~X$, $\set{a} \in Rect~X$ for all $a \in X$, and for $Rect~X$ to be closed under intersection.
+It is not hard to show that these properties extend to rectangular families, and that the collection of all rectangular families is closed under products, projections, and $unproject$.
 
-Further, all of the necessary operations can be exactly implemented if finite sets are modeled directly, sets in an ordered space (such as $\Re$) are modeled by intervals, and finite products are modeled by pairs.
-$J \to X$ and the results $unproject$ can be modeled by \emph{finite} binary trees, because a converging preimage computation can apply $unproject$ only finitely many times.
+Further, all of the necessary operations can be exactly implemented if finite sets are modeled directly, sets in an ordered space (such as $\Re$) are modeled by intervals, and sets in $Rect~\pair{X_1,X_2}$ are modeled by pairs of type $\pair{Rect~X_1,Rect~X_2}$.
+Though $J$ is infinite, sets in $Rect~(J \to X)$ can be modeled by \emph{finite} binary trees of sets in $Rect~X$, because a converging preimage computation can apply $unproject$ only finitely many times to $J \to X$.
 
 Implementing $\lazypre$ (defined in Figure~\ref{fig:preimage-arrow-defs}) requires computing $pre$, but only for the empty mapping, which is trivial: $pre~\emptyset \equiv \pair{\emptyset,\fun{B}\emptyset}$.
 Implementing the other combinators requires implementing the preimage mapping operations $(\circ\pre)$, $\pair{\cdot,\cdot}\pre$ and $(\uplus\pre)$.
 
+\subsection{Approximate Preimage Mapping Operations}
+
 From the preimage mapping definitions (Figure~\ref{fig:preimage-mapping-defs}), we see that $ap\pre$, which $(\circ\pre)$ and $(\uplus\pre)$ depend on, can be implemented directly if $A \i B$ is implemented.
 Given an $ap\pre$ implementation, $(\circ\pre)$ is directly implementable.
 Unfortunately, we hit a snag with $\pair{\cdot,\cdot}\pre$: it loops over possibly uncountably many members of $B$ in a big union.
-It is at this point that we need to approximate.
+At this point, we need to approximate.
 
 \begin{theorem}[pair preimage overapproximation]
 Let $g_1 \in X \pto Y_1$ and $g_2 \in X \pto Y_2$.
@@ -2361,7 +2366,7 @@ For all $B \subseteq Y_1 \times Y_2$, $preimage~\pair{g_1,g_2}\map~B \subseteq p
 By monotonicity of preimages and Lemma~\ref{lem:preimage-under-pairing}.
 \end{proof}
 
-Thus, the following approximation:
+Thus, the following replacement:
 \begin{equation}
 \begin{aligned}
 	&\pair{\cdot,\cdot}\pre' : (X \prepto Y_1) \tto (X \prepto Y_2) \tto (X \prepto Y_1 \times Y_2) \\
@@ -2369,14 +2374,31 @@ Thus, the following approximation:
 	&\tab\pair{Y_1' \times Y_2',\fun{B}{p_1~(image~fst~B) \i p_2~(image~snd~B)}}
 \end{aligned}
 \end{equation}
-computes covering rectangles for preimages under pairing.
+computes covering rectangles of preimages under pairing.
 
-Now that we are approximating, we cannot guarantee $(\uplus\pre)$ receives disjoint preimage mappings.
-Further, rectangular families are not closed under union.
-Replacing each union in $(\uplus\pre)$ with a join (in the lattice sense) results in
+For $(\uplus\pre)$, we need an approximating replacement for $(\u)$ under which rectangular families are closed.
+In other words, we need a lattice join (with respect to $(\subseteq)$) with the following additional properties:
 \begin{equation}
 \begin{aligned}
-	&(\uplus\pre)' : (X \prepto Y) \tto (X \prepto Y) \tto (X \prepto Y) \\
+	(A_1 \times A_2) \join (B_1 \times B_2) &\ = \ (A_1 \join B_1) \times (A_2 \join B_2) \\
+	(\textstyle\prod_{j \in J} A_j) \join (\textstyle\prod_{j \in J} B_j) &\ = \ \textstyle\prod_{j \in J} A_j \join B_j
+\label{eqn:join-laws}
+\end{aligned}
+\end{equation}
+If for every non-product type $X$, $Rect~X$ is closed under $(\join)$, then rectangular families are clearly closed under $(\join)$. Further, for any $A$ and $B$, $A \u B \subseteq A \join B$.
+
+For example, if $Rect~\Re$ contains all the closed real intervals, then the following join is allowable:
+\begin{equation}
+\begin{aligned}[t]
+	[a_1,b_1] \vee [a_2,b_2] \ = \ [min~a_1~a_2, max~b_1~b_2]
+\end{aligned}
+\end{equation}
+With this join, $([0,1] \times [0,1]) \join ([2,3] \times [2,3]) = [0,3] \times [0,3]$.
+
+Replacing each union in $(\uplus\pre)$ with a join results in
+\begin{equation}
+\begin{aligned}
+	&(\uplus\pre') : (X \prepto Y) \tto (X \prepto Y) \tto (X \prepto Y) \\
 	&\lzfcsplit{
 		&h_1 \uplus\pre' h_2 \ := \ 
 		\lzfclet{
@@ -2386,22 +2408,8 @@ Replacing each union in $(\uplus\pre)$ with a join (in the lattice sense) result
 	}
 \end{aligned}
 \end{equation}
-Every non-product family of sets must be closed under $(\join)$, and $(\join)$ itself must be subject to
-\begin{equation}
-\begin{aligned}
-	A \u B &\ \subseteq\ A \join B \\
-	(A_1 \times A_2) \join (B_1 \times B_2) &\ = \ (A_1 \join B_1) \times (A_2 \join B_2) \\
-	(\textstyle\prod_{j \in J} A_j) \join (\textstyle\prod_{j \in J} B_j) &\ = \ \textstyle\prod_{j \in J} A_j \join B_j
-\label{eqn:join-laws}
-\end{aligned}
-\end{equation}
-For example, if $Rect~\Re$ contains all the closed real intervals, then the following join is allowable:
-\begin{equation}
-\begin{aligned}[t]
-	[a_1,b_1] \vee [a_2,b_2] \ = \ [min~a_1~a_2, max~b_1~b_2]
-\end{aligned}
-\end{equation}
-e.g. $[0,1] \join [2,3] = [0,3]$, and $([0,1] \times [0,1]) \join ([2,3] \times [2,3]) = [0,3] \times [0,3]$.
+which overapproximates $(\uplus\pre)$.
+
 
 \subsection{Partial Programs}
 
@@ -2413,7 +2421,7 @@ Directly implementing $\convifppre$, and thus $agrees$, cannot work.
 Turning $agrees$ into a mapping shows why:
 \begin{equation}
 \begin{aligned}
-	&mapping~agrees~(Bool \times Bool) = \\
+	&\arrmap~agrees~(Bool \times Bool) = \\
 	&\tab\set{\pair{\pair{true,true},true},\pair{\pair{false,false},false}}
 \end{aligned}
 \end{equation}
@@ -2422,24 +2430,44 @@ The preimage of $Bool$ is $\set{\pair{true,true},\pair{false,false}}$, which is 
 A lengthy (elided) sequence of substitutions to the defining expression for $\convifppre$ results in
 \begin{equation}
 \begin{aligned}
-	&\convifppre~k_1~k_2~k_3~j\ \equiv \\
+	&\convifppre~k_1~k_2~k_3~j~A\ \equiv \\
 	&\tab\lzfclet{
-		\pair{Y_{11},p_{11}} & k_1~(left~j)~A \\
-		\pair{Y_{12},p_{12}} & branch\ppre~j~A \\
-		Y_{true} & Y_{11} \i Y_{12} \i \set{true} \\
-		Y_{false} & Y_{11} \i Y_{12} \i \set{false} \\
-		h_2 & k_2~(left~(right~j))~(p_{11}~Y_{true} \i p_{12}~Y_{true}) \\
-		h_3 & k_3~(right~(right~j))~(p_{11}~Y_{false} \i p_{12}~Y_{false})
-	}{h_2 \uplus\pre h_3}
+		\pair{C_k,p_k} & k_1~j_1~A \\
+		\pair{C_b,p_b} & branch\ppre~j~A \\
+		C_2 & C_k \i C_b \i \set{true} \\
+		C_3 & C_k \i C_b \i \set{false} \\
+		A_2 & p_k~C_2 \i p_b~C_2 \\
+		A_3 & p_k~C_3 \i p_b~C_3 \\
+	}{(k_2~j_2~A_2) \uplus\pre (k_3~j_3~A_3)}
 \end{aligned}
 \end{equation}
-which has no trace of $agrees$ and clearly preserves rectangularity if $k_1$, $k_2$ and $k_3$ do.
-Yet this is still not good enough.
-Because we are computing approximations, branches can be taken unnecessarily; i.e. $p_{11}$ and $p_{12}$ can be applied to overapproximations of $\emptyset$.
-Unnecessary branching can lead to divergence.
-According to the exact semantics, programs interpreted using $\convifppre$ should never diverge.
+where $j_1 = left~j$ and so on.
+This has no trace of $agrees$ and clearly preserves rectangularity if $k_1$, $k_2$ and $k_3$ do.
+Yet it is still not good enough.
+When $A_2$ and $A_3$ overapproximate $\emptyset$, it takes unnecessary branches, which can lead to divergence.
+In the exact semantics, a well-defined program interpreted using $\convifppre$ never diverges.
 
-XXX: approximation using top sets (universes)
+Suppose we altered $\convifppre$ to take \emph{no branches} when it would normally take two.
+A program run with $T \subset J \tto Bool_\bot$ 
+XXX: now prove that programs interpreted using this always converge...
+
+If both $A_2$ and $A_3$ are nonempty, we know the preimage mapping's range is a subset of $Y$ and that the preimages it computes are subsets of $A_2 \join A_3$.
+Therefore, we might replace the $let$ body $(k_2~j_2~A_2) \uplus\pre (k_3~j_3~A_3)$ with
+\begin{equation}
+\begin{aligned}
+	\lzfcsplit{if~
+		&(A_2 = \emptyset~or~A_3 = \emptyset) \\
+		&(k_2~j_2~A_2) \uplus\pre (k_3~j_3~A_3) \\
+		&\pair{Y,\fun{B}\lzfcsplit{A_2 \join A_3}}}
+\end{aligned}
+\end{equation}
+which computes the same preimages if $A_2$ or $A_3$ is empty, and takes no branches and overapproximates otherwise.
+
+We cannot refer to $Y$ in a function definition, however; it is only part of the type of $\convifppre$.
+Thus, we need to add a universal set $\top$ to every $Rect~X$
+
+XXX: for all $X$, $\top \in Rect~X$
+
 
 \section{Implementation}
 
