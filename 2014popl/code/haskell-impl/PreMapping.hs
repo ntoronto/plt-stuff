@@ -1,40 +1,28 @@
+{-# LANGUAGE
+    TypeFamilies #-}
+
 module PreMapping where
 
 import Set
 import Rect
 
-data PreMapping s1 s2 x y = PreMapping { range :: s2 y, preimage :: s2 y -> Maybe (s1 x) }
+data PreMapping s1 s2 = PreMapping { preRange :: s2, runPreMapping :: s2 -> s1 }
 
-preAp :: (Set s1 x, Set s2 y) => Maybe (PreMapping s1 s2 x y) -> s2 y -> Maybe (s1 x)
-preAp h bs =
-  do PreMapping ys p <- h
-     p =<< meet bs ys
+preAp :: (Set s1, Set s2) => PreMapping s1 s2 -> s2 -> s1
+preAp (PreMapping ys p) bs = p (meet ys bs)
 
-prePair :: (Set s1 x, Set s2 y, Set s3 z)
-           => Maybe (PreMapping s1 s2 x y) -> Maybe (PreMapping s1 s3 x z) -> Maybe (PreMapping s1 (Rect s2 s3) x (y,z))
-prePair h1 h2 =
-  do PreMapping ys py <- h1
-     PreMapping zs pz <- h2
-     return (PreMapping (prod ys zs)
-                        (\ bc -> do xs1 <- py (projFst bc)
-                                    xs2 <- pz (projSnd bc)
-                                    meet xs1 xs2))
-     
-preComp :: (Set s1 x, Set s2 y, Set s3 z)
-           => Maybe (PreMapping s2 s3 y z) -> Maybe (PreMapping s1 s2 x y) -> Maybe (PreMapping s1 s3 x z)
-preComp hz hy =
-  do PreMapping zs pz <- hz
-     return (PreMapping zs (\ cs -> do ys <- pz cs
-                                       preAp hy ys))
+prePair :: (Set s1, Set s2, Set s3)
+           => PreMapping s1 s2 -> PreMapping s1 s3 -> PreMapping s1 (Rect s2 s3)
+prePair (PreMapping ys py) (PreMapping zs pz) =
+  PreMapping (prod ys zs) (\bcs -> meet (py (projFst bcs)) (pz (projSnd bcs)))
 
--- This is WRONG: if one of them is Nothing, the other should get returned
-prePlus :: (Set s1 x, Set s2 y)
-           => Maybe (PreMapping s1 s2 x y) -> Maybe (PreMapping s1 s2 x y) -> Maybe (PreMapping s1 s2 x y)
+preComp :: (Set s1, Set s2, Set s3)
+           => PreMapping s2 s3 -> PreMapping s1 s2 -> PreMapping s1 s3
+preComp (PreMapping zs pz) hy =
+  PreMapping zs (\cs -> do preAp hy (pz cs))
+
+prePlus :: (Set s1, Set s2)
+           => PreMapping s1 s2 -> PreMapping s1 s2 -> PreMapping s1 s2
 prePlus h1 h2 =
-  do PreMapping ys1 p1 <- h1
-     PreMapping ys2 p2 <- h2
-     return (PreMapping (join ys1 ys2)
-                        (\ bs -> do xs1 <- preAp h1 bs
-                                    xs2 <- preAp h2 bs
-                                    return (join xs1 xs2)))
+  PreMapping (join (preRange h1) (preRange h2)) (\bs -> join (preAp h1 bs) (preAp h2 bs))
 

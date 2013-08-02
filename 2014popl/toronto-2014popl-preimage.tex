@@ -311,7 +311,6 @@ For this work, we use a manually checked, polymorphic type system characterized 
 \end{itemize}
 The type $Set~X$ denotes the same values as the powerset $\powerset~X$, or \emph{subsets} of $X$.
 Similarly, the type $\pair{X,Y}$ denotes the same values as the product set $X \times Y$.
-There is no subtyping.
 
 We write \lzfclang programs in heavily sugared $\lambda$-calculus syntax, with an $if$ expression and these additional primitives:
 \begin{equation}
@@ -717,7 +716,8 @@ One obvious candidate for the simpler arrow is the function arrow, defined in~\e
 However, we will need to explicitly handle divergence as an error value, so we need a slightly more complicated arrow for which running computations may raise an error.
 
 Figure~\ref{fig:bottom-arrow-defs} defines the \mykeyword{bottom arrow}.
-Its computations are of type $x \botto y ::= x \tto y_\bot$, where the inhabitants of $y_\bot$ are the error value $\bot$ as well as the inhabitants of $y$. The type $Bool_\bot$, for example, denotes the members of $Bool \u \set{\bot}$.
+Its computations are of type $x \botto y ::= x \tto y_\bot$, where the inhabitants of $y_\bot$ are the error value $\bot$ as well as the inhabitants of $y$.
+The type $Bool_\bot$, for example, denotes the members of $Bool \uplus \set{\bot}$.
 
 If we wish to claim that $x~\botto~y$ computations obey the arrow laws, we need a notion of equivalence for lambdas that is coarser than observational equivalence.
 \begin{definition}[bottom arrow equivalence]
@@ -728,7 +728,7 @@ Two bottom arrow computations $f_1 : x \botto y$ and $f_2 : x \botto y$ are equi
 $\arrbot$, $(\pairbot)$, $(\compbot)$, $\ifbot$ and $\lazybot$ define an arrow.
 \end{theorem}
 \begin{proof}
-The bottom arrow is the Maybe monad's Kleisli arrow with $Nothing = \bot$.
+The bottom arrow is isomorphic to the Maybe monad's Kleisli arrow with $Nothing = \bot$.
 \end{proof}
 
 \subsection{Deriving the Mapping Arrow}
@@ -2233,6 +2233,15 @@ In particular, for any converging $g := \meaningofconv{\mathit{e}}\pmap$, preima
 
 \section{Approximating Semantics}
 
+If we were to confine preimage computation to computably enumerable sets, we could model sets as streams and implement the preimage arrow almost directly.
+But we would like something more efficient, even if it means approximating.
+
+Trying to generalize all useful approximation methods would result in a specification that cannot be directly implemented.
+Instead, we focus on a specific method: approximating product sets with covering rectangles.
+We recover some generality by stating correctness theorems in terms of general properties such as monotonicity.
+
+\subsection{Implementable Lifts}
+
 \begin{figure*}[t]\centering
 \begin{align*}
 \begin{aligned}[t]
@@ -2268,16 +2277,22 @@ In particular, for any converging $g := \meaningofconv{\mathit{e}}\pmap$, preima
 \\[-6pt]
 	&\begin{aligned}[t]
 		%&\pi\pre : J \tto (J \to X) \preto X \\
-		&\arrpre~(\pi~j)~A \ \equiv \ \pair{image~(\pi~j)~A, unproject~j~A}
+		&\arrpre~(\pi~j)~A \ \equiv \ \pair{project~j~A, unproject~j~A}
 	\end{aligned} \\
 \\[-6pt]
 \hline
 \\[-6pt]
 	&\begin{aligned}[t]
-		&unproject :: J \tto (J \to X) \tto Set~X \tto (J \to X) \\
+		&project :: J \tto Set~(J \to X) \tto Set~X \\
+		&project~j~A \ := \ image~(\pi~j)~A
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&unproject :: J \tto Set~(J \to X) \tto Set~X \tto Set~(J \to X) \\
 		&unproject~j~A~B \lzfcsplit{
-			&\ :=\ preimage~(mapping~(\pi~j)~A)~B \\[2pt]
-			&\ \;\equiv\ A \i \prod_{i \in J} if~(j = i)~B~(image~(\pi~j)~A)
+			%&\ :=\ preimage~(mapping~(\pi~j)~A)~B \\[2pt]
+			%&\ \;\equiv\ A \i \prod_{i \in J} if~(j = i)~B~(project~j~A)
+			&\ :=\ A \i \prod_{j' \in J} if~(j' = j)~B~(project~j'~A)
 		}
 	\end{aligned}
 \end{aligned}
@@ -2286,15 +2301,6 @@ In particular, for any converging $g := \meaningofconv{\mathit{e}}\pmap$, preima
 \caption{Instances of $\arrpre~f$ necessary for interpreting probabilistic programs.}
 \label{fig:extra-preimage-arrow-defs}
 \end{figure*}
-
-If we were to confine preimage computation to computably enumerable sets, we could model sets as streams and implement the preimage arrow almost directly.
-But we would like something more efficient, even if it means approximating.
-
-Trying to generalize all useful approximation methods would result in a specification that cannot be directly implemented.
-Instead, we focus on a specific method: approximating product sets with covering rectangles.
-We recover some generality by stating correctness theorems in terms of general properties such as monotonicity.
-
-\subsection{Implementable Lifts}
 
 We would like to be able to compute preimages of uncountable sets, such as real intervals.
 This would seem to be a show-stopper: $preimage~g~B$ is uncomputable for most uncountable sets $B$ no matter how cleverly they are represented.
@@ -2315,7 +2321,7 @@ the following are representable and can be computed in finite time:
 	\item $J \to X$, $image~(\pi~j)~A$ and $unproject~j~A~B$
 	\item $A = \emptyset$
 \end{itemize}
-Before worrying about computability, we need to define families of sets under which these operations are closed.
+Before addressing computability, we need to define families of sets under which these operations are closed.
 
 \subsection{Rectangular Families}
 
@@ -2342,16 +2348,43 @@ lift cartesian products to sets of sets.
 
 For example, if $Rect~\Re$ contains all the closed real intervals, then by~\eqref{eqn:standard-rect-finite-product-rule}, $[0,2] \times [1,\pi] \in Rect~\pair{\Re,\Re}$.
 
-For every non-product type $X$, we require $\emptyset \in Rect~X$, $X \in Rect~X$, $\set{a} \in Rect~X$ for all $a \in X$, and for $Rect~X$ to be closed under intersection.
+For every non-product type $X$, we require $\emptyset \in Rect~X$, a universal set $X \in Rect~X$, singletons $\set{a} \in Rect~X$ for all $a \in X$, and for $Rect~X$ to be closed under intersection.
 It is not hard to show that these properties extend to rectangular families, and that the collection of all rectangular families is closed under products, projections, and $unproject$.
 
 Further, all of the necessary operations can be exactly implemented if finite sets are modeled directly, sets in an ordered space (such as $\Re$) are modeled by intervals, and sets in $Rect~\pair{X_1,X_2}$ are modeled by pairs of type $\pair{Rect~X_1,Rect~X_2}$.
 Though $J$ is infinite, sets in $Rect~(J \to X)$ can be modeled by \emph{finite} binary trees of sets in $Rect~X$, because a converging preimage computation can apply $unproject$ only finitely many times to $J \to X$.
 
-Implementing $\lazypre$ (defined in Figure~\ref{fig:preimage-arrow-defs}) requires computing $pre$, but only for the empty mapping, which is trivial: $pre~\emptyset \equiv \pair{\emptyset,\fun{B}\emptyset}$.
-Implementing the other combinators requires implementing the preimage mapping operations $(\circ\pre)$, $\pair{\cdot,\cdot}\pre$ and $(\uplus\pre)$.
+We defined one nonrectangular domain: the set of branch traces $T$, which contains every $t \in J \to Bool_\bot$ for which $t~j \neq \bot$ for no more than finitely many $J$.
+Fortunately, under conditions that are always met while computing approximate preimages, we can represent $T$ subsets as $J \to Bool_\bot$ rectangles, implicitly intersected with $T$.
+
+\begin{theorem}
+Let $T' \in Rect~(J \to Bool_\bot)$ such that $\bot \notin project~j~T'$ for no more than finitely many $j \in J$.
+Then $project~j~(T' \i T) = project~j~T'$.
+\end{theorem}
+\begin{proof}
+The subset case is by monotonicity of projections.
+For the superset case, let $b \in project~j~T'$.
+Define $t$ by
+\begin{equation}
+	t~j' =
+	\begin{cases}
+		b & j' = j \\
+		\text{any member of } project~j'~T' & \bot \notin project~j'~T' \\
+		\bot & \bot \in project~j'~T'
+	\end{cases}
+\end{equation}
+For no more than finitely many $j' \in J$, $t~j' \neq \bot$, so $t \in T$; also $t \in T'$ by construction.
+Thus, there exists a $t \in T' \i T$ such that $t~j = b$, so $b \in project~j~(T' \i T)$.
+\end{proof}
+
+\begin{corollary}
+Under the same conditions, for all $B \subseteq Bool$, $unproject~j~(T' \i T)~B = T \i unproject~j~T'~B$.
+\end{corollary}
 
 \subsection{Approximate Preimage Mapping Operations}
+
+Implementing $\lazypre$ (defined in Figure~\ref{fig:preimage-arrow-defs}) requires computing $pre$, but only for the empty mapping, which is trivial: $pre~\emptyset \equiv \pair{\emptyset,\fun{B}\emptyset}$.
+Implementing the other combinators requires implementing the preimage mapping operations $(\circ\pre)$, $\pair{\cdot,\cdot}\pre$ and $(\uplus\pre)$.
 
 From the preimage mapping definitions (Figure~\ref{fig:preimage-mapping-defs}), we see that $ap\pre$, which $(\circ\pre)$ and $(\uplus\pre)$ depend on, can be implemented directly if $A \i B$ is implemented.
 Given an $ap\pre$ implementation, $(\circ\pre)$ is directly implementable.
