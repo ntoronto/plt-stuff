@@ -1,28 +1,34 @@
-{-# LANGUAGE
-    TypeFamilies #-}
-
 module PreMapping where
 
 import Set
 import Rect
 
+-- A type `PreMapping s1 s2' represents preimage mappings with domain `s1' and codomain `s2'.
+-- A preimage mapping computes overapproximate preimages of `s2' instances, and has an observable
+-- range to 1) ensure correctness; and 2) allow preimage arrow composition.
+
 data PreMapping s1 s2 = PreMapping { preRange :: s2, runPreMapping :: s2 -> s1 }
 
+-- Application computes approximate preimages
 preAp :: (Set s1, Set s2) => PreMapping s1 s2 -> s2 -> s1
-preAp (PreMapping ys p) bs = p (meet ys bs)
+preAp (PreMapping ys p) bs = p (ys /\ bs)
 
+-- Pairing
 prePair :: (Set s1, Set s2, Set s3)
            => PreMapping s1 s2 -> PreMapping s1 s3 -> PreMapping s1 (Rect s2 s3)
 prePair (PreMapping ys py) (PreMapping zs pz) =
-  PreMapping (prod ys zs) (\bcs -> meet (py (projFst bcs)) (pz (projSnd bcs)))
+  PreMapping (prod ys zs) (\bcs -> py (projFst bcs) /\ pz (projSnd bcs))
 
+-- Composition
 preComp :: (Set s1, Set s2, Set s3)
            => PreMapping s2 s3 -> PreMapping s1 s2 -> PreMapping s1 s3
 preComp (PreMapping zs pz) hy =
   PreMapping zs (\cs -> do preAp hy (pz cs))
 
+-- "Disjoint" union (overapproximation actually makes it a join, but it's a disjoint union operator
+-- in the exact semantics)
 prePlus :: (Set s1, Set s2)
            => PreMapping s1 s2 -> PreMapping s1 s2 -> PreMapping s1 s2
 prePlus h1 h2 =
-  PreMapping (join (preRange h1) (preRange h2)) (\bs -> join (preAp h1 bs) (preAp h2 bs))
+  PreMapping (preRange h1 \/ preRange h2) (\bs -> preAp h1 bs \/ preAp h2 bs)
 

@@ -5,6 +5,9 @@ module MaybeSet where
 
 import Set
 
+-- A type `Set (MaybeSet s)' denotes the same subsets as a type of class `Set s', except the value
+-- `Nothing' may be contained in any of them.
+
 data MaybeSet s = OnlyJust s | WithNothing s
   deriving(Show,Eq)
 
@@ -18,15 +21,15 @@ instance Set s => Set (MaybeSet s) where
   empty = OnlyJust empty
   universe = WithNothing universe
 
-  meet (OnlyJust a) (OnlyJust b) = OnlyJust (meet a b)
-  meet (OnlyJust a) (WithNothing b) = OnlyJust (meet a b)
-  meet (WithNothing a) (OnlyJust b) = OnlyJust (meet a b)
-  meet (WithNothing a) (WithNothing b) = WithNothing (meet a b)
+  OnlyJust a /\ OnlyJust b = OnlyJust (a /\ b)
+  OnlyJust a /\ WithNothing b = OnlyJust (a /\ b)
+  WithNothing a /\ OnlyJust b = OnlyJust (a /\ b)
+  WithNothing a /\ WithNothing b = WithNothing (a /\ b)
 
-  join (OnlyJust a) (OnlyJust b) = OnlyJust (join a b)
-  join (WithNothing a) (OnlyJust b) = WithNothing (join a b)
-  join (OnlyJust a) (WithNothing b) = WithNothing (join a b)
-  join (WithNothing a) (WithNothing b) = WithNothing (join a b)
+  OnlyJust a \/ OnlyJust b = OnlyJust (a \/ b)
+  WithNothing a \/ OnlyJust b = WithNothing (a \/ b)
+  OnlyJust a \/ WithNothing b = WithNothing (a \/ b)
+  WithNothing a \/ WithNothing b = WithNothing (a \/ b)
 
   contains (WithNothing a) Nothing = True
   contains (OnlyJust a) Nothing = False

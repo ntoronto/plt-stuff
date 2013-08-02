@@ -5,6 +5,8 @@ module BoolSet where
 
 import Set
 
+-- The type `BoolSet' denotes a set of booleans.
+
 data BoolSet = EmptyBoolSet | UnivBoolSet | TrueSet | FalseSet
   deriving(Show,Eq)
 
@@ -14,17 +16,17 @@ instance Set BoolSet where
   empty = EmptyBoolSet
   universe = UnivBoolSet
 
-  meet EmptyBoolSet _ = EmptyBoolSet
-  meet _ EmptyBoolSet = EmptyBoolSet
-  meet UnivBoolSet a = a
-  meet a UnivBoolSet = a
-  meet a b = if a == b then a else EmptyBoolSet
+  EmptyBoolSet /\ _ = EmptyBoolSet
+  _ /\ EmptyBoolSet = EmptyBoolSet
+  UnivBoolSet /\ a = a
+  a /\ UnivBoolSet = a
+  a /\ b = if a == b then a else EmptyBoolSet
 
-  join EmptyBoolSet a = a
-  join a EmptyBoolSet = a
-  join UnivBoolSet _ = UnivBoolSet
-  join _ UnivBoolSet = UnivBoolSet
-  join a b = if a == b then a else UnivBoolSet
+  EmptyBoolSet \/ a = a
+  a \/ EmptyBoolSet = a
+  UnivBoolSet \/ _ = UnivBoolSet
+  _ \/ UnivBoolSet = UnivBoolSet
+  a \/ b = if a == b then a else UnivBoolSet
 
   contains EmptyBoolSet _ = False
   contains UnivBoolSet _ = True

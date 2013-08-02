@@ -1,8 +1,5 @@
 {-# LANGUAGE
-    TypeFamilies,
-    StandaloneDeriving,
-    FlexibleInstances,
-    MultiParamTypeClasses #-}
+    TypeFamilies #-}
 
 module TreeSet where
 
@@ -11,6 +8,8 @@ import Interval
 import MaybeSet
 import BoolSet
 
+-- The `TreeIndex' type denotes indexes into infinite (or unbounded) binary trees. In the
+-- approximating semantics, it's used as the domain (i.e. index set) of infinite vectors.
 
 type TreeIndex = [Bool]
 
@@ -22,48 +21,83 @@ indexRight j = False : j
 
 j0 = []
 
+--
 
-data TreeSet s = EmptyTreeSet | UnivTreeSet | TreeSetNode s !(TreeSet s) !(TreeSet s)
+-- A type `TreeVal x' represents an infinite vector of `x' with finitely many observable values.
+
+data TreeVal x = AnyTreeVal | TreeValNode !x !(TreeVal x) !(TreeVal x)
   deriving(Show,Eq)
 
-data TreeVal x = AnyTreeVal | TreeValNode x !(TreeVal x) !(TreeVal x)
+treeValRef :: TreeIndex -> TreeVal x -> x
+treeValRef [] (TreeValNode a _ _) = a
+treeValRef  (True:j) (TreeValNode _ l _) = treeValRef j l
+treeValRef (False:j) (TreeValNode _ _ r) = treeValRef j r
+-- The `treeValRef j AnyTreeVal' case is missing because trying to do it should be an error: the
+-- answer is indeterminate
+
+--
+
+-- A type of class `Set (TreeSet s)' represents subsets of infinite vectors indexed by `TreeIndex'
+-- instances, with each component a `MemberType s' value. Each is a rectangle with no more than
+-- finitely many full axes.
+
+-- WARNING: Do not use the `TreeSetNode' constructor! See Rect.hs for reasons.
+
+-- The strictness of the fields is critical to correct operation. If they weren't strict, trees
+-- could be infinite, so membership, equality, subset tests, etc., could diverge. The trees can
+-- still represent sets of infinite vectors, however: the `UnivTreeSet' variant represents a subset
+-- that contains every possible vector.
+
+data TreeSet s = EmptyTreeSet | UnivTreeSet | TreeSetNode !s !(TreeSet s) !(TreeSet s)
   deriving(Show,Eq)
 
-treeSetNode :: Set s => s -> TreeSet s -> TreeSet s -> TreeSet s
-treeSetNode x l r = if x == empty || l == empty || r == empty
-                      then EmptyTreeSet
-                      else TreeSetNode x l r
+treeSetNode :: TreeAxisSet s => s -> TreeSet s -> TreeSet s -> TreeSet s
+treeSetNode x l r =
+  if x == empty || l == empty || r == empty
+  then EmptyTreeSet
+  else if x == fullAxis && l == universe && r == universe
+       then UnivTreeSet
+       else TreeSetNode x l r
+
+-- The maximal set on each axis is not necessarily `universe', so each contained type needs to
+-- specify its maximal set when used in a tree
 
 class Set s => TreeAxisSet s where
   fullAxis :: s
 
-instance Set s => Set (TreeSet s) where
+
+instance TreeAxisSet s => Set (TreeSet s) where
   type MemberType (TreeSet s) = TreeVal (MemberType s)
 
   empty = EmptyTreeSet
   universe = UnivTreeSet
 
-  meet EmptyTreeSet _ = EmptyTreeSet
-  meet _ EmptyTreeSet = EmptyTreeSet
-  meet UnivTreeSet a = a
-  meet a UnivTreeSet = a
-  meet (TreeSetNode xs1 l1 r1) (TreeSetNode xs2 l2 r2) =
-    TreeSetNode (meet xs1 xs2) (meet l1 l2) (meet r1 r2)
+  EmptyTreeSet /\ _ = EmptyTreeSet
+  _ /\ EmptyTreeSet = EmptyTreeSet
+  UnivTreeSet /\ a = a
+  a /\ UnivTreeSet = a
+  TreeSetNode xs1 l1 r1 /\ TreeSetNode xs2 l2 r2 =
+    treeSetNode (xs1 /\ xs2) (l1 /\ l2) (r1 /\ r2)
 
-  join EmptyTreeSet a = a
-  join a EmptyTreeSet = a
-  join UnivTreeSet _ = UnivTreeSet
-  join _ UnivTreeSet = UnivTreeSet
-  join (TreeSetNode xs1 ls1 rs1) (TreeSetNode xs2 ls2 rs2) =
-    TreeSetNode (join xs1 xs2) (join ls1 ls2) (join rs1 rs2)
+  EmptyTreeSet \/ a = a
+  a \/ EmptyTreeSet = a
+  UnivTreeSet \/ _ = UnivTreeSet
+  _ \/ UnivTreeSet = UnivTreeSet
+  TreeSetNode xs1 ls1 rs1 \/ TreeSetNode xs2 ls2 rs2 =
+    treeSetNode (xs1 \/ xs2) (ls1 \/ ls2) (rs1 \/ rs2)
 
   contains EmptyTreeSet _ = False
   contains UnivTreeSet _ = True
   contains (TreeSetNode xs ls rs) (TreeValNode x l r) =
     contains xs x && contains ls l && contains rs r
+  -- The `contains (TreeSetNode _ _ _) AnyTreeVal' case is missing because trying to do it should
+  -- be an error: the answer is indeterminate for any non-full axis
 
   singleton AnyTreeVal = UnivTreeSet
-  singleton (TreeValNode x l r) = TreeSetNode (singleton x) (singleton l) (singleton r)
+  singleton (TreeValNode x l r) = treeSetNode (singleton x) (singleton l) (singleton r)
+
+-- `project' is like `projFst' and `projSnd', generalized to arbitrary products; equivalently, it
+-- retrieves an axis from a rectangular set of vectors
 
 project :: TreeAxisSet s => TreeIndex -> TreeSet s -> s
 project j EmptyTreeSet = empty
@@ -72,19 +106,12 @@ project [] (TreeSetNode xs _ _) = xs
 project  (True:j) (TreeSetNode _ l _) = project j l
 project (False:j) (TreeSetNode _ _ r) = project j r
 
+-- `unproject' computes rectangular preimages under projection; equivalently, it's a functional
+-- update to an axis in a rectangular set of vectors, with intersecting instead of replacing
+
 unproject :: TreeAxisSet s => TreeIndex -> TreeSet s -> s -> TreeSet s
 unproject j UnivTreeSet ys = unproject j (TreeSetNode fullAxis UnivTreeSet UnivTreeSet) ys
-unproject [] (TreeSetNode xs ls rs) ys = TreeSetNode (meet xs ys) ls rs
-unproject  (True:j) (TreeSetNode xs ls rs) ys = TreeSetNode xs (unproject j ls ys) rs
-unproject (False:j) (TreeSetNode xs ls rs) ys = TreeSetNode xs ls (unproject j rs ys)
-
-
-type RSet = TreeSet (Interval Float)
-type TSet = TreeSet (MaybeSet BoolSet)
-
-instance TreeAxisSet (Interval Float) where
-  fullAxis = Ivl 0.0 1.0
-
-instance TreeAxisSet (MaybeSet BoolSet) where
-  fullAxis = WithNothing UnivBoolSet
+unproject [] (TreeSetNode xs ls rs) ys = treeSetNode (xs /\ ys) ls rs
+unproject  (True:j) (TreeSetNode xs ls rs) ys = treeSetNode xs (unproject j ls ys) rs
+unproject (False:j) (TreeSetNode xs ls rs) ys = treeSetNode xs ls (unproject j rs ys)
 

@@ -1,18 +1,22 @@
 module BotArrow where
 
-import Control.Arrow
+import ValArrow
 
-type BotArrow x y = Kleisli Maybe x y
+newtype BotArrow x y = BotArrow { runBotArrow :: x -> (Maybe y) }
 
-runBotArrow :: BotArrow x y -> x -> Maybe y
-runBotArrow = runKleisli
+instance ValArrow BotArrow where
+  f1 ->>> f2 =
+    BotArrow (\a -> do b <- runBotArrow f1 a; runBotArrow f2 b)
 
-pairToEither :: (Bool,x) -> Either x x
-pairToEither (a,b) = if a then Left b else Right b
+  f1 -&&& f2 =
+    BotArrow (\a -> do b <- runBotArrow f1 a; c <- runBotArrow f2 a; return (b,c))
 
-ifte :: ArrowChoice a => a x Bool -> a x y -> a x y -> a x y
-ifte f1 f2 f3 = f1 &&& arr id >>> arr pairToEither >>> f2 ||| f3
+  valIfte f1 f2 f3 =
+    BotArrow (\a -> do b <- runBotArrow f1 a; if b then runBotArrow f2 a else runBotArrow f3 a)
 
-const :: Arrow a => y -> a x y
-const b = arr (\ a -> b)
+  valLazy f = f
+  valId = BotArrow (\a -> Just a)
+  valConst b = BotArrow (\a -> Just b)
+  valFst = BotArrow (\(a,b) -> Just a)
+  valSnd = BotArrow (\(a,b) -> Just b)
 

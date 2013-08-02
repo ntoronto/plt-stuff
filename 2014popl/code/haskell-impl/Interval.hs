@@ -5,14 +5,15 @@ module Interval where
 
 import Set
 
-data Interval x = EmptyIvl | UnivIvl | Ivl x x
+-- A type `Interval x' denotes intervals of type `x' (with class `Ord x').
+
+-- WARNING: Do not use the `Interval' constructor! Use `ivl' instead; see Rect.hs for reasons.
+
+data Interval x = EmptyIvl | UnivIvl | Interval x x
   deriving(Show,Eq)
 
-unitIvl :: Interval Float
-unitIvl = Ivl 0.0 1.0
-
 ivl :: Ord x => x -> x -> Interval x
-ivl a1 a2 = if a1 <= a2 then Ivl a1 a2 else EmptyIvl
+ivl a1 a2 = if a1 <= a2 then Interval a1 a2 else EmptyIvl
 
 instance Ord x => Set (Interval x) where
   type MemberType (Interval x) = x
@@ -20,21 +21,21 @@ instance Ord x => Set (Interval x) where
   empty = EmptyIvl
   universe = UnivIvl
 
-  meet EmptyIvl _ = EmptyIvl
-  meet _ EmptyIvl = EmptyIvl
-  meet UnivIvl a = a
-  meet a UnivIvl = a
-  meet (Ivl a1 a2) (Ivl b1 b2) = ivl (max a1 b1) (min a2 b2)
+  EmptyIvl /\ _ = EmptyIvl
+  _ /\ EmptyIvl = EmptyIvl
+  UnivIvl /\ a = a
+  a /\ UnivIvl = a
+  Interval a1 a2 /\ Interval b1 b2 = ivl (max a1 b1) (min a2 b2)
 
-  join EmptyIvl a = a
-  join a EmptyIvl = a
-  join UnivIvl _ = UnivIvl
-  join _ UnivIvl = UnivIvl
-  join (Ivl a1 a2) (Ivl b1 b2) = Ivl (min a1 b1) (max a2 b2)
+  EmptyIvl \/ a = a
+  a \/ EmptyIvl = a
+  UnivIvl \/ _ = UnivIvl
+  _ \/ UnivIvl = UnivIvl
+  Interval a1 a2 \/ Interval b1 b2 = ivl (min a1 b1) (max a2 b2)
 
   contains EmptyIvl _ = False
   contains UnivIvl _ = True
-  contains (Ivl a1 a2) a = a1 <= a && a <= a2
+  contains (Interval a1 a2) a = a1 <= a && a <= a2
 
-  singleton a = Ivl a a
+  singleton a = ivl a a
 
