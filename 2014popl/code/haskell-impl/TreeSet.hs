@@ -4,9 +4,6 @@
 module TreeSet where
 
 import Set
-import Interval
-import MaybeSet
-import BoolSet
 
 -- The `TreeIndex' type denotes indexes into infinite (or unbounded) binary trees. In the
 -- approximating semantics, it's used as the domain (i.e. index set) of infinite vectors.
@@ -41,36 +38,36 @@ treeValRef (False:j) (TreeValNode _ _ r) = treeValRef j r
 -- instances, with each component a `MemberType s' value. Each is a rectangle with no more than
 -- finitely many full axes.
 
--- WARNING: Do not use the `TreeSetNode' constructor! See Rect.hs for reasons.
+-- WARNING: Do not use the `TreeSetNode' constructor! See PairSet.hs for reasons.
 
 -- The strictness of the fields is critical to correct operation. If they weren't strict, trees
 -- could be infinite, so membership, equality, subset tests, etc., could diverge. The trees can
 -- still represent sets of infinite vectors, however: the `UnivTreeSet' variant represents a subset
--- that contains every possible vector.
+-- that member every possible vector.
 
 data TreeSet s = EmptyTreeSet | UnivTreeSet | TreeSetNode !s !(TreeSet s) !(TreeSet s)
   deriving(Show,Eq)
 
-treeSetNode :: TreeAxisSet s => s -> TreeSet s -> TreeSet s -> TreeSet s
-treeSetNode x l r =
-  if x == empty || l == empty || r == empty
-  then EmptyTreeSet
-  else if x == fullAxis && l == universe && r == universe
-       then UnivTreeSet
-       else TreeSetNode x l r
-
--- The maximal set on each axis is not necessarily `universe', so each contained type needs to
+-- The maximal set on each axis is not necessarily `univ', so each contained type needs to
 -- specify its maximal set when used in a tree
 
 class Set s => TreeAxisSet s where
   fullAxis :: s
 
 
+treeSetNode :: TreeAxisSet s => s -> TreeSet s -> TreeSet s -> TreeSet s
+treeSetNode x l r =
+  if x == empty || l == empty || r == empty
+  then EmptyTreeSet
+  else if x == fullAxis && l == univ && r == univ
+       then UnivTreeSet
+       else TreeSetNode x l r
+
 instance TreeAxisSet s => Set (TreeSet s) where
   type MemberType (TreeSet s) = TreeVal (MemberType s)
 
   empty = EmptyTreeSet
-  universe = UnivTreeSet
+  univ = UnivTreeSet
 
   EmptyTreeSet /\ _ = EmptyTreeSet
   _ /\ EmptyTreeSet = EmptyTreeSet
@@ -86,11 +83,11 @@ instance TreeAxisSet s => Set (TreeSet s) where
   TreeSetNode xs1 ls1 rs1 \/ TreeSetNode xs2 ls2 rs2 =
     treeSetNode (xs1 \/ xs2) (ls1 \/ ls2) (rs1 \/ rs2)
 
-  contains EmptyTreeSet _ = False
-  contains UnivTreeSet _ = True
-  contains (TreeSetNode xs ls rs) (TreeValNode x l r) =
-    contains xs x && contains ls l && contains rs r
-  -- The `contains (TreeSetNode _ _ _) AnyTreeVal' case is missing because trying to do it should
+  member EmptyTreeSet _ = False
+  member UnivTreeSet _ = True
+  member (TreeSetNode xs ls rs) (TreeValNode x l r) =
+    member xs x && member ls l && member rs r
+  -- The `member (TreeSetNode _ _ _) AnyTreeVal' case is missing because trying to do it should
   -- be an error: the answer is indeterminate for any non-full axis
 
   singleton AnyTreeVal = UnivTreeSet

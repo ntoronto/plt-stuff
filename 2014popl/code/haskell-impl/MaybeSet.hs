@@ -19,7 +19,7 @@ instance Set s => Set (MaybeSet s) where
   type MemberType (MaybeSet s) = Maybe (MemberType s)
 
   empty = OnlyJust empty
-  universe = WithNothing universe
+  univ = WithNothing univ
 
   OnlyJust a /\ OnlyJust b = OnlyJust (a /\ b)
   OnlyJust a /\ WithNothing b = OnlyJust (a /\ b)
@@ -31,10 +31,10 @@ instance Set s => Set (MaybeSet s) where
   OnlyJust a \/ WithNothing b = WithNothing (a \/ b)
   WithNothing a \/ WithNothing b = WithNothing (a \/ b)
 
-  contains (WithNothing a) Nothing = True
-  contains (OnlyJust a) Nothing = False
-  contains (WithNothing a) (Just x) = contains a x
-  contains (OnlyJust a) (Just x) = contains a x
+  member (WithNothing a) Nothing = True
+  member (OnlyJust a) Nothing = False
+  member (WithNothing a) (Just x) = member a x
+  member (OnlyJust a) (Just x) = member a x
 
   singleton Nothing = WithNothing empty
   singleton (Just a) = OnlyJust (singleton a)

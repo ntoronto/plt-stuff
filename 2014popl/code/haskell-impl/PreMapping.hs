@@ -1,7 +1,7 @@
 module PreMapping where
 
 import Set
-import Rect
+import PairSet
 
 -- A type `PreMapping s1 s2' represents preimage mappings with domain `s1' and codomain `s2'.
 -- A preimage mapping computes overapproximate preimages of `s2' instances, and has an observable
@@ -15,7 +15,7 @@ preAp (PreMapping ys p) bs = p (ys /\ bs)
 
 -- Pairing
 prePair :: (Set s1, Set s2, Set s3)
-           => PreMapping s1 s2 -> PreMapping s1 s3 -> PreMapping s1 (Rect s2 s3)
+           => PreMapping s1 s2 -> PreMapping s1 s3 -> PreMapping s1 (PairSet s2 s3)
 prePair (PreMapping ys py) (PreMapping zs pz) =
   PreMapping (prod ys zs) (\bcs -> py (projFst bcs) /\ pz (projSnd bcs))
 

@@ -1,7 +1,7 @@
 import Set
-import Rect
+import PairSet
 import BoolSet
-import Interval
+import OrdSet
 import TreeSet
 import MaybeSet
 import PreMapping
@@ -12,7 +12,7 @@ import ValArrow
 import BotArrow
 import BotArrow2
 
-t = let t0 = unproject [] UnivTreeSet (ivl 0.1 0.9) :: TreeSet (Interval Float)
+t = let t0 = unproject [] UnivTreeSet (ivl 0.1 0.9) :: TreeSet (OrdSet Float)
         t1 = unproject [True] t0 (ivl 0.2 0.3)
       in t1
 
@@ -44,7 +44,8 @@ main = do
   let f = valFst -&&& valSnd :: BotArrow (Integer,Integer) (Integer,Integer)
     in print (runBotArrow f (1,1))
 
-  let h = setFst ~&&& setSnd :: PreArrow (Rect (Interval Integer) (Interval Integer)) (Rect (Interval Integer) (Interval Integer))
+  let h = setFst ~&&& setSnd :: PreArrow (PairSet (OrdSet Integer) (OrdSet Integer))
+                                         (PairSet (OrdSet Integer) (OrdSet Integer))
       g = runPreArrow h (prod (ivl 0 2) (ivl 0 2))
     in print (preAp g (prod (ivl 0 1) (ivl 0 2)))
 

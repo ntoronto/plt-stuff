@@ -1,7 +1,7 @@
 module PreArrow where
 
 import Set
-import Rect
+import PairSet
 import PreMapping
 import SetArrow
 

@@ -14,7 +14,7 @@ instance Set BoolSet where
   type MemberType BoolSet = Bool
 
   empty = EmptyBoolSet
-  universe = UnivBoolSet
+  univ = UnivBoolSet
 
   EmptyBoolSet /\ _ = EmptyBoolSet
   _ /\ EmptyBoolSet = EmptyBoolSet
@@ -28,11 +28,11 @@ instance Set BoolSet where
   _ \/ UnivBoolSet = UnivBoolSet
   a \/ b = if a == b then a else UnivBoolSet
 
-  contains EmptyBoolSet _ = False
-  contains UnivBoolSet _ = True
-  contains TrueSet True = True
-  contains FalseSet False = True
-  contains _ _ = False
+  member EmptyBoolSet _ = False
+  member UnivBoolSet _ = True
+  member TrueSet True = True
+  member FalseSet False = True
+  member _ _ = False
 
   singleton True = TrueSet
   singleton False = FalseSet
