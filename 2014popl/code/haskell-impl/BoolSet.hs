@@ -10,7 +10,7 @@ import Set
 data BoolSet = EmptyBoolSet | UnivBoolSet | TrueSet | FalseSet
   deriving(Show,Eq)
 
-instance Set BoolSet where
+instance LatticeSet BoolSet where
   type MemberType BoolSet = Bool
 
   empty = EmptyBoolSet

@@ -11,11 +11,11 @@ import Set
 data MaybeSet s = OnlyJust s | WithNothing s
   deriving(Show,Eq)
 
-withoutNothing :: Set s => MaybeSet s -> s
+withoutNothing :: LatticeSet s => MaybeSet s -> s
 withoutNothing (OnlyJust a) = a
 withoutNothing (WithNothing a) = a
 
-instance Set s => Set (MaybeSet s) where
+instance LatticeSet s => LatticeSet (MaybeSet s) where
   type MemberType (MaybeSet s) = Maybe (MemberType s)
 
   empty = OnlyJust empty

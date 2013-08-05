@@ -1,12 +1,12 @@
 #lang typed/racket
 
+(require "untyped-utils.rkt")
+
 (provide (all-defined-out))
 
 ;; Maybe type
 
-(define bottom '⊥)
-(define-type Bottom '⊥)
-(define-predicate bottom? Bottom)
+(define-singleton-type Bottom ⊥)
 
 (struct: (X) just ([value : X]) #:transparent)
 
@@ -14,7 +14,7 @@
 
 (: unjust (All (X) ((U Bottom (just X)) -> (U Bottom X))))
 (define (unjust v)
-  (if (bottom? v) bottom (just-value v)))
+  (if (⊥? v) ⊥ (just-value v)))
 
 ;; Combinators
 

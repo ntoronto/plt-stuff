@@ -1,5 +1,6 @@
 {-# LANGUAGE
-    TypeFamilies #-}
+    TypeFamilies,
+    FlexibleContexts #-}
 
 module Set where
 
@@ -8,13 +9,30 @@ module Set where
 
 infixr 3 /\
 infixr 2 \/
+infixr 2 \\
 
-class Eq s => Set s where
+class Eq s => LatticeSet s where
   type MemberType s :: *
-  empty :: s     -- lattice bottom
-  univ :: s  -- lattice top
-  (/\) :: s -> s -> s
-  (\/) :: s -> s -> s
+  empty :: s  -- lattice bottom
+  univ :: s   -- lattice top
+  (/\) :: s -> s -> s  -- meet
+  (\/) :: s -> s -> s  -- join
   member :: s -> MemberType s -> Bool
   singleton :: MemberType s -> s
+
+
+class LatticeSet s => MeasurableSet s where
+  (\\) :: s -> s -> [s]  -- subtract (i.e. relative complement)
+
+union :: MeasurableSet s => [s] -> [s]
+union [] = []
+union (a:as) = a : concatMap (\\ a) as
+
+
+class MeasurableSet s => LebesgueMeasurableSet s where
+  type MeasureType s :: *
+  measure :: s -> MeasureType s
+
+unionMeasure :: (LebesgueMeasurableSet s, Num (MeasureType s)) => [s] -> MeasureType s
+unionMeasure as = sum (map measure (union as))
 

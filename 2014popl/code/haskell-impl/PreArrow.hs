@@ -10,9 +10,6 @@ import SetArrow
 
 newtype PreArrow s1 s2 = PreArrow { runPreArrow :: s1 -> PreMapping s1 s2 }
 
-emptyPreMapping :: (Set s1, Set s2) => PreMapping s1 s2
-emptyPreMapping = PreMapping empty (\a -> empty)
-
 -- Toronto & McCarthy 2014 derives the implementation ultimately from the bottom arrow, and proves
 -- that it computes approximate preimages under corresponding bottom arrow computations.
 
@@ -32,13 +29,13 @@ instance SetArrow PreArrow where
                       in prePlus (runPreArrow h2 a2) (runPreArrow h3 a3))
 
   setLazy h =
-    PreArrow (\a -> if a == empty then emptyPreMapping else runPreArrow h a)
+    PreArrow (\a -> if a == empty then emptyPreMapping else runPreArrow (h ()) a)
 
   setId =
     PreArrow (\a -> PreMapping a (\b -> b))
 
   setConst y =
-    PreArrow (\a -> PreMapping (singleton y) (\b -> a))
+    PreArrow (\a -> PreMapping (singleton y) (\b -> if b == empty then empty else a))
 
   setFst =
     PreArrow (\a -> let a1 = projFst a
@@ -50,6 +47,6 @@ instance SetArrow PreArrow where
                         a2 = projSnd a
                       in PreMapping a2 (\b -> a /\ prod a1 b))
 
-refine :: (Set s1, Set s2) => PreArrow s1 s2 -> s1 -> s2 -> s1
+refine :: (LatticeSet s1, LatticeSet s2) => PreArrow s1 s2 -> s1 -> s2 -> s1
 refine h as bs = preAp (runPreArrow h as) bs
 
