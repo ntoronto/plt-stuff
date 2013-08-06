@@ -2,38 +2,112 @@
 
 (require "../types.rkt"
          "../untyped-utils.rkt"
-         racket/match)
+         racket/match
+         racket/list)
 
 (provide (all-defined-out))
 
-;; class set S X where ...
-(struct: (S X) set ([empty : S]
-                    [univ : S]
-                    [meet : (S S -> S)]
-                    [join : (S S -> S)]
-                    [member? : (S X -> Boolean)]
-                    [singleton : (X -> S)]))
+(define-singleton-type Empty-Set empty-set)
+(define-singleton-type Univ-Set univ-set)
 
-(: set-empty? (All (S X) ((set S X) -> (S -> Boolean))))
-(define ((set-empty? ops) A)
-  (equal? (set-empty ops) A))
+(define-type Set (U Empty-Set Univ-Set Real-Set Bool-Set Pair-Set Null-Set Tree-Set))
 
-(: set-univ? (All (S X) ((set S X) -> (S -> Boolean))))
-(define ((set-univ? ops) A)
-  (equal? (set-univ ops) A))
+(define-type Value (Rec V (U Flonum Boolean (Pair V V) Tree-Val)))
+
+
+(: set-empty? (Set -> Boolean))
+(define (set-empty? A)
+  (or (empty-set? A)
+      (empty-real-set? A)
+      (empty-bool-set? A)
+      (empty-pair-set? A)
+      (empty-null-set? A)))
+
+(: set-meet (Set Set -> Set))
+(define (set-meet A B)
+  (cond [(and (real-set? A) (real-set? B))  (real-set-meet A B)]
+        [(and (bool-set? A) (bool-set? B))  (bool-set-meet A B)]
+        [(and (pair-set? A) (pair-set? B))  (pair-set-meet A B)]
+        [(and (null-set? A) (null-set? B))  (null-set-meet A B)]
+        [(and (tree-set? A) (tree-set? B))  (tree-set-meet A B)]
+        [(or (empty-set? A) (empty-set? B))  empty-set]
+        [(univ-set? A)  B]
+        [(univ-set? B)  A]
+        [else  empty-set]))
+
+(: set-join (Set Set -> Set))
+(define (set-join A B)
+  (cond [(and (real-set? A) (real-set? B))  (real-set-join A B)]
+        [(and (bool-set? A) (bool-set? B))  (bool-set-join A B)]
+        [(and (pair-set? A) (pair-set? B))  (pair-set-join A B)]
+        [(and (null-set? A) (null-set? B))  (null-set-join A B)]
+        [(and (tree-set? A) (tree-set? B))  (tree-set-join A B)]
+        [(or (univ-set? A) (univ-set? B))  univ-set]
+        [(empty-set? A)  B]
+        [(empty-set? B)  A]
+        [else  univ-set]))
+
+(: set-member? (Set Value -> Boolean))
+(define (set-member? A a)
+  (cond [(and (real-set? A) (flonum? a))  (real-set-member? A a)]
+        [(and (bool-set? A) (boolean? a))  (bool-set-member? A a)]
+        [(and (pair-set? A) (pair? a))  (pair-set-member? A a)]
+        [(and (null-set? A) (null? a))  (null-set-member? A a)]
+        [(and (tree-set? A) (tree-val? a))  (tree-set-member? A a)]
+        [(univ-set? A)  #t]
+        [else  #f]))
+
+(: set-singleton (Value -> Set))
+(define (set-singleton a)
+  (cond [(flonum? a)  (real-set-singleton a)]
+        [(boolean? a)  (bool-set-singleton a)]
+        [(pair? a)  (pair-set-singleton a)]
+        [(null? a)  (null-set-singleton a)]
+        [(tree-val? a)  (tree-set-singleton a)]))
+
+(: set-proj-fst (Set -> Set))
+(define (set-proj-fst A)
+  (cond [(pair-set? A)  (pair-set-proj-fst A)]
+        [(univ-set? A)  univ-set]
+        [else  empty-set]))
+
+(: set-proj-snd (Set -> Set))
+(define (set-proj-snd A)
+  (cond [(pair-set? A)  (pair-set-proj-snd A)]
+        [(univ-set? A)  univ-set]
+        [else  empty-set]))
+
+(: set-project (Tree-Index Set -> Set))
+(define (set-project j A)
+  (cond [(tree-set? A)  (tree-set-project j A)]
+        [(univ-set? A)  (tree-set-project j univ-tree-set)]
+        [else  empty-set]))
+
+(: set-unproject (Tree-Index Set Set -> Set))
+(define (set-unproject j A B)
+  (cond [(tree-set? A)  (tree-set-unproject j A B)]
+        [(univ-set? A)  (tree-set-unproject j univ-tree-set B)]
+        [else  empty-set]))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Reals
 
-(struct: interval ([min : Flonum] [max : Flonum]) #:transparent)
+(struct: Real-Set-Base () #:transparent)
+(struct: interval Real-Set-Base ([min : Flonum] [max : Flonum]) #:transparent)
+(define-singleton-type Empty-Real-Set Real-Set-Base empty-real-set)
+(define-singleton-type Univ-Real-Set Real-Set-Base univ-real-set)
 
-(define-singleton-type Empty-Real-Set empty-real-set)
-(define-singleton-type Univ-Real-Set univ-real-set)
-(define-type Real-Set (U Empty-Real-Set Univ-Real-Set interval))
+(define-type Real-Set (U interval Empty-Real-Set Univ-Real-Set))
+(define real-set? Real-Set-Base?)
+
+(define real-ivl (interval -inf.0 +inf.0))
+(define unit-ivl (interval 0.0 1.0))
 
 (: ivl (Flonum Flonum -> Real-Set))
 (define (ivl min max)
-  (if (min . <= . max) (interval min max) empty-real-set))
+  (cond [(and (min . = . -inf.0) (max . = . +inf.0))  univ-real-set]
+        [(min . <= . max)  (interval min max)]
+        [else  empty-real-set]))
 
 (: real-set-meet (Real-Set Real-Set -> Real-Set))
 (define (real-set-meet A B)
@@ -64,24 +138,32 @@
 (define (real-set-singleton a)
   (interval a a))
 
-;; instance set Real-Set Flonum where ...
-(: real-set-ops (set Real-Set Flonum))
-(define real-set-ops
-  (set empty-real-set univ-real-set real-set-meet real-set-join real-set-member? real-set-singleton))
-
 ;; ---------------------------------------------------------------------------------------------------
 ;; Booleans
 
-(define-singleton-type Empty-Bool-Set empty-bool-set)
-(define-singleton-type Univ-Bool-Set univ-bool-set)
-(define-type Bool-Set (U Empty-Bool-Set Univ-Bool-Set #t #f))
+(struct: Bool-Set-Base () #:transparent)
+(struct: singleton-bool-set Bool-Set-Base ([value : Boolean])
+  #:transparent
+  #:property prop:custom-write
+  (λ (A port mode)
+    (fprintf port (if (singleton-bool-set-value A) "true-set" "false-set")))
+  )
+
+(define-singleton-type Empty-Bool-Set Bool-Set-Base empty-bool-set)
+(define-singleton-type Univ-Bool-Set Bool-Set-Base univ-bool-set)
+
+(define-type Bool-Set (U singleton-bool-set Empty-Bool-Set Univ-Bool-Set))
+(define bool-set? Bool-Set-Base?)
+
+(define true-set (singleton-bool-set #t))
+(define false-set (singleton-bool-set #f))
 
 (: bool-set-meet (Bool-Set Bool-Set -> Bool-Set))
 (define (bool-set-meet A B)
   (cond [(or (empty-bool-set? A) (empty-bool-set? B))  empty-bool-set]
         [(univ-bool-set? A)  B]
         [(univ-bool-set? B)  A]
-        [(eq? A B)  A]
+        [(eq? (singleton-bool-set-value A) (singleton-bool-set-value B))  A]
         [else  empty-bool-set]))
 
 (: bool-set-join (Bool-Set Bool-Set -> Bool-Set))
@@ -89,166 +171,257 @@
   (cond [(or (univ-bool-set? A) (univ-bool-set? B))  univ-bool-set]
         [(empty-bool-set? A)  B]
         [(empty-bool-set? B)  A]
-        [(eq? A B)  A]
+        [(eq? (singleton-bool-set-value A) (singleton-bool-set-value B))  A]
         [else  univ-bool-set]))
 
 (: bool-set-member? (Bool-Set Boolean -> Boolean))
 (define (bool-set-member? A a)
   (cond [(empty-bool-set? A)  #f]
         [(univ-bool-set? A)   #t]
-        [else  (eq? A a)]))
+        [else  (eq? (singleton-bool-set-value A) a)]))
 
 (: bool-set-singleton (Boolean -> Bool-Set))
-(define (bool-set-singleton a) a)
-
-;; instance set Bool-Set Boolean where ...
-(: bool-set-ops (set Bool-Set Boolean))
-(define bool-set-ops
-  (set empty-bool-set univ-bool-set bool-set-meet bool-set-join bool-set-member? bool-set-singleton))
+(define (bool-set-singleton a)
+  (singleton-bool-set a))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Pairs
 
-(struct: (S1 S2) pair-set ([fst : S1] [snd : S2]) #:transparent)
+(struct: Pair-Set-Base () #:transparent)
+(struct: prod-set Pair-Set-Base ([fst : Set] [snd : Set]) #:transparent)
+(define-singleton-type Empty-Pair-Set Pair-Set-Base empty-pair-set)
+(define-singleton-type Univ-Pair-Set Pair-Set-Base univ-pair-set)
 
-(define-singleton-type Empty-Pair-Set empty-pair-set)
-(define-singleton-type Univ-Pair-Set univ-pair-set)
-(define-type (Pair-Set S1 S2) (U Empty-Pair-Set Univ-Pair-Set (pair-set S1 S2)))
+(define-type Pair-Set (U prod-set Empty-Pair-Set Univ-Pair-Set))
+(define pair-set? Pair-Set-Base?)
 
-;; set-prod :: (set S1 X1, set S2 X2) => S1 -> S2 -> Pair-Set S1 S2
-(: set-prod (All (S1 X1 S2 X2) ((set S1 X1) (set S2 X2) -> (S1 S2 -> (Pair-Set S1 S2)))))
-(define (set-prod ops1 ops2)
-  (define empty1? (set-empty? ops1))
-  (define empty2? (set-empty? ops2))
-  (define univ1? (set-univ? ops1))
-  (define univ2? (set-univ? ops2))
-  (λ (A1 A2)
-    (cond [(or (empty1? A1) (empty2? A2))  empty-pair-set]
-          [(and (univ1? A1) (univ2? A2))   univ-pair-set]
-          [else  (pair-set A1 A2)])))
+(: set-prod (Set Set -> Pair-Set))
+(define (set-prod A1 A2)
+  (cond [(or (set-empty? A1) (set-empty? A2))  empty-pair-set]
+        [(and (univ-set? A1) (univ-set? A2))   univ-pair-set]
+        [else  (prod-set A1 A2)]))
 
-(: set-proj-fst (All (S1 X1 S2 X2) ((set S1 X1) (set S2 X2) -> ((Pair-Set S1 S2) -> S1))))
-(define (set-proj-fst ops1 ops2)
-  (define empty1 (set-empty ops1))
-  (define univ1 (set-univ ops1))
-  (λ (A)
-    (cond [(empty-pair-set? A)  empty1]
-          [(univ-pair-set? A)   univ1]
-          [else  (pair-set-fst A)])))
+(: pair-set-proj-fst (Pair-Set -> Set))
+(define (pair-set-proj-fst A)
+  (cond [(empty-pair-set? A)  empty-set]
+        [(univ-pair-set? A)  univ-set]
+        [else  (prod-set-fst A)]))
 
-(: set-proj-snd (All (S1 X1 S2 X2) ((set S1 X1) (set S2 X2) -> ((Pair-Set S1 S2) -> S2))))
-(define (set-proj-snd ops1 ops2)
-  (define empty2 (set-empty ops2))
-  (define univ2 (set-univ ops2))
-  (λ (A)
-    (cond [(empty-pair-set? A)  empty2]
-          [(univ-pair-set? A)   univ2]
-          [else  (pair-set-snd A)])))
+(: pair-set-proj-snd (Pair-Set -> Set))
+(define (pair-set-proj-snd A)
+  (cond [(empty-pair-set? A)  empty-set]
+        [(univ-pair-set? A)  univ-set]
+        [else  (prod-set-snd A)]))
 
-;; instance (set S1 X1, set S2 X2) => set (Pair-Set S1 S2) (Pair X1 X2) where ...
-(: pair-set-ops (All (S1 X1 S2 X2) ((set S1 X1) (set S2 X2) -> (set (Pair-Set S1 S2) (Pair X1 X2)))))
-(define (pair-set-ops ops1 ops2)
-  (define prod (set-prod ops1 ops2))
-  (match-define (set _empty1 _univ1 meet1 join1 member1? singleton1) ops1)
-  (match-define (set _empty2 _univ2 meet2 join2 member2? singleton2) ops2)
-  (set empty-pair-set
-       univ-pair-set
-       ;; meet
-       (λ: ([A : (Pair-Set S1 S2)] [B : (Pair-Set S1 S2)])
-         (cond [(or (empty-pair-set? A) (empty-pair-set? B))  empty-pair-set]
-               [(univ-pair-set? A)  B]
-               [(univ-pair-set? B)  A]
-               [else  (prod (meet1 (pair-set-fst A) (pair-set-fst B))
-                            (meet2 (pair-set-snd A) (pair-set-snd B)))]))
-       ;; join
-       (λ: ([A : (Pair-Set S1 S2)] [B : (Pair-Set S1 S2)])
-         (cond [(or (univ-pair-set? A) (univ-pair-set? B))  univ-pair-set]
-               [(empty-pair-set? A)  B]
-               [(empty-pair-set? B)  A]
-               [else  (prod (join1 (pair-set-fst A) (pair-set-fst B))
-                            (join2 (pair-set-snd A) (pair-set-snd B)))]))
-       ;; member?
-       (λ: ([A : (Pair-Set S1 S2)] [a : (Pair X1 X2)])
-         (cond [(empty-pair-set? A)  #f]
-               [(univ-pair-set? A)   #t]
-               [else  (and (member1? (pair-set-fst A) (car a))
-                           (member2? (pair-set-snd A) (cdr a)))]))
-       ;; singleton
-       (λ: ([a : (Pair X1 X2)])
-         (pair-set (singleton1 (car a))
-                   (singleton2 (cdr a))))))
+(: pair-set-meet (Pair-Set Pair-Set -> Pair-Set))
+(define (pair-set-meet A B)
+  (cond [(or (empty-pair-set? A) (empty-pair-set? B))  empty-pair-set]
+        [(univ-pair-set? A)  B]
+        [(univ-pair-set? B)  A]
+        [else  (match-define (prod-set A1 A2) A)
+               (match-define (prod-set B1 B2) B)
+               (set-prod (set-meet A1 B1) (set-meet A2 B2))]))
+
+(: pair-set-join (Pair-Set Pair-Set -> Pair-Set))
+(define (pair-set-join A B)
+  (cond [(or (univ-pair-set? A) (univ-pair-set? B))  univ-pair-set]
+        [(empty-pair-set? A)  B]
+        [(empty-pair-set? B)  A]
+        [else  (match-define (prod-set A1 A2) A)
+               (match-define (prod-set B1 B2) B)
+               (prod-set (set-join A1 B1) (set-join A2 B2))]))
+
+(: pair-set-member? (Pair-Set (Pair Value Value) -> Boolean))
+(define (pair-set-member? A a)
+  (cond [(empty-pair-set? A)  #f]
+        [(univ-pair-set? A)   #t]
+        [else  (match-define (prod-set A1 A2) A)
+               (match-define (cons a1 a2) a)
+               (and (set-member? A1 a1) (set-member? A2 a2))]))
+
+(: pair-set-singleton ((Pair Value Value) -> Pair-Set))
+(define (pair-set-singleton a)
+  (match-define (cons a1 a2) a)
+  (set-prod (set-singleton a1) (set-singleton a2)))
 
 ;; ---------------------------------------------------------------------------------------------------
-;; Sets of singleton types (e.g. Null or 'bob)
+;; Nulls
 
-(struct: (X) empty-singleton-set ([value : X]) #:transparent)
-(struct: (X) univ-singleton-set ([value : X]) #:transparent)
-(define-type (Singleton-Set X) (U (empty-singleton-set X) (univ-singleton-set X)))
+(struct: Base-Null-Set () #:transparent)
+(define-singleton-type Empty-Null-Set Base-Null-Set empty-null-set)
+(define-singleton-type Univ-Null-Set Base-Null-Set univ-null-set)
 
-(: singleton-set-ops (All (X) (X -> (set (Singleton-Set X) X))))
-(define (singleton-set-ops a)
-  (define empty (empty-singleton-set a))
-  (define univ   (univ-singleton-set a))
-  (set empty
-       univ
-       ;; meet
-       (λ: ([A : (Singleton-Set X)] [B : (Singleton-Set X)])
-         (cond [(or (empty-singleton-set? A) (empty-singleton-set? B))  empty]
-               [else  univ]))
-       ;; join
-       (λ: ([A : (Singleton-Set X)] [B : (Singleton-Set X)])
-         (cond [(or (univ-singleton-set? A) (univ-singleton-set? B))  univ]
-               [else  empty]))
-       ;; member?
-       (λ: ([A : (Singleton-Set X)] [a : X])
-         (if (empty-singleton-set? A) #f #t))
-       ;; singleton
-       (λ: ([a : X]) univ)))
+(define-type Null-Set (U Empty-Null-Set Univ-Null-Set))
+(define null-set? Base-Null-Set?)
 
-(define-type Null-Set (Singleton-Set Null))
-(define null-set-ops ((inst singleton-set-ops Null) null))
+(: null-set-meet (Null-Set Null-Set -> Null-Set))
+(define (null-set-meet A B)
+  (cond [(or (empty-null-set? A) (empty-null-set? B))  empty-null-set]
+        [(univ-null-set? A)  B]
+        [(univ-null-set? B)  A]))
 
+(: null-set-join (Null-Set Null-Set -> Null-Set))
+(define (null-set-join A B)
+  (cond [(or (univ-null-set? A) (univ-null-set? B))  univ-null-set]
+        [(empty-null-set? A)  B]
+        [(empty-null-set? B)  A]))
+
+(: null-set-member? (Null-Set Null -> Boolean))
+(define (null-set-member? A a)
+  (cond [(empty-null-set? A)  #f]
+        [(univ-null-set? A)   #t]))
+
+(: null-set-singleton (Null -> Null-Set))
+(define (null-set-singleton a)
+  univ-null-set)
+
+#|
 ;; ---------------------------------------------------------------------------------------------------
 ;; Sets containing ⊥ (e.g. sets of (Maybe Bool))
 
-(struct: (S) only-just ([set : S]) #:transparent)
-(struct: (S) with-bot ([set : S]) #:transparent)
-(define-type (Maybe-Set S) (U (only-just S) (with-bot S)))
+(struct: Maybe-Set-Base () #:transparent)
+(struct: only-just Maybe-Set-Base ([set : Set]) #:transparent)
+(struct: with-bot Maybe-Set-Base ([set : Set]) #:transparent)
 
-(: without-bot (All (S) ((Maybe-Set S) -> S)))
-(define (without-bot A)
+(define-type Maybe-Set (U only-just with-bot))
+(define maybe-set? Maybe-Set-Base?)
+
+(: maybe-set-subtract-bot (Maybe-Set -> Set))
+(define (maybe-set-subtract-bot A)
   (match A
     [(only-just A)  A]
     [(with-bot A)   A]))
 
-;; instance set S X => set (Maybe-Set S) (Maybe X) where ...
-(: maybe-set-ops (All (S X) ((set S X) -> (set (Maybe-Set S) (Maybe X)))))
-(define (maybe-set-ops ops)
-  (set (only-just (set-empty ops))
-       (with-bot  (set-univ  ops))
-       ;; meet
-       (λ: ([A : (Maybe-Set S)] [B : (Maybe-Set S)])
-         (match* (A B)
-           [((with-bot A)  (with-bot B))   (with-bot  ((set-meet ops) A B))]
-           [((with-bot A)  (only-just B))  (only-just ((set-meet ops) A B))]
-           [((only-just A) (with-bot B))   (only-just ((set-meet ops) A B))]
-           [((only-just A) (only-just B))  (only-just ((set-meet ops) A B))]))
-       ;; join
-       (λ: ([A : (Maybe-Set S)] [B : (Maybe-Set S)])
-         (match* (A B)
-           [((with-bot A)  (with-bot B))   (with-bot  ((set-join ops) A B))]
-           [((with-bot A)  (only-just B))  (with-bot  ((set-join ops) A B))]
-           [((only-just A) (with-bot B))   (with-bot  ((set-join ops) A B))]
-           [((only-just A) (only-just B))  (only-just ((set-join ops) A B))]))
-       ;; member?
-       (λ: ([A : (Maybe-Set S)] [b : (Maybe X)])
-         (match* (A b)
-           [((with-bot A)  (just b))  ((set-member? ops) A b)]
-           [((only-just A) (just b))  ((set-member? ops) A b)]
-           [((with-bot A)  _)  #t]
-           [((only-just A) _)  #f]))
-       ;; singleton
-       (λ: ([a : (Maybe X)])
-         (match a
-           [(just a)  (only-just ((set-singleton ops) a))]
-           [_         (with-bot  (set-empty ops))]))))
+(: maybe-set-meet (Maybe-Set Maybe-Set -> Maybe-Set))
+(define (maybe-set-meet A B)
+  (match* (A B)
+    [((with-bot A)  (with-bot B))   (with-bot  (set-meet A B))]
+    [((with-bot A)  (only-just B))  (only-just (set-meet A B))]
+    [((only-just A) (with-bot B))   (only-just (set-meet A B))]
+    [((only-just A) (only-just B))  (only-just (set-meet A B))]))
+
+(: maybe-set-join (Maybe-Set Maybe-Set -> Maybe-Set))
+(define (maybe-set-join A B)
+  (match* (A B)
+    [((with-bot A)  (with-bot B))   (with-bot  (set-join A B))]
+    [((with-bot A)  (only-just B))  (with-bot  (set-join A B))]
+    [((only-just A) (with-bot B))   (with-bot  (set-join A B))]
+    [((only-just A) (only-just B))  (only-just (set-join A B))]))
+
+(: maybe-set-member? (Maybe-Set (Maybe Value) -> Boolean))
+(define (maybe-set-member? A a)
+  (match* (A a)
+    [((with-bot A)  (just a))  (set-member? A a)]
+    [((only-just A) (just a))  (set-member? A a)]
+    [((with-bot A)  _)  #t]
+    [((only-just A) _)  #f]))
+
+(: maybe-set-singleton ((Maybe Value) -> Maybe-Set))
+(define (maybe-set-singleton a)
+  (match a
+    [(just a)  (only-just (set-singleton a))]
+    [_         (with-bot  empty-set)]))
+|#
+
+;; ===================================================================================================
+;; Sets of countable vectors with at most finitely many restricted axes
+
+(define-type Tree-Index (Listof Boolean))
+
+(: index-left (Tree-Index -> Tree-Index))
+(define (index-left j) (cons #t j))
+
+(: index-right (Tree-Index -> Tree-Index))
+(define (index-right j) (cons #f j))
+
+(define j0 '())
+
+;; ---------------------------------------------------------------------------------------------------
+
+(struct: Tree-Val-Base () #:transparent)
+(struct: tree-val-node Tree-Val-Base ([value : Value] [left : Tree-Val] [right : Tree-Val])
+  #:transparent)
+(define-singleton-type Any-Tree-Val Tree-Val-Base any-tree-val)
+
+(define-type Tree-Val (U Any-Tree-Val tree-val-node))
+(define tree-val? Tree-Val-Base?)
+
+(: tree-val-ref (All (X) (Tree-Index Tree-Val -> Value)))
+(define (tree-val-ref j t)
+  (define j0 j)
+  (let loop ([j j] [t t])
+    (match t
+      [(? any-tree-val?)  (error 'tree-val-ref "indeterminate value at ~e" j0)]
+      [(tree-val-node x l r)  (cond [(empty? j)  x]
+                                    [(first j)  (loop (rest j) l)]
+                                    [else       (loop (rest j) r)])])))
+
+;; ---------------------------------------------------------------------------------------------------
+
+(struct: Base-Tree-Set () #:transparent)
+(struct: Tree-Set-Node Base-Tree-Set ([axis : Set] [left : Tree-Set] [right : Tree-Set])
+  #:transparent)
+(define-singleton-type Empty-Tree-Set Base-Tree-Set empty-tree-set)
+(define-singleton-type Univ-Tree-Set Base-Tree-Set univ-tree-set)
+
+(define-type Tree-Set (U Empty-Tree-Set Univ-Tree-Set Tree-Set-Node))
+(define tree-set? Base-Tree-Set?)
+
+(: tree-set-node (Set Tree-Set Tree-Set -> Tree-Set))
+(define (tree-set-node A L R)
+  (cond [(or (set-empty? A) (empty-tree-set? L) (empty-tree-set? R))  empty-tree-set]
+        [(and (univ-set? A) (univ-tree-set? L) (univ-tree-set? R))  univ-tree-set]
+        [else  (Tree-Set-Node A L R)]))
+
+(: tree-set-meet (Tree-Set Tree-Set -> Tree-Set))
+(define (tree-set-meet A1 A2)
+  (cond [(or (empty-tree-set? A1) (empty-tree-set? A2))  empty-tree-set]
+        [(univ-tree-set? A1)  A2]
+        [(univ-tree-set? A2)  A1]
+        [else  (match-let ([(Tree-Set-Node A1 L1 R1)  A1]
+                           [(Tree-Set-Node A2 L2 R2)  A2])
+                 (tree-set-node (set-meet A1 A2) (tree-set-meet L1 L2) (tree-set-meet R1 R2)))]))
+
+(: tree-set-join (Tree-Set Tree-Set -> Tree-Set))
+(define (tree-set-join A1 A2)
+  (cond [(or (univ-tree-set? A1) (univ-tree-set? A2))  univ-tree-set]
+        [(empty-tree-set? A1)  A2]
+        [(empty-tree-set? A2)  A1]
+        [else  (match-let ([(Tree-Set-Node A1 L1 R1)  A1]
+                           [(Tree-Set-Node A2 L2 R2)  A2])
+                 (tree-set-node (set-join A1 A2) (tree-set-join L1 L2) (tree-set-join R1 R2)))]))
+
+(: tree-set-member? (Tree-Set Tree-Val -> Boolean))
+(define (tree-set-member? A a)
+  (cond [(empty-tree-set? A)  #f]
+        [(univ-tree-set? A)   #t]
+        [(any-tree-val? a)  (error 'tree-set-member? "indeterminate value")]
+        [else  (match-let ([(Tree-Set-Node A L R)  A]
+                           [(tree-val-node a l r)  a])
+                 (and (set-member? A a) (tree-set-member? L l) (tree-set-member? R r)))]))
+
+(: tree-set-singleton (Tree-Val -> Tree-Set))
+(define (tree-set-singleton a)
+  (match a
+    [(? any-tree-val?)  univ-tree-set]
+    [(tree-val-node a l r)  (tree-set-node (set-singleton a)
+                                           (tree-set-singleton l)
+                                           (tree-set-singleton r))]))
+
+(: tree-set-project (Tree-Index Tree-Set -> Set))
+(define (tree-set-project j A)
+  (cond [(empty-tree-set? A)  empty-set]
+        [(univ-tree-set? A)   univ-set]
+        [(empty? j)  (Tree-Set-Node-axis A)]
+        [(first j)   (tree-set-project (rest j) (Tree-Set-Node-left A))]
+        [else        (tree-set-project (rest j) (Tree-Set-Node-right A))]))
+
+(: tree-set-unproject (Tree-Index Tree-Set Set -> Tree-Set))
+(define (tree-set-unproject j A B)
+  (let loop ([j j] [A A])
+    (cond [(empty-tree-set? A)  empty-tree-set]
+          [(univ-tree-set? A)   (loop j (Tree-Set-Node univ-set univ-tree-set univ-tree-set))]
+          [else  (match-let ([(Tree-Set-Node A L R)  A])
+                   (cond [(empty? j)  (tree-set-node (set-meet A B) L R)]
+                         [(first j)   (tree-set-node A (loop (rest j) L) R)]
+                         [else        (tree-set-node A L (loop (rest j) R))]))])))

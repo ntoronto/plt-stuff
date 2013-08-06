@@ -1,7 +1,6 @@
 #lang typed/racket
 
 (require "set.rkt"
-         "tree-set.rkt"
          "pre-mapping.rkt"
          "pre-arrow.rkt")
 
@@ -10,177 +9,96 @@
 ;; ===================================================================================================
 ;; Preimage arrow
 
-(define-type Maybe-Bool-Set (Maybe-Set Bool-Set))
-(define maybe-bool-set-ops (maybe-set-ops bool-set-ops))
+(define-type Pre*-Arrow (Tree-Index -> Pre-Arrow))
 
-(define-type RSet (Tree-Set Real-Set))
-(define-type TSet (Tree-Set (Maybe-Set Bool-Set)))
+(: lift/pre* (Pre-Arrow -> Pre*-Arrow))
+(define ((lift/pre* h) j)
+  (snd/pre . >>>/pre . h))
 
-(define-type (Pre*-Arrow S1 S2) (Tree-Index -> (Pre-Arrow (Pair-Set (Pair-Set RSet TSet) S1) S2)))
+(: >>>/pre* (Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
+(define ((>>>/pre* k1 k2) j)
+  ((fst/pre . &&&/pre . (k1 (index-left j))) . >>>/pre . (k2 (index-right j))))
 
-(define full-rset-axis (interval 0.0 1.0))
-(define full-tset-axis (with-bot univ-bool-set))
+(: &&&/pre* (Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
+(define ((&&&/pre* k1 k2) j)
+  ((k1 (index-left j)) . &&&/pre . (k2 (index-right j))))
 
-(define rset-ops (tree-set-ops real-set-ops full-rset-axis))
-(define tset-ops (tree-set-ops maybe-bool-set-ops full-tset-axis))
-(define store-set-ops (pair-set-ops rset-ops tset-ops))
+(: if/pre* (Pre*-Arrow Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
+(define ((if/pre* k1 k2 k3) j)
+  (if/pre (k1 (index-left j))
+          (k2 (index-left (index-right j)))
+          (k3 (index-right (index-right j)))))
 
-(: >>>/pre* (All (S1 X1 S2 X2 S3 X3)
-                 ((set S1 X1)
-                  (set S2 X2)
-                  (set S3 X3)
-                  -> ((Pre*-Arrow S1 S2) (Pre*-Arrow S2 S3) -> (Pre*-Arrow S1 S3)))))
-(define (>>>/pre* ops1 ops2 ops3)
-  (define fst (fst/pre store-set-ops ops1))
-  (define &&& (&&&/pre (pair-set-ops store-set-ops ops1) store-set-ops ops2))
-  (define >>> (>>>/pre (pair-set-ops store-set-ops ops1) (pair-set-ops store-set-ops ops2) ops3))
-  (λ (k1 k2)
-    (λ (j) ((fst . &&& . (k1 (index-left j))) . >>> . (k2 (index-right j))))))
+(: lazy/pre* ((Promise Pre*-Arrow) -> Pre*-Arrow))
+(define ((lazy/pre* k) j)
+  (lazy/pre (delay ((force k) j))))
 
-(: &&&/pre* (All (S1 X1 S2 X2 S3 X3)
-                 ((set S1 X1)
-                  (set S2 X2)
-                  (set S3 X3)
-                  -> ((Pre*-Arrow S1 S2) (Pre*-Arrow S1 S3) -> (Pre*-Arrow S1 (Pair-Set S2 S3))))))
-(define (&&&/pre* ops1 ops2 ops3)
-  (define &&& (&&&/pre (pair-set-ops store-set-ops ops1) ops2 ops3))
-  (λ (k1 k2)
-    (λ (j) ((k1 (index-left j)) . &&& . (k2 (index-right j))))))
+(: id/pre* Pre*-Arrow)
+(define id/pre* (lift/pre* id/pre))
 
-(: if/pre* (All (S S1 X1 S2 X2)
-                ((set S1 X1)
-                 (set S2 X2)
-                 -> ((Pre*-Arrow S1 Bool-Set) (Pre*-Arrow S1 S2) (Pre*-Arrow S1 S2)
-                                              -> (Pre*-Arrow S1 S2)))))
-(define (if/pre* ops1 ops2)
-  (define ifte (if/pre (pair-set-ops store-set-ops ops1) ops2))
-  (λ (k1 k2 k3)
-    (λ (j) (ifte (k1 (index-left j))
-                 (k2 (index-left (index-right j)))
-                 (k3 (index-right (index-right j)))))))
+(: const/pre* (Value -> Pre*-Arrow))
+(define (const/pre* b) (lift/pre* (const/pre b)))
 
-(: lazy/pre* (All (S1 X1 S2 X2)
-                  ((set S1 X1) (set S2 X2) -> ((-> (Pre*-Arrow S1 S2)) -> (Pre*-Arrow S1 S2)))))
-(define (lazy/pre* ops1 ops2)
-  (define lazy (lazy/pre (pair-set-ops store-set-ops ops1) ops2))
-  (λ (k)
-    (λ (j) (lazy (λ () ((k) j))))))
+(: fst/pre* Pre*-Arrow)
+(define fst/pre* (lift/pre* fst/pre))
 
-
-(: lift/pre* (All (S1 X1 S2 X2)
-                  ((set S1 X1) (set S2 X2) -> ((Pre-Arrow S1 S2) -> (Pre*-Arrow S1 S2)))))
-(define (lift/pre* ops1 ops2)
-  (define snd (snd/pre store-set-ops ops1))
-  (define >>> (>>>/pre (pair-set-ops store-set-ops ops1) ops1 ops2))
-  (λ (h)
-    (λ (j) (snd . >>> . h))))
-
-(: id/pre* (All (S X) ((set S X) -> (Pre*-Arrow S S))))
-(define (id/pre* ops) ((lift/pre* ops ops) (id/pre ops)))
-
-(: const/pre* (All (S1 X1 S2 X2) ((set S1 X1) (set S2 X2) -> (X2 -> (Pre*-Arrow S1 S2)))))
-(define ((const/pre* ops1 ops2) a2)
-  ((lift/pre* ops1 ops2) ((const/pre ops1 ops2) a2)))
-
-(: fst/pre* (All (S1 X1 S2 X2) ((set S1 X1) (set S2 X2) -> (Pre*-Arrow (Pair-Set S1 S2) S1))))
-(define (fst/pre* ops1 ops2)
-  ((lift/pre* (pair-set-ops ops1 ops2) ops1) (fst/pre ops1 ops2)))
-
-(: snd/pre* (All (S1 X1 S2 X2) ((set S1 X1) (set S2 X2) -> (Pre*-Arrow (Pair-Set S1 S2) S2))))
-(define (snd/pre* ops1 ops2)
-  ((lift/pre* (pair-set-ops ops1 ops2) ops2) (snd/pre ops1 ops2)))
+(: snd/pre* Pre*-Arrow)
+(define snd/pre* (lift/pre* snd/pre))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Random numbers
 
-(define project-real (project real-set-ops full-rset-axis))
-(define unproject-real (unproject real-set-ops full-rset-axis))
-
-(: random/pre (Tree-Index -> (Pre-Arrow RSet Real-Set)))
+(: random/pre (Tree-Index -> Pre-Arrow))
 (define ((random/pre j) A)
-  (pre-mapping (project-real j A)
-               (λ: ([B : Real-Set]) (unproject-real j A B))))
+  (pre-mapping (set-meet unit-ivl (set-project j A))
+               (λ: ([B : Set]) (set-unproject j A B))))
 
-(: random/pre* (All (S X) ((set S X) -> (Pre*-Arrow S Real-Set))))
-(define (random/pre* ops)
-  (define fst0 (fst/pre store-set-ops ops))
-  (define >>>0 (>>>/pre (pair-set-ops store-set-ops ops) store-set-ops real-set-ops))
-  (define fst1 (fst/pre rset-ops tset-ops))
-  (define >>>1 (>>>/pre store-set-ops rset-ops real-set-ops))
-  (λ (j)
-    (fst0 . >>>0 . (fst1 . >>>1 . (random/pre j)))))
+(: random/pre* Pre*-Arrow)
+(define (random/pre* j)
+  ((fst/pre . >>>/pre . fst/pre) . >>>/pre . (random/pre j)))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Conditional that always converges
 
-(define project-bool (project maybe-bool-set-ops full-tset-axis))
-(define unproject-bool (unproject maybe-bool-set-ops full-tset-axis))
-
-(: branch/pre (Tree-Index -> (Pre-Arrow TSet Bool-Set)))
+(: branch/pre (Tree-Index -> Pre-Arrow))
 (define ((branch/pre j) A)
-  (pre-mapping (without-bot (project-bool j A))
-               (λ: ([B : Bool-Set]) (unproject-bool j A (only-just B)))))
+  (pre-mapping (set-meet univ-bool-set (set-project j A))
+               (λ: ([B : Set]) (set-unproject j A B))))
 
-(: branch/pre* (All (S X) ((set S X) -> (Pre*-Arrow S Bool-Set))))
-(define (branch/pre* ops)
-  (define fst0 (fst/pre store-set-ops ops))
-  (define >>>0 (>>>/pre (pair-set-ops store-set-ops ops) store-set-ops bool-set-ops))
-  (define snd1 (snd/pre rset-ops tset-ops))
-  (define >>>1 (>>>/pre store-set-ops tset-ops bool-set-ops))
-  (λ (j)
-    (fst0 . >>>0 . (snd1 . >>>1 . (branch/pre j)))))
+(: branch/pre* Pre*-Arrow)
+(define (branch/pre* j)
+  (fst/pre . >>>/pre . (snd/pre . >>>/pre . (branch/pre j))))
 
-(: convif/pre* (All (S S1 X1 S2 X2)
-                    ((set S1 X1)
-                     (set S2 X2)
-                     -> ((Pre*-Arrow S1 Bool-Set) (Pre*-Arrow S1 S2) (Pre*-Arrow S1 S2)
-                                                  -> (Pre*-Arrow S1 S2)))))
-(define (convif/pre* ops1 ops2)
-  (define branch1 (branch/pre* ops1))
-  (define ops (pair-set-ops store-set-ops ops1))
-  (define meet (set-meet ops))
-  (define join (set-join ops))
-  (define empty? (set-empty? ops))
-  (define empty-pre (empty-pre-mapping ops ops2))
-  (define univ2 (set-univ ops2))
-  (define plus (pre-plus ops ops2))
-  (λ (k1 k2 k3)
-    (λ (j)
-      (λ (A)
-        (match-define (pre-mapping Ck pk) ((k1 (index-left j)) A))
-        (match-define (pre-mapping Cb pb) ((branch1 j) A))
-        (define C (bool-set-meet Ck Cb))
-        (define C2 (bool-set-meet C #t))
-        (define C3 (bool-set-meet C #f))
-        (define A2 (meet (pk C2) (pb C2)))
-        (define A3 (meet (pk C3) (pb C3)))
-        (cond [(univ-bool-set? Cb)
-               (pre-mapping univ2 (λ: ([B : S2]) (join A2 A3)))]
-              [else
-               (plus ((k2 (index-left (index-right j))) A2)
-                     ((k3 (index-right (index-right j))) A3))])))))
+(: convif/pre* (Pre*-Arrow Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
+(define (((convif/pre* k1 k2 k3) j) A)
+  (match-define (pre-mapping Ck pk) ((k1 (index-left j)) A))
+  (match-define (pre-mapping Cb pb) ((branch/pre* j) A))
+  (define C (set-meet Ck Cb))
+  (define C2 (set-meet C true-set))
+  (define C3 (set-meet C false-set))
+  (define A2 (set-meet (pk C2) (pb C2)))
+  (define A3 (set-meet (pk C3) (pb C3)))
+  (cond [(univ-bool-set? Cb)
+         (define A (set-join A2 A3))
+         (pre-mapping univ-set (λ: ([B : Set]) (if (set-empty? B) empty-set A)))]
+        [else
+         (pre-plus ((k2 (index-left (index-right j))) A2)
+                   ((k3 (index-right (index-right j))) A3))]))
 
 ;; ===================================================================================================
 
-(: halt-on-true/pre* (Pre*-Arrow Bool-Set Bool-Set))
+(pre-ap ((random/pre* j0) (set-prod (set-prod univ-tree-set univ-tree-set) univ-null-set))
+        (ivl 0.0 0.5))
+
+(: halt-on-true/pre* Pre*-Arrow)
 (define halt-on-true/pre*
-  ((convif/pre* bool-set-ops bool-set-ops)
-   (id/pre* bool-set-ops)
-   (id/pre* bool-set-ops)
-   ((lazy/pre* bool-set-ops bool-set-ops) (λ () halt-on-true/pre*))))
+  (convif/pre* id/pre* id/pre* (lazy/pre* (delay halt-on-true/pre*))))
 
-((pre-ap (pair-set-ops store-set-ops bool-set-ops) bool-set-ops)
- ((halt-on-true/pre* j0) univ-pair-set) 
- #t)
+(pre-ap ((halt-on-true/pre* j0) univ-set) true-set)
+(pre-ap ((halt-on-true/pre* j0) univ-set) false-set)
 
-((pre-ap (pair-set-ops store-set-ops bool-set-ops) bool-set-ops)
- ((halt-on-true/pre* j0) univ-pair-set)
- #f)
-
-((pre-ap (pair-set-ops store-set-ops bool-set-ops) bool-set-ops)
- ((halt-on-true/pre* j0) ((set-prod store-set-ops bool-set-ops)
-                          ((set-prod rset-ops tset-ops)
-                           univ-tree-set
-                           (unproject-bool '() univ-tree-set (only-just #f)))
-                          univ-bool-set))
+(pre-ap
+ ((halt-on-true/pre* j0) (set-prod (set-prod univ-tree-set
+                                             (set-unproject '() univ-tree-set false-set))
+                                   univ-bool-set))
  univ-bool-set)
