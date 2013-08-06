@@ -1,6 +1,7 @@
-#lang typed/racket
+#lang typed/racket/base
 
-(require "set.rkt"
+(require racket/promise
+         "set.rkt"
          "pre-mapping.rkt")
 
 (provide (all-defined-out))
@@ -28,7 +29,7 @@
 
 (: lazy/pre ((Promise Pre-Arrow) -> Pre-Arrow))
 (define ((lazy/pre h) A)
-  (if (set-empty? A) empty-pre-mapping ((force h) A)))
+  (if (empty-set? A) empty-pre-mapping ((force h) A)))
 
 (: id/pre Pre-Arrow)
 (define (id/pre A)
@@ -36,7 +37,7 @@
 
 (: const/pre (Value -> Pre-Arrow))
 (define ((const/pre b) A)
-  (pre-mapping (set-singleton b) (λ: ([B : Set]) (if (set-empty? B) empty-set A))))
+  (pre-mapping (set-singleton b) (λ: ([B : Set]) (if (empty-set? B) empty-set A))))
 
 (: fst/pre Pre-Arrow)
 (define (fst/pre A)

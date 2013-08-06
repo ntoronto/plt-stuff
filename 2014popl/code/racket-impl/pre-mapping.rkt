@@ -1,6 +1,7 @@
-#lang typed/racket
+#lang typed/racket/base
 
-(require "set.rkt")
+(require racket/match
+         "set.rkt")
 
 (provide (all-defined-out))
 

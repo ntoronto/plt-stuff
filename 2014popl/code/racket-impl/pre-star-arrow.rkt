@@ -1,6 +1,8 @@
-#lang typed/racket
+#lang typed/racket/base
 
-(require "set.rkt"
+(require racket/promise
+         racket/match
+         "set.rkt"
          "pre-mapping.rkt"
          "pre-arrow.rkt")
 
@@ -62,7 +64,7 @@
 
 (: branch/pre (Tree-Index -> Pre-Arrow))
 (define ((branch/pre j) A)
-  (pre-mapping (set-meet univ-bool-set (set-project j A))
+  (pre-mapping (set-meet bools-set (set-project j A))
                (λ: ([B : Set]) (set-unproject j A B))))
 
 (: branch/pre* Pre*-Arrow)
@@ -78,16 +80,16 @@
   (define C3 (set-meet C false-set))
   (define A2 (set-meet (pk C2) (pb C2)))
   (define A3 (set-meet (pk C3) (pb C3)))
-  (cond [(univ-bool-set? Cb)
+  (cond [(bools-set? Cb)
          (define A (set-join A2 A3))
-         (pre-mapping univ-set (λ: ([B : Set]) (if (set-empty? B) empty-set A)))]
+         (pre-mapping univ-set (λ: ([B : Set]) (if (empty-set? B) empty-set A)))]
         [else
          (pre-plus ((k2 (index-left (index-right j))) A2)
                    ((k3 (index-right (index-right j))) A3))]))
 
 ;; ===================================================================================================
 
-(pre-ap ((random/pre* j0) (set-prod (set-prod univ-tree-set univ-tree-set) univ-null-set))
+(pre-ap ((random/pre* j0) (set-prod (set-prod univ-tree-set univ-tree-set) null-set))
         (ivl 0.0 0.5))
 
 (: halt-on-true/pre* Pre*-Arrow)
@@ -100,5 +102,5 @@
 (pre-ap
  ((halt-on-true/pre* j0) (set-prod (set-prod univ-tree-set
                                              (set-unproject '() univ-tree-set false-set))
-                                   univ-bool-set))
- univ-bool-set)
+                                   bools-set))
+ bools-set)
