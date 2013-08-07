@@ -98,9 +98,11 @@
 
 (pre-ap ((halt-on-true/pre* j0) univ-set) true-set)
 (pre-ap ((halt-on-true/pre* j0) univ-set) false-set)
+(pre-ap ((halt-on-true/pre* j0) univ-set) bools-set)
 
 (pre-ap
  ((halt-on-true/pre* j0) (set-prod (set-prod univ-tree-set
                                              (set-unproject '() univ-tree-set false-set))
                                    bools-set))
  bools-set)
+

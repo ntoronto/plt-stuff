@@ -26,7 +26,7 @@ class LatticeSet s => MeasurableSet s where
 
 union :: MeasurableSet s => [s] -> [s]
 union [] = []
-union (a:as) = a : concatMap (\\ a) as
+union (a:as) = a : union (concatMap (\\ a) as)
 
 
 class MeasurableSet s => LebesgueMeasurableSet s where

@@ -78,11 +78,10 @@ setRandomBool' p = PreArrow' (\j -> runPreArrow' setRandom' j ~>>> setLTConst p)
 
 -- Index branch traces (not used directly in translations)
 
-setBranch :: TreeIndex -> PreArrow TSet BoolSet
-setBranch j = PreArrow (\a -> PreMapping (withoutNothing (project j a))
-                                         (\b -> unproject j a (OnlyJust b)))
+setBranch :: TreeIndex -> PreArrow TSet (MaybeSet BoolSet)
+setBranch j = PreArrow (\a -> PreMapping (project j a) (unproject j a))
 
-setBranch' :: LatticeSet s1 => PreArrow' s1 BoolSet
+setBranch' :: LatticeSet s1 => PreArrow' s1 (MaybeSet BoolSet)
 setBranch' = PreArrow' (\j -> setFst ~>>> setSnd ~>>> setBranch j)
 
 -- A conditional that always converges by never taking more than one branch
@@ -96,12 +95,12 @@ setIfte' k1 k2 k3 =
         (\a ->
           let PreMapping ck pk = runPreArrow (runPreArrow' k1 (indexLeft j)) a
               PreMapping cb pb = runPreArrow (runPreArrow' setBranch' j) a
-              c = ck /\ cb
+              c = ck /\ withoutNothing cb
               c2 = c /\ singleton True
               c3 = c /\ singleton False
-              a2 = pk c2 /\ pb c2
-              a3 = pk c3 /\ pb c3
-            in case cb of
+              a2 = pk c2 /\ pb (OnlyJust c2)
+              a3 = pk c3 /\ pb (OnlyJust c3)
+            in case withoutNothing cb of
                  UnivBoolSet -> PreMapping univ (\b -> a2 \/ a3)
                  TrueSet -> runPreArrow (runPreArrow' k2 (indexLeft (indexRight j))) a2
                  FalseSet -> runPreArrow (runPreArrow' k3 (indexRight (indexRight j))) a3

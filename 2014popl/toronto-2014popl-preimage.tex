@@ -1660,7 +1660,7 @@ Using $branch\genc$, we define an additional if-then-else combinator, which ensu
 	&\begin{aligned}
 		&\arrowconvif\genc : (x \arrow\genc Bool) \tto (x \arrow\genc y) \tto (x \arrow\genc y) \tto (x \arrow\genc y) \\
 		&\arrowconvif\genc~k_1~k_2~k_3~j \ := \\
-		&\tab \arrowconvif\gen~\lzfcsplit{
+		&\tab \arrowif\gen~\lzfcsplit{
 				&((k_1~(left~j)~\arrowpair\gen~branch\genc~j)~\arrowcomp\gen~\arrowarr\gen~agrees) \\
 				&(k_2~(left~(right~j))) \\
 				&(k_3~(right~(right~j)))
@@ -2246,38 +2246,31 @@ We recover some generality by stating correctness theorems in terms of general p
 \begin{align*}
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		%&id\pre : X \preto X \\
-		&\arrpre~id~A \ \equiv \ \pair{A,\fun{B}{B}}
+		id\pre~A &\ := \ \arrpre~id~A &&\!\!\!\!\equiv \ \pair{A,\fun{B}{B}} \\
+		fst\pre~A &\ := \ \arrpre~fst~A &&\!\!\!\!\equiv \ \pair{proj_{fst}~A,unproj_{fst}~A} \\
+		snd\pre~A &\ := \ \arrpre~snd~A &&\!\!\!\!\equiv \ \pair{proj_{snd}~A,unproj_{snd}~A}
+	\end{aligned} \\
+\\[-6pt]
+\hline
+\\[-6pt]
+	&\begin{aligned}[t]
+		&proj_{fst} := image~fst;\ \ proj_{snd} := image~snd
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		%&fst\pre : \pair{X,Y} \preto X \\
-		&\arrpre~fst~A \ \equiv \ 
-			\lzfclet{
-				A_1 & image~fst~A \\
-				A_2 & image~snd~A
-			}{\pair{A_1,\fun{B}{A \i (B \times A_2)}}}
-	\end{aligned} \\
-\\[-6pt]
-	&\begin{aligned}[t]
-		%&snd\pre : \pair{X,Y} \preto Y \\
-		&\arrpre~snd~A \ \equiv \ 
-			\lzfclet{
-				A_1 & image~fst~A \\
-				A_2 & image~snd~A
-			}{\pair{A_2,\fun{B}{A \i (A_1 \times B)}}}
-	\end{aligned} \\
+		&unproj_{fst} :: Set~\pair{X_1,X_2} \tto Set~X_1 \tto Set~\pair{X_1,X_2} \\
+		&unproj_{fst}~A~B \lzfcsplit{
+			&\ :=\ preimage~(mapping~fst~A)~B \\[2pt]
+			&\ \;\equiv\ A \i (B \times proj_{snd}~A)
+			%&\ :=\ A \i \prod_{j' \in J} if~(j' = j)~B~(project~j'~A)
+		}
+	\end{aligned}
 \end{aligned}
 &\tab\tab\tab
 \begin{aligned}[t]
 	&\begin{aligned}[t]
-		%&const\pre : Y \tto X \preto Y \\
-		&\arrpre~(const~b)~A \ \equiv \ \pair{\set{b},\fun{B}{if~(B = \emptyset)~\emptyset~A}}
-	\end{aligned} \\
-\\[-6pt]
-	&\begin{aligned}[t]
-		%&\pi\pre : J \tto (J \to X) \preto X \\
-		&\arrpre~(\pi~j)~A \ \equiv \ \pair{project~j~A, unproject~j~A}
+		const\pre~b~A &\ := \ \arrpre~(const~b)~A &&\!\!\!\!\equiv \ \pair{\set{b},\fun{B}{if~(B = \emptyset)~\emptyset~A}} \\
+		\pi\pre~j~A &\ := \ \arrpre~(\pi~j)~A &&\!\!\!\!\equiv \ \pair{project~j~A, unproject~j~A}
 	\end{aligned} \\
 \\[-6pt]
 \hline
@@ -2290,15 +2283,16 @@ We recover some generality by stating correctness theorems in terms of general p
 	&\begin{aligned}[t]
 		&unproject :: J \tto Set~(J \to X) \tto Set~X \tto Set~(J \to X) \\
 		&unproject~j~A~B \lzfcsplit{
-			%&\ :=\ preimage~(mapping~(\pi~j)~A)~B \\[2pt]
-			%&\ \;\equiv\ A \i \prod_{i \in J} if~(j = i)~B~(project~j~A)
-			&\ :=\ A \i \prod_{j' \in J} if~(j' = j)~B~(project~j'~A)
+			&\ :=\ preimage~(mapping~(\pi~j)~A)~B \\[2pt]
+			&\ \;\equiv\ A \i \prod_{i \in J} if~(j = i)~B~(project~j~A)
+			%&\ :=\ A \i \prod_{j' \in J} if~(j' = j)~B~(project~j'~A)
 		}
 	\end{aligned}
 \end{aligned}
 \end{align*}
 \hrule
-\caption{Instances of $\arrpre~f$ necessary for interpreting probabilistic programs.}
+\caption{Preimage arrow lifts needed to interpret probabilistic programs.
+The definition of $unproj_{snd}$ is like $unproj_{fst}$'s.}
 \label{fig:extra-preimage-arrow-defs}
 \end{figure*}
 
@@ -2315,12 +2309,15 @@ Figure~\ref{fig:extra-preimage-arrow-defs} gives expressions equivalent to $\arr
 (We will deal with $agrees$ separately.)
 By inspecting these expressions, we see that we need to model sets in a way that
 the following are representable and can be computed in finite time:
-\begin{itemize}
-	\item $A \i B$, $\emptyset$, $\set{true}$, $\set{false}$ and $\set{b}$ for every $const~b$
-	\item $A_1 \times A_2$, $image~fst~A$ and $image~snd~A$
-	\item $J \to X$, $image~(\pi~j)~A$ and $unproject~j~A~B$
-	\item $A = \emptyset$
-\end{itemize}
+\begin{equation}
+\begin{aligned}
+	&\text{\textbullet\ $A \i B$, $\emptyset$, $\set{true}$, $\set{false}$ and $\set{b}$ for every $const~b$} \\
+	&\text{\textbullet\ $A_1 \times A_2$, $proj_{fst}~A$ and $proj_{snd}~A$} \\
+	&\text{\textbullet\ $J \to X$, $project~j~A$ and $unproject~j~A~B$} \\
+	&\text{\textbullet\ $A = \emptyset$} \\
+\end{aligned}
+\label{eqn:exact-rectangle-ops}
+\end{equation}
 Before addressing computability, we need to define families of sets under which these operations are closed.
 
 \subsection{Rectangular Families}
@@ -2351,7 +2348,7 @@ For example, if $Rect~\Re$ contains all the closed real intervals, then by~\eqre
 For every non-product type $X$, we require $\emptyset \in Rect~X$, a universal set $X \in Rect~X$, singletons $\set{a} \in Rect~X$ for all $a \in X$, and for $Rect~X$ to be closed under intersection.
 It is not hard to show that these properties extend to rectangular families, and that the collection of all rectangular families is closed under products, projections, and $unproject$.
 
-Further, all of the necessary operations can be exactly implemented if finite sets are modeled directly, sets in an ordered space (such as $\Re$) are modeled by intervals, and sets in $Rect~\pair{X_1,X_2}$ are modeled by pairs of type $\pair{Rect~X_1,Rect~X_2}$.
+Further, all of the operations in~\eqref{eqn:exact-rectangle-ops} can be exactly implemented if finite sets are modeled directly, sets in an ordered space (such as $\Re$) are modeled by intervals, and sets in $Rect~\pair{X_1,X_2}$ are modeled by pairs of type $\pair{Rect~X_1,Rect~X_2}$.
 Though $J$ is infinite, sets in $Rect~(J \to X)$ can be modeled by \emph{finite} binary trees of sets in $Rect~X$, because a converging preimage computation can apply $unproject$ only finitely many times to $J \to X$.
 
 We defined one nonrectangular domain: the set of branch traces $T$, which contains every $t \in J \to Bool_\bot$ for which $t~j \neq \bot$ for no more than finitely many $J$.
@@ -2386,17 +2383,16 @@ Under the same conditions, for all $B \subseteq Bool$, $unproject~j~(T' \i T)~B 
 Implementing $\lazypre$ (defined in Figure~\ref{fig:preimage-arrow-defs}) requires computing $pre$, but only for the empty mapping, which is trivial: $pre~\emptyset \equiv \pair{\emptyset,\fun{B}\emptyset}$.
 Implementing the other combinators requires implementing the preimage mapping operations $(\circ\pre)$, $\pair{\cdot,\cdot}\pre$ and $(\uplus\pre)$.
 
-From the preimage mapping definitions (Figure~\ref{fig:preimage-mapping-defs}), we see that $ap\pre$, which $(\circ\pre)$ and $(\uplus\pre)$ depend on, can be implemented directly if $A \i B$ is implemented.
-Given an $ap\pre$ implementation, $(\circ\pre)$ is directly implementable.
+From the preimage mapping definitions (Figure~\ref{fig:preimage-mapping-defs}), we see that $ap\pre$ is defined in terms of $(\i)$ and that $(\circ\pre)$ is defined in terms of $ap\pre$, so $(\circ\pre)$ is directly implementable.
 Unfortunately, we hit a snag with $\pair{\cdot,\cdot}\pre$: it loops over possibly uncountably many members of $B$ in a big union.
 At this point, we need to approximate.
 
 \begin{theorem}[pair preimage overapproximation]
 Let $g_1 \in X \pto Y_1$ and $g_2 \in X \pto Y_2$.
-For all $B \subseteq Y_1 \times Y_2$, $preimage~\pair{g_1,g_2}\map~B \subseteq preimage~g_1~(image~fst~B) \i preimage~g_2~(image~snd~B)$.
+For all $B \subseteq Y_1 \times Y_2$, $preimage~\pair{g_1,g_2}\map~B \subseteq preimage~g_1~(proj_{fst}~B) \i preimage~g_2~(proj_{snd}~B)$.
 \end{theorem}
 \begin{proof}
-By monotonicity of preimages and Lemma~\ref{lem:preimage-under-pairing}.
+By preimage/projection monotonicity and Lemma~\ref{lem:preimage-under-pairing}.
 \end{proof}
 
 Thus, the following replacement:
@@ -2404,13 +2400,13 @@ Thus, the following replacement:
 \begin{aligned}
 	&\pair{\cdot,\cdot}\pre' : (X \prepto Y_1) \tto (X \prepto Y_2) \tto (X \prepto Y_1 \times Y_2) \\
 	&\pair{\pair{Y_1',p_1},\pair{Y_2',p_2}}\pre' \ := \ \\
-	&\tab\pair{Y_1' \times Y_2',\fun{B}{p_1~(image~fst~B) \i p_2~(image~snd~B)}}
+	&\tab\pair{Y_1' \times Y_2',\fun{B}{p_1~(proj_{fst}~B) \i p_2~(proj_{snd}~B)}}
 \end{aligned}
 \end{equation}
 computes covering rectangles of preimages under pairing.
 
 For $(\uplus\pre)$, we need an approximating replacement for $(\u)$ under which rectangular families are closed.
-In other words, we need a lattice join (with respect to $(\subseteq)$) with the following additional properties:
+In other words, we need a lattice join with respect to $(\subseteq)$, with the following additional properties:
 \begin{equation}
 \begin{aligned}
 	(A_1 \times A_2) \join (B_1 \times B_2) &\ = \ (A_1 \join B_1) \times (A_2 \join B_2) \\
@@ -2426,8 +2422,6 @@ For example, if $Rect~\Re$ contains all the closed real intervals, then the foll
 	[a_1,b_1] \vee [a_2,b_2] \ = \ [min~a_1~a_2, max~b_1~b_2]
 \end{aligned}
 \end{equation}
-With this join, $([0,1] \times [0,1]) \join ([2,3] \times [2,3]) = [0,3] \times [0,3]$.
-
 Replacing each union in $(\uplus\pre)$ with a join results in
 \begin{equation}
 \begin{aligned}
@@ -2473,6 +2467,7 @@ A lengthy (elided) sequence of substitutions to the defining expression for $\co
 		A_3 & p_k~C_3 \i p_b~C_3 \\
 	}{(k_2~j_2~A_2) \uplus\pre (k_3~j_3~A_3)}
 \end{aligned}
+\label{eqn:expanded-convifppre}
 \end{equation}
 where $j_1 = left~j$ and so on.
 This has no trace of $agrees$ and clearly preserves rectangularity if $k_1$, $k_2$ and $k_3$ do.
@@ -2480,29 +2475,267 @@ Yet it is still not good enough.
 When $A_2$ and $A_3$ overapproximate $\emptyset$, it takes unnecessary branches, which can lead to divergence.
 In the exact semantics, a well-defined program interpreted using $\convifppre$ never diverges.
 
-Suppose we altered $\convifppre$ to take \emph{no branches} when it would normally take two.
-A program run with $T \subset J \tto Bool_\bot$ 
-XXX: now prove that programs interpreted using this always converge...
+Suppose we defined ${\convifppre}'~k_1~k_2~k_3~j~A$ to take \emph{no branches} when $branch\ppre~j~A$ contains both $true$ and $false$.
+Because $branch\ppre~j~A$ can return $\set{true}$ or $\set{false}$ for at most finitely many $j \in J$, there exists a suffix set $J' \subseteq J$ for which no branches will be taken.
 
-If both $A_2$ and $A_3$ are nonempty, we know the preimage mapping's range is a subset of $Y$ and that the preimages it computes are subsets of $A_2 \join A_3$.
-Therefore, we might replace the $let$ body $(k_2~j_2~A_2) \uplus\pre (k_3~j_3~A_3)$ with
+The returned preimage mapping's range is a subset of $Y$, and the preimages it computes must be subsets of $A_2 \join A_3$.
+Therefore, we might replace the $let$ body in~\eqref{eqn:expanded-convifppre} with
 \begin{equation}
 \begin{aligned}
 	\lzfcsplit{if~
-		&(A_2 = \emptyset~or~A_3 = \emptyset) \\
-		&(k_2~j_2~A_2) \uplus\pre (k_3~j_3~A_3) \\
-		&\pair{Y,\fun{B}\lzfcsplit{A_2 \join A_3}}}
+		&(C_b = \set{true,false}) \\
+		&\pair{Y,\fun{B}\lzfcsplit{A_2 \join A_3}} \\
+		&(k_2~j_2~A_2 \uplus\pre k_3~j_3~A_3)}
 \end{aligned}
 \end{equation}
-which computes the same preimages if $A_2$ or $A_3$ is empty, and takes no branches and overapproximates otherwise.
+which computes the same preimages if $C_b \subset \set{true,false}$, and takes no branches and overapproximates otherwise.
+A well-defined program interpreted using a conditional defined this way should always converge.
 
-We cannot refer to $Y$ in a function definition, however; it is only part of the type of $\convifppre$.
-Thus, we need to add a universal set $\top$ to every $Rect~X$
+Unfortunately, we cannot refer to $Y$ in a function definition: it is only part of the type of $\convifppre$.
+We need a value $\top \in Rect~X$ for every $X$ to represent $X$ itself.
+It should behave exactly as $X$; e.g. $x \in \top$ for all $x \in X$ and $\top \i X' = X'$ for all $X' \subseteq X$.
+Thus, the approximating ${\convifppre}'$ can be written in terms of $\top$ instead of in terms of its (erased) type $Y$.
 
-XXX: for all $X$, $\top \in Rect~X$
+\begin{figure*}[t]\centering
+\begin{minipage}{\textwidth}
+\begin{align*}
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&X \prepto' Y ::= \pair{Rect~Y, Rect~Y \tto Rect~X}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&ap\pre' : (X \prepto' Y) \tto Rect~Y \tto Rect~X \\
+		&ap\pre'~\pair{Y',p}~B \ := \ p~(B \i Y') 
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\circ\pre') : (Y \prepto' Z) \tto (X \prepto' Y) \tto (X \prepto' Z) \\
+		&\pair{Z',p_2} \circ\pre' h_1 \ := \ \pair{Z', \fun{C}{ap\pre'~h_1~(p_2~C)}}
+	\end{aligned} \\
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&\pair{\cdot,\cdot}\pre' : (X \prepto' Y_1) \tto (X \prepto' Y_2) \tto (X \prepto' Y_1 \times Y_2) \\
+		&\pair{\pair{Y_1',p_1},\pair{Y_2',p_2}}\pre' \ := \\
+		&\tab\pair{Y_1' \times Y_2',\fun{B}{p_1~(proj_{fst}~B) \i p_2~(proj_{snd}~B)}}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\uplus\pre') : (X \prepto' Y) \tto (X \prepto' Y) \tto (X \prepto' Y) \\
+		&\pair{Y_1',p_1} \uplus\pre' \pair{Y_2',p_2} \ := \\
+		&\tab\pair{Y_1' \join Y_2',\fun{B}{(ap\pre'~\pair{Y_1',p_1}~B) \join (ap\pre'~\pair{Y_2',p_2}~B)}
+		}
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
+\subcaption{Definitions for approximating preimage mappings that compute rectangular preimage covers.}
+\end{minipage}
+\begin{minipage}{\textwidth}
+\begin{align*}
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&X \preto' Y ::= Rect~X \tto (X \prepto' Y)
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\comppre') : (X \preto' Y) \tto (Y \preto' Z) \tto (X \preto' Z) \\
+		&(h_1~\comppre'~h_2)~A \ := \ 
+			\lzfclet{
+				h_1' & h_1~A \\
+				h_2' & h_2~(range\pre'~h_1')
+			}{h_2' \circ\pre' h_1'}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\pairpre') : (X \preto' Y_1) \tto (X \preto' Y_2) \tto (X \preto' \pair{Y_1,Y_2}) \\
+		&(h_1~\pairpre'~h_2)~A \ := \ \pair{h_1~A,h_2~A}\pre'
+	\end{aligned}
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&\ifpre' : (X \preto' Bool) \tto (X \preto' Y) \tto (X \preto' Y) \tto (X \preto' Y) \\
+		&\ifpre'~h_1~h_2~h_3~A \ := \ 
+			\lzfclet{
+				h_1' & h_1~A \\
+				h_2' & h_2~(ap\pre'~h_1'~\set{true}) \\
+				h_3' & h_3~(ap\pre'~h_1'~\set{false})
+			}{h_2' \uplus\pre' h_3'}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\lazypre' : (1 \tto (X \preto' Y)) \tto (X \preto' Y) \\
+		&\lazypre'~h~A \ := \ if~(A = \emptyset)~\pair{\emptyset,\fun{B}{\emptyset}}~(h~0~A)
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
+\subcaption{An approximating preimage arrow, defined in terms of approximating preimage mappings.}
+\end{minipage}
+\begin{minipage}{\textwidth}
+\begin{align*}
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		X \ppreto' Y &\ ::= \ J \tto (\pair{S,X} \preto' Y) \\
+		S &\ ::= \ (J \to [0,1]) \times (J \to Bool_\bot)
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\compppre') : (X \ppreto' Y) \tto (Y \ppreto' Z) \tto (X \ppreto' Z) \\
+		&(k_1~\compppre'~k_2)~j \ := \\
+			&\tab(fst\pre~\pairpre'~k_1~(left~j))~\comppre'~k_2~(right~j)
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&(\pairppre') : (X \ppreto' Y_1) \tto (X \ppreto' Y_2) \tto (X \ppreto' \pair{Y_1,Y_2}) \\
+		&(k_1~\pairppre'~k_2)~j \ := \ k_1~(left~j)~\pairpre'~k_2~(right~j)
+	\end{aligned} \\
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&\ifppre' : (X \ppreto' Bool) \tto (X \ppreto' Y) \tto (X \ppreto' Y) \tto (X \ppreto' Y) \\
+		&\ifppre'~k_1~k_2~k_3~j \ := \
+			\lzfcsplit{\ifpre'~&(k_1~(left~j)) \\ &(k_2~(left~(right~j))) \\ &(k_3~(right~(right~j)))}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\lazyppre' : (1 \tto (X \ppreto' Y)) \tto (X \ppreto' Y) \\
+		&\lazyppre'~k~j \ := \ \lazypre'~\fun{0}{k~0~j}
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&\arrowtrans\ppre' : (X \preto' Y) \tto (X \ppreto' Y) \\
+		&\arrowtrans\ppre'~f~j \ := \ snd\pre~\comppre'~f
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
+\subcaption{An approximating preimage* arrow, defined in terms of the approximating preimage arrow.}
+\end{minipage}
+\begin{minipage}{\textwidth}
+\begin{align*}
+\begin{aligned}[t]
+ 	&\begin{aligned}[t]
+		&random\ppre' : X \ppreto' [0,1] \\
+		&random\ppre'~j \ := \ fst\pre~\comppre'~fst\pre~\comppre'~\pi\pre~j
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		&branch\ppre' : X \ppreto' Bool \\
+		&branch\ppre'~j \ := \ fst\pre~\comppre'~snd\pre~\comppre'~\pi\pre~j
+	\end{aligned} \\
+\\[-6pt]
+	&\begin{aligned}[t]
+		fst\ppre' := \arrowtrans\ppre'~fst\pre;\ \ snd\ppre' := \arrowtrans\ppre'~snd\pre;\ \ \cdots
+	\end{aligned}
+\end{aligned}
+&\tab\tab
+\begin{aligned}[t]
+	&\begin{aligned}[t]
+		&{\convifppre}' : (X \ppreto' Bool) \tto (X \ppreto' Y) \tto (X \ppreto' Y) \tto (X \ppreto' Y) \\
+		&{\convifppre}'~k_1~k_2~k_3~j \ := \\
+		&\tab\lzfclet{
+			\pair{C_k,p_k} & k_1~j_1~A \\
+			\pair{C_b,p_b} & branch\ppre~j~A \\
+			A_2 & p_k~(C_k \i C_b \i \set{true}) \i p_b~(C_k \i C_b \i \set{true}) \\
+			A_3 & p_k~(C_k \i C_b \i \set{false}) \i p_b~(C_k \i C_b \i \set{false}) \\
+		}{if~(C_b = \set{true,false})~\pair{\top,\fun{B}\lzfcsplit{A_2 \join A_3}}~(k_2~j_2~A_2 \uplus\pre' k_3~j_3~A_3)}
+	\end{aligned}
+\end{aligned}
+\end{align*}
+\hrule
+\subcaption{Additional preimage* arrow combinators, for retrieving random numbers and branch traces, and computing without diverging.}
+\end{minipage}
+\caption{Implementable arrows that approximate preimage arrows.
+Because $\arrpre$ is generally uncomputable, there is no corresponding $\arrpre'$ combinator.
+However, specific lifts such as $fst\pre := \arrpre~fst$ are computable, and are defined in Figure~\ref{fig:extra-preimage-arrow-defs}.}
+\label{fig:approximating-preimage-arrow-defs}
+\end{figure*}
+
+Figure~\ref{fig:approximating-preimage-arrow-defs} shows the final approximating preimage arrow.
+This arrow, the lifts in Figure~\ref{fig:extra-preimage-arrow-defs}, and the semantic function $\meaningof{\cdot}\gen$ in Figure~\ref{fig:semantic-function} define an approximating semantics for partial, probabilistic programs.
+
+\subsection{Correctness}
+
+From here on, ${\meaningof{\cdot}\conv\ppre}'$ interprets programs as approximating preimage* arrow computations using ${\convifppre}'$.
+
+The following theorems assume $h := \meaningof{\mathit{e}}\conv\ppre : X \ppreto Y$ and $h' := {\meaningof{\mathit{e}}\conv\ppre}' : X \ppreto' Y$ for some program $\mathit{e}$.
+Further, define
+\begin{equation}
+\begin{aligned}
+	refine~A &:= ap\pre~(h~j_0~A)~B \\
+	refine'~A &:= ap\pre'~(h'~j_0~A)~B
+\end{aligned}
+\end{equation}
+
+\begin{theorem}[approximation]
+For all $A \in Rect~\pair{S,X}$ and $B \in Rect~Y$, $refine~A \subseteq refine'~A$.
+\end{theorem}
+\begin{proof}By construction.\end{proof}
+
+\begin{theorem}[monotonicity]
+$ap\pre'~(h'~j_0~A)~B$ is monotone in both $A$ and $B$.
+\end{theorem}
+\begin{proof}
+Monotonicity of $ap\pre~(h~j_0~A)~B$ is a property of preimages.
+For $ap\pre'~(h'~j_0~A)~B$, lattice operations, which replace set operations in the approximating combinators, are monotone.\end{proof}
+
+\begin{theorem}[approximate preimages are nonincreasing]
+For all $A \in Rect~\pair{S,X}$ and $B \in Rect~Y$, $refine'~A \subseteq A$.
+\end{theorem}
+\begin{proof}
+XXX: todo
+\end{proof}
+
+
+\begin{corollary}[disjointness of approximate preimages]
+If $A_1$ and $A_2$ are disjoint, then $refine'~A_1$ and $refine'~A_2$ are disjoint.
+\end{corollary}
+
+\subsection{Approximation Limitations}
+
+With disjointness and monotonicity properties, it is natural to suppose that we can compute probabilities of preimages of $B$ by computing preimages with respect to increasingly fine discretizations.
+For example, starting with any partition $\A : Set~(Rect~\pair{S,X})$, we might repeat the following:
+\begin{enumerate}
+	\item Refine every rectangle in $\A$: let $\A' := image~refine'~\A$.
+	\item Partition the rectangles in $\A'$: let $\A := \bigcup\limits_{A' \in \A'} partition~A'$.
+\end{enumerate}
+If the second step always yields finer partitions, it seems the sum of the measures of each rectangle in $\A$ should approach the probability of $B$.
+
+We are not so fortunate: in the limit, we would be computing the \keyword{Jordan outer measure} of the preimage of $B$, which is not always equal to its probability.
+
+For example, suppose we extend the language with real numbers---which is reasonable, given that Bayesian practice requires them.
+If it also has $(<)$, which is also a reasonable extension, it is possible to define $(\ge)$ and thus $(=)$ for real numbers, and thus a $rational?$ function that semidecides rationality by enumerating the rationals and returning $true$ when it finds its input.
+The preimage of $\set{true}$ under $\meaningof{rational?~random}\pmap\conv$ has probability $0$, but its outer Jordan measure is $1$.
+
+Roughly, it is impossible to tightly cover a dense, measurable set with finite partitions.
+
+Fortunately, finite discretization tends to work out anyway.
+In a language with reasonable primitives, programs that halt with probability 1 tend to be piecewise continuous, so preimages of rectangles are finite unions of Jordan-measurable sets.
+These unions are thus Jordan-measurable, so their outer Jordan measure is their probability.
+
+Still, there is one very good reason to not exhaustively discretize.
+Good accuracy would require fine discretization, which is \emph{exponential} in the number of discretized axes.
+For example, a nonrecursive program that contains only 10 uses of $random$ would need to partition 10 axes of $R$.
+Splitting each into only 4 intervals yields a partition of $R$ of size $4^{10} = 1,048,576$.
+
+This explosion in time and space is often called the \keyword{curse of dimensionality}.
+One way to avoid it is to sample instead of enumerate, which we do in our main implementation.
+
 
 
 \section{Implementation}
+\label{sec:implementation}
+
+Given a rectangular set library, the approximating semantics defined in Figure~\ref{fig:extra-preimage-arrow-defs} and Figure~\ref{fig:approximating-preimage-arrow-defs} can be implemented with few changes in almost any practical $\lambda$-calculus.
+We have done so in both Typed Racket~[XXX:cite] and Haskell~[XXX:cite].
+
+In Typed Racket, we have also implemented $\meaningof{\cdot}\gen$ from Figure~\ref{fig:semantic-function} and its extension $\meaningof{\cdot}\gen\conv$, targeting both the bottom* arrow and the preimage* arrow.
+
 
 \section{Unrelated Work}
 
