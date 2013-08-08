@@ -164,7 +164,7 @@ There is currently no efficient probabilistic language implementation that simul
 \begin{enumerate}
 	\item Places no extraneous restrictions on legal programs.
 	\item Allows \keyword{conditioning}, or restricting the output in a way that preserves relative probabilities.
-	\item Has a formal semantics. (XXX: implies Coq; change terminology---possibly ``mathematical specification'')
+	\item Has a semantics, or a mathematical specification.
 \end{enumerate}
 In the field of programming languages, there are a few examples of languages that do not restrict legal programs and have a semantics (XXX: cite all).
 Unfortunately, most of the demand for probabilistic languages comes from Bayesian practice, which requires conditioning.
@@ -190,7 +190,7 @@ While $t$'s distribution has a density (a standard bell curve at mean $\mu$), th
 Using densities, this program cannot have a meaning.
 %Placing a condition on the value of $t'$ to discover how restricting its value would affect $\mu$'s distribution---an activity that should be central to Bayesian practice---is unfathomable.
 
-The restrictions placed on legal programs are indeed onerous, if uses of such benign functions as $min$ and $max$ are suspect. (XXX: that sentence bugs Jay for some reason)
+The restrictions placed on programs are indeed onerous, if benign functions such as $min$ and $max$ must be disallowed.
 We cannot even model measuring devices correctly.
 
 \subsection{Measure-Theoretic Probability}
@@ -261,9 +261,9 @@ From top-left to top-right, $X \botto Y$ computations are intensional functions 
 The computations of the arrows in the bottom row are equivalent to those in the top, except they always converge.
 We can do this because in \lzfclang, Turing-uncomputable programs are definable.
 
-Our approximating semantics consists of the same semantic function and an arrow $X \ppreto' Y$, derived from $X \ppreto Y$, for computing conservative approximations of preimages. XXX: try to put a lift from $X \ppreto Y$ to $X \ppreto' Y$ on the diagram
+Our approximating semantics consists of the same semantic function and an arrow $X \ppreto' Y$, derived from $X \ppreto Y$, for computing conservative approximations of preimages.
 
-An implementation implements the semantic function, and $X \botto Y$ and $X \ppreto' Y$ arrows.
+An implementation implements the semantic function, and the $X \botto Y$ and $X \ppreto' Y$ arrows' combinators.
 
 Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram} is a homomorphism.
 We use $\arrowlift$ and $\arrowtrans$ to define the correctness of one arrow in terms of another arrow.
@@ -280,7 +280,7 @@ We write all of the programs in this paper in \lzfclang~\cite{cit:toronto-2012fl
 Generally, contemporary mathematics---measure theory in particular---is done in \keyword{ZFC}: \keyword{Zermelo-Fraenkel} set theory extended with the axiom of \keyword{Choice} (equivalently unique \keyword{Cardinality}).
 ZFC has only first-order functions and no general recursion, which makes implementing a language defined by a transformation into ZFC quite difficult.
 The problem is exacerbated if implementing the language requires approximation.
-Targeting \lzfclang instead allows creating a precise mathematical specification and deriving an approximating implementation without changing languages.
+Targeting \lzfclang instead allows creating a precise mathematical specification and deriving an approximating specification without changing languages.
 
 In \lzfclang, essentially every set is a value, as well as every lambda and every set of lambdas.
 All operations, including operations on infinite sets, are assumed to complete instantly if they converge.\footnote{An example of a diverging \lzfclang function is one that attempts to decide whether arbitrary \lzfclang expressions converge.}
@@ -296,8 +296,8 @@ Only the \emph{existence} of encodings into sets is important, as it means data 
 More precisely, the lengths of paths to data structure leaves is unbounded, but each path must be finite.
 Less precisely, data may be ``infinitely wide'' (such as $\Re$) but not ``infinitely tall'' (such as infinite trees and lists).
 
-We assume data structures, including pairs, are encoded as \emph{primitive} ordered pairs with the first element a unique tag, so they can be distinguished by checking tags.
-Accessors such as $fst$ and $snd$ are trivial to define.
+%We assume data structures, including pairs, are encoded as \emph{primitive} ordered pairs with the first element a unique tag, so they can be distinguished by checking tags.
+%sAccessors such as $fst$ and $snd$ are trivial to define.
 
 \lzfclang is untyped so its users can define an auxiliary type system that best suits their application area.
 For this work, we use a manually checked, polymorphic type system characterized by these rules:
@@ -311,6 +311,7 @@ For this work, we use a manually checked, polymorphic type system characterized 
 \end{itemize}
 The type $Set~X$ denotes the same values as the powerset $\powerset~X$, or \emph{subsets} of $X$.
 Similarly, the type $\pair{X,Y}$ denotes the same values as the product set $X \times Y$.
+XXX: is there subtyping?
 
 We write \lzfclang programs in heavily sugared $\lambda$-calculus syntax, with an $if$ expression and these additional primitives:
 \begin{equation}
@@ -446,7 +447,7 @@ The increment function for the natural numbers, for example, is $\set{\pair{0,1}
 We call extensional functions \mykeyword{mappings} and intensional functions \keyword{lambdas}, and use the word \keyword{function} to mean either.
 For convenience, as with lambdas, we use adjacency (e.g. $(f~x)$) to apply mappings.
 
-Syntax for defining unnamed mappings is defined by
+Syntax for unnamed mappings is defined by
 \begin{align}
 	&\fun{\mathit{x_a} \in \mathit{e_A}}{\mathit{e_b}} \ :\equiv\ mapping~(\fun{\mathit{x_a}}\mathit{e_b})~\mathit{e_A} \\
 \nonumber\\[-6pt]
@@ -455,13 +456,13 @@ Syntax for defining unnamed mappings is defined by
 		&mapping~f~A \ := \ image~(\fun{a}{\pair{a,f~a}})~A
 	\end{aligned}
 \end{align}
-Figure~\ref{fig:mapping-defs} defines more common operations on mappings: $domain$, $range$, $preimage$, $restrict$, pairing, composition, and disjoint union.
+Figure~\ref{fig:mapping-defs} defines other common operations on mappings: $domain$, $range$, $preimage$, $restrict$, pairing, composition, and disjoint union.
 The latter three are particularly important in the preimage arrow's derivation, and $preimage$ is critical in measure theory's account of probability.
 For symmetry with partial functions $x \tto y$, they are defined on $X \pto Y$, where $X \pto Y$ is the set of all partial mappings from any domain set $X$ to any codomain set $Y$.
 
 The set $X \to Y$ contains all the \emph{total} mappings from $X$ to $Y$.
 We use total mappings as possibly infinite vectors, with application for indexing.
-Projections are produced by
+Indexing functions are produced by
 \begin{equation}
 \begin{aligned}
 	&\pi : J \tto (J \to X) \tto X \\
@@ -488,7 +489,7 @@ Again, we define a different combinator, $\arrowif\gen$, to make it easier to ap
 In a nonstrict $\lambda$-calculus, simply defining a choice combinator allows writing recursive functions using nothing but arrow combinators and lifted, pure functions.
 However, any strict $\lambda$-calculus (such as \lzfclang) requires an extra combinator to defer computations in conditional branches.
 
-For example, suppose we define the \keyword{function arrow} with choice, by defining
+For example, define the \keyword{function arrow} with choice:
 \begin{equation}
 \begin{aligned}
 	\arrowarr~f &\ := \ f \\
@@ -799,9 +800,8 @@ To parameterize mapping arrow computations on a domain, we define the \mykeyword
 \begin{equation}
 	X \mapto Y \ ::= \ Set~X \tto (X \pto Y)
 \end{equation}
-Notice that $\bot$ is absent in $Set~X \tto (X \pto Y)$. (XXX: reword to remove ``Notice'')
-This will make it easier to exclude diverging inputs further on.
-The absence of $\bot$ and the fact that the type parameters denote sets will make it easier to apply theorems from set theory, which know nothing of error values and lambda types.
+The fact that $\bot$ is absent from $Y$ in $Set~X \tto (X \pto Y)$ will make it easier to exclude diverging inputs.
+Its absence and the fact that the type parameters denote sets will make it easier to apply well-known theorems from set theory, which know nothing of lambda types and propagating error values.
 
 Further on, we will need every computation $g : X \mapto Y$ to meet the \mykeyword{mapping arrow restriction law}:
 for all $A \subseteq X$ and $A' \subseteq A$ for which $g~A$ converges,
@@ -833,7 +833,7 @@ If $\liftmap$ is to be a homomorphism, mapping arrow computation equivalence nee
 Two mapping arrow computations $g_1 : X \mapto Y$ and $g_2 : X \mapto Y$ are equivalent, or $g_1 \equiv g_2$, when $g_1~A \equiv g_2~A$ for all $A \subseteq X$.
 \end{definition}
 
-Clearly $\arrowarr\genb := lift\genb \circ \arrowarr\gen$ meets the first homomorphism identity~\eqref{eqn:lift-distributes-over-arr}, so we define $\arrmap$ as a composition.
+Clearly $\arrmap := \liftmap \circ \arrbot$ meets the first homomorphism identity~\eqref{eqn:lift-distributes-over-arr}.
 The following subsections derive $(\pairmap)$, $(\compmap)$, $\ifmap$ and $\lazymap$ from their corresponding bottom arrow combinators, in a way that ensures $\liftmap$ is an arrow homomorphism.
 Figure~\ref{fig:mapping-arrow-defs} contains the resulting definitions.
 
@@ -2395,7 +2395,7 @@ For all $B \subseteq Y_1 \times Y_2$, $preimage~\pair{g_1,g_2}\map~B \subseteq p
 By preimage/projection monotonicity and Lemma~\ref{lem:preimage-under-pairing}.
 \end{proof}
 
-Thus, the following replacement:
+It is not hard to show that the following replacement:
 \begin{equation}
 \begin{aligned}
 	&\pair{\cdot,\cdot}\pre' : (X \prepto Y_1) \tto (X \prepto Y_2) \tto (X \prepto Y_1 \times Y_2) \\
@@ -2416,12 +2416,6 @@ In other words, we need a lattice join with respect to $(\subseteq)$, with the f
 \end{equation}
 If for every non-product type $X$, $Rect~X$ is closed under $(\join)$, then rectangular families are clearly closed under $(\join)$. Further, for any $A$ and $B$, $A \u B \subseteq A \join B$.
 
-For example, if $Rect~\Re$ contains all the closed real intervals, then the following join is allowable:
-\begin{equation}
-\begin{aligned}[t]
-	[a_1,b_1] \vee [a_2,b_2] \ = \ [min~a_1~a_2, max~b_1~b_2]
-\end{aligned}
-\end{equation}
 Replacing each union in $(\uplus\pre)$ with a join results in
 \begin{equation}
 \begin{aligned}
@@ -2475,7 +2469,7 @@ Yet it is still not good enough.
 When $A_2$ and $A_3$ overapproximate $\emptyset$, it takes unnecessary branches, which can lead to divergence.
 In the exact semantics, a well-defined program interpreted using $\convifppre$ never diverges.
 
-Suppose we defined ${\convifppre}'~k_1~k_2~k_3~j~A$ to take \emph{no branches} when $branch\ppre~j~A$ contains both $true$ and $false$.
+Suppose we defined the approximating ${\convifppre}'$ to take \emph{no branches} when $branch\ppre~j~A$ contains both $true$ and $false$.
 Because $branch\ppre~j~A$ can return $\set{true}$ or $\set{false}$ for at most finitely many $j \in J$, there exists a suffix set $J' \subseteq J$ for which no branches will be taken.
 
 The returned preimage mapping's range is a subset of $Y$, and the preimages it computes must be subsets of $A_2 \join A_3$.
@@ -2630,20 +2624,24 @@ Thus, the approximating ${\convifppre}'$ can be written in terms of $\top$ inste
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		fst\ppre' := \arrowtrans\ppre'~fst\pre;\ \ snd\ppre' := \arrowtrans\ppre'~snd\pre;\ \ \cdots
+		fst\ppre' &:= \arrowtrans\ppre'~fst\pre \\
+		snd\ppre' &:= \arrowtrans\ppre'~snd\pre;\ \cdots
 	\end{aligned}
 \end{aligned}
-&\tab\tab
+&\tab\tab\tab
 \begin{aligned}[t]
 	&\begin{aligned}[t]
 		&{\convifppre}' : (X \ppreto' Bool) \tto (X \ppreto' Y) \tto (X \ppreto' Y) \tto (X \ppreto' Y) \\
 		&{\convifppre}'~k_1~k_2~k_3~j \ := \\
 		&\tab\lzfclet{
-			\pair{C_k,p_k} & k_1~j_1~A \\
+			\pair{C_k,p_k} & k_1~(left~j)~A \\
 			\pair{C_b,p_b} & branch\ppre~j~A \\
 			A_2 & p_k~(C_k \i C_b \i \set{true}) \i p_b~(C_k \i C_b \i \set{true}) \\
 			A_3 & p_k~(C_k \i C_b \i \set{false}) \i p_b~(C_k \i C_b \i \set{false}) \\
-		}{if~(C_b = \set{true,false})~\pair{\top,\fun{B}\lzfcsplit{A_2 \join A_3}}~(k_2~j_2~A_2 \uplus\pre' k_3~j_3~A_3)}
+		}{if~\lzfcsplit{
+				&(C_b = \set{true,false}) \\
+				&\pair{\top,\fun{\underline{\ \ }}\lzfcsplit{A_2 \join A_3}} \\
+				&(k_2~(left~(right~j))~A_2 \uplus\pre' k_3~(right~(right~j))~A_3)}}
 	\end{aligned}
 \end{aligned}
 \end{align*}
@@ -2656,7 +2654,7 @@ However, specific lifts such as $fst\pre := \arrpre~fst$ are computable, and are
 \label{fig:approximating-preimage-arrow-defs}
 \end{figure*}
 
-Figure~\ref{fig:approximating-preimage-arrow-defs} shows the final approximating preimage arrow.
+Figure~\ref{fig:approximating-preimage-arrow-defs} defines the final approximating preimage arrow.
 This arrow, the lifts in Figure~\ref{fig:extra-preimage-arrow-defs}, and the semantic function $\meaningof{\cdot}\gen$ in Figure~\ref{fig:semantic-function} define an approximating semantics for partial, probabilistic programs.
 
 \subsection{Correctness}
@@ -2697,44 +2695,70 @@ If $A_1$ and $A_2$ are disjoint, then $refine'~A_1$ and $refine'~A_2$ are disjoi
 \end{corollary}
 
 \subsection{Approximation Limitations}
+\label{sec:discretization}
 
-With disjointness and monotonicity properties, it is natural to suppose that we can compute probabilities of preimages of $B$ by computing preimages with respect to increasingly fine discretizations.
+With disjointness and monotonicity properties, it is natural to suppose that we can compute probabilities of preimages of $B$ by computing preimages with respect to increasingly fine discretizations of $A$.
 For example, starting with any partition $\A : Set~(Rect~\pair{S,X})$, we might repeat the following:
 \begin{enumerate}
 	\item Refine every rectangle in $\A$: let $\A' := image~refine'~\A$.
 	\item Partition the rectangles in $\A'$: let $\A := \bigcup\limits_{A' \in \A'} partition~A'$.
 \end{enumerate}
-If the second step always yields finer partitions, it seems the sum of the measures of each rectangle in $\A$ should approach the probability of $B$.
+If the second step yields finer partitions, it seems the sum of the measures of each rectangle in $\A$ should approach the probability of $B$.
 
-We are not so fortunate: in the limit, we would be computing the \keyword{Jordan outer measure} of the preimage of $B$, which is not always equal to its probability.
+We are not so fortunate: in the limit, we would be computing the \keyword{Jordan outer measure}~(XXX: cite) of the preimage of $B$, which is not always equal to its probability.
 
 For example, suppose we extend the language with real numbers---which is reasonable, given that Bayesian practice requires them.
 If it also has $(<)$, which is also a reasonable extension, it is possible to define $(\ge)$ and thus $(=)$ for real numbers, and thus a $rational?$ function that semidecides rationality by enumerating the rationals and returning $true$ when it finds its input.
 The preimage of $\set{true}$ under $\meaningof{rational?~random}\pmap\conv$ has probability $0$, but its outer Jordan measure is $1$.
+Roughly, it is impossible to tightly cover a dense set like $\Rat$ using finite partitions.
 
-Roughly, it is impossible to tightly cover a dense, measurable set with finite partitions.
-
-Fortunately, finite discretization tends to work out anyway.
-In a language with reasonable primitives, programs that halt with probability 1 tend to be piecewise continuous, so preimages of rectangles are finite unions of Jordan-measurable sets.
-These unions are thus Jordan-measurable, so their outer Jordan measure is their probability.
-
-Still, there is one very good reason to not exhaustively discretize.
-Good accuracy would require fine discretization, which is \emph{exponential} in the number of discretized axes.
-For example, a nonrecursive program that contains only 10 uses of $random$ would need to partition 10 axes of $R$.
-Splitting each into only 4 intervals yields a partition of $R$ of size $4^{10} = 1,048,576$.
-
-This explosion in time and space is often called the \keyword{curse of dimensionality}.
-One way to avoid it is to sample instead of enumerate, which we do in our main implementation.
+For programs that halt with probability 1, finite discretization tends to work out anyway.
+Unfortunately, the sparsity of work on Jordan measure, especially in general spaces, makes it difficult to characterize the conditions under which a discretization algorithm converges.
+We leave this for future work.
 
 
-
-\section{Implementation}
+\section{Implementations}
 \label{sec:implementation}
 
-Given a rectangular set library, the approximating semantics defined in Figure~\ref{fig:extra-preimage-arrow-defs} and Figure~\ref{fig:approximating-preimage-arrow-defs} can be implemented with few changes in almost any practical $\lambda$-calculus.
-We have done so in both Typed Racket~[XXX:cite] and Haskell~[XXX:cite].
+We have four implementations: one of the exact semantics, two direct implementations of the approximating semantics, and a less direct but more efficient implementation of the approximating semantics, which we call \mykeyword{Dr. Bayes}.
 
-In Typed Racket, we have also implemented $\meaningof{\cdot}\gen$ from Figure~\ref{fig:semantic-function} and its extension $\meaningof{\cdot}\gen\conv$, targeting both the bottom* arrow and the preimage* arrow.
+\subsection{Direct Implementations}
+
+If sets are restricted to be finite, the arrows used as translation targets in the exact semantics, defined in Figures~\ref{fig:mapping-defs}, \ref{fig:bottom-arrow-defs}, \ref{fig:mapping-arrow-defs}, \ref{fig:preimage-mapping-defs}, \ref{fig:preimage-arrow-defs} and~\ref{fig:astore-arrow-defs}, can be implemented directly in any practical $\lambda$-calculus with a set data type.
+Computing exact preimages is very inefficient, even under the interpretations of very small programs.
+However, we have found our Typed Racket~(XXX: cite) implementation useful for verifying theorems.
+
+Given a rectangular set library, the approximating preimage arrows defined in Figures~\ref{fig:extra-preimage-arrow-defs} and~\ref{fig:approximating-preimage-arrow-defs} can be implemented with few changes in any practical $\lambda$-calculus.
+We have done so in Typed Racket and Haskell~(XXX: cite).
+Both implementations' arrow combinator definitions are almost line-for-line transliterations from the figures.
+
+Making the rectangular set type polymorphic seems to require the equivalent of a typeclass system.
+In Haskell, it also requires GHC's multi-parameter typeclasses or indexed type families~(XXX: cite) to associate set types with the types of their members.
+Using indexed type families, the only significant differences between the Haskell implementation and the approximating semantics are type contexts and newtype wrappers for arrow types.
+
+Typed Racket has no typeclass system on top of its type system, so the rectangular set type is monomorphic; thus, so are the arrow types.
+The lack of type variables in the combinator types is the only significant difference between the implementation and the approximating semantics.
+
+All three direct implementations can currently be found at XXX: URL.
+
+\subsection{Dr. Bayes}
+
+Our main implementation, \mykeyword{Dr. Bayes}, is written in Typed Racket.
+Roughly, it consists of a monomorphic rectangular set data type, the semantic function $\meaningof{\cdot}\gen$ from Figure~\ref{fig:semantic-function} and its extension $\meaningof{\cdot}\gen\conv$, the bottom* arrow as defined in Figures~\ref{fig:bottom-arrow-defs} and~\ref{fig:astore-arrow-defs}, the approximating preimage and preimage* arrows as defined in Figures~\ref{fig:extra-preimage-arrow-defs} and~\ref{fig:approximating-preimage-arrow-defs}, and algorithms to compute approximate probabilities.
+We use it to test the semantics agains real-world problems.
+
+%The arrow definitions are similar enough to those given in this paper that we do not need to report on them.
+
+Section~\ref{sec:discretization} outlines a discretization algorithm that seems to converge for programs that halt with probability 1, consisting of repeatedly refining a program's domain and repartitioning it.
+We do not use this algorithm in our main implementation, not only because it may not converge: it is also terribly inefficient.
+Good accuracy requires fine discretization, which is \emph{exponential} in the number of discretized axes.
+For example, a nonrecursive program that contains only 10 uses of $random$ would need to partition 10 axes of $R$, the set of random sources.
+Splitting each axis into only 4 disjoint intervals yields a partition of $R$ of size $4^{10} = 1,048,576$.
+
+To avoid this explosion in time and space in the main implementation, we sample from the discretization instead of enumerating it.
+
+
+
 
 
 \section{Unrelated Work}
