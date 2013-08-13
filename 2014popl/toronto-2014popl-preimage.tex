@@ -216,7 +216,7 @@ These complexities tend to drive practitioners to densities, even though they ar
 
 \subsection{Measure-Theoretic Semantics}
 
-Because purely functional languages do not allow effects (except usually divergence), programmers must write probabilistic programs as functions from a random source to outputs.
+Because purely functional languages do not allow side-effects (except usually divergence), programmers must write probabilistic programs as functions from a random source to outputs.
 Monads and other categorical classes such as idioms and arrows can make doing so easier. (XXX: cite me, bunch of others)
 
 It seems this approach should make it easy to interpret probabilistic programs measure-theoretically.
@@ -225,7 +225,7 @@ Unfortunately, it is difficult to turn this simple-sounding idea into a composit
 \begin{enumerate}
 	\item Preimages are defined for extensional functions. \label{problem:observable-domain}
 	\item Requiring subsets of $X$ and $Y$ to be measurable constrains $f$: preimages of measurable subsets of $Y$ must be measurable subsets of $X$. Proving the conditions under which this is true is difficult, especially when $f$ may diverge. \label{problem:measurability}
-	\item Probability measures cannot be defined for arbitrary function spaces (XXX: cite). \label{problem:higher-orderness}
+	\item It is very difficult to define probability measures for arbitrary spaces of measurable functions (XXX: cite Aumann). \label{problem:higher-orderness}
 \end{enumerate}
 Implementing a language based on such a semantics is complicated by these facts:
 \begin{enumerate}
@@ -262,7 +262,7 @@ Using arrows, we define an \emph{exact} semantics and an \emph{approximating} se
 Our exact semantics consists of
 \begin{itemize}
 	\item A semantic function which, like the semantic function for the arrow calculus~(XXX: cite Hughes or Lindley), transforms first-order programs into the computations of an arbitrary arrow.
-	\item Arrows for running programs in different ways.
+	\item Arrows for evaluating expressions in different ways.
 \end{itemize}
 This commutative diagram describes the relationships among the arrows used to define the exact semantics:
 \youarehere{eqn:roadmap-diagram1}
@@ -274,7 +274,7 @@ Our approximating semantics consists of the same semantic function and an arrow 
 
 An implementation implements the semantic function, and the $X \botto Y$ and $X \ppreto' Y$ arrows' combinators.
 
-Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram} is a homomorphism.
+Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram1} is a homomorphism.
 We use $\arrowlift$ and $\arrowtrans$ to define the correctness of one arrow in terms of another arrow.
 Homomorphism properties allow $\arrowlift$ and $\arrowtrans$ to distribute over the other arrow's computations.
 
@@ -380,7 +380,7 @@ In these cases, we use a slightly weaker equivalence.
 Two \lzfclang terms $\mathit{e_1}$ and $\mathit{e_2}$ are \keyword{observationally equivalent}, written $\mathit{e_1} \equiv \mathit{e_2}$, when $\mathit{e_1} = \mathit{e_2}$ or both $\mathit{e_1}$ and $\mathit{e_2}$ diverge.
 \end{definition}
 
-It might seem helpful to introduce even coarser notions of equivalence, such as applicative or logical bisimilarity.
+It might seem helpful to introduce even coarser notions of equivalence, such as applicative or logical bisimilarity (XXX: cite).
 However, we do not want internal equality and external equivalence to differ too much, and we want the flexibility of extending ``$\equiv$'' with type-specific rules.
 
 \subsection{Additional Functions and Forms}
@@ -487,7 +487,16 @@ which is particularly useful when $f$ is unnamed.
 
 \section{Arrows and First-Order Semantics}
 
-XXX: really short arrow intro (XXX: cite Hughes, Lindley et al)
+Like monads and idioms (XXX: cite Wadler, McBride), arrows (XXX: cite Hughes) are used in functional programming to thread effects through computations in a way that imposes structure on the computations.
+Unlike monad and idiom computations, arrow computations are always
+\begin{itemize}
+	\item Function-like: An arrow computation of type $x \arrow y$ must behave like a corresponding function of type $x \tto y$ (in a sense we formalize shortly).
+	\item First-order: There is no way to derive a computation $app : \pair{x \arrow y, x} \arrow y$ from an arrow's minimal definition.
+\end{itemize}
+The first property makes arrows a perfect fit for a compositional translation from programs to intensional or extensional functions---or, as we will see, to computations that compute preimages.
+The second property makes them a perfect fit for a measure-theoretic semantics in particular, as $app$ in the function arrow is generally not measurable (XXX: cite Aumann).
+Targeting arrows in the semantics therefore gives some assurance that we can meet measure theory's requirement that preimage measure be defined only for measurable functions.
+We prove in Section~\ref{sec:measurability} that it is sufficient.
 
 \subsection{Alternative Arrow Definitions and Laws}
 \label{sec:arrow-definitions}
@@ -497,7 +506,7 @@ For each arrow $a$, instead of $first\gen$, we define $(\arrowpair\gen)$---typic
 Though $first\gen$ may be defined in terms of $(\arrowpair\gen)$ and vice-versa~\cite{cit:hughes-2005afp-arrows}, we give $(\arrowpair\gen)$ definitions because the applicable measure-theoretic theorems are in terms of pairing functions.
 
 One way to strengthen an arrow $a$ is to define an additional combinator $left\gen$, which can be used to choose an arrow computation based on the result of another.
-Again, we define a different combinator, $\arrowif\gen$, to make it easier to apply measure-theoretic theorems.
+Again, we define a different combinator, $\arrowif\gen$ (``if-then-else''), to make applying measure-theoretic theorems easier.
 
 In a nonstrict $\lambda$-calculus, simply defining a choice combinator allows writing recursive functions using nothing but arrow combinators and lifted, pure functions.
 However, any strict $\lambda$-calculus (such as \lzfclang) requires an extra combinator to defer computations in conditional branches.
@@ -548,7 +557,7 @@ The additional combinators
 	\arrowlazy\gen &: (1 \tto (x \arrow\gen y)) \tto (x \arrow\gen y)
 \end{aligned}
 \end{equation}
-define an \keyword{arrow with choice} if certain additional homomorphism and structural laws hold.
+where $1 = \set{0}$, define an \keyword{arrow with choice} if certain additional homomorphism and structural laws hold.
 \end{definition}
 
 From here on, as all of our arrows are arrows with choice, we simply call them arrows.
@@ -579,7 +588,7 @@ A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeywor
 \label{def:arrow-homomorphism}
 \end{definition}
 
-The homomorphism laws state that $\arrowarr\gen$ must be a homomorphism from the function arrow~\eqref{eqn:function-arrow} to arrow $a$.
+The arrow homomorphism laws state that $\arrowarr\gen$ must be a homomorphism from the function arrow~\eqref{eqn:function-arrow} to arrow $a$.
 Roughly, arrow computations that do not use additional combinators can be transformed into $\arrowarr\gen$ applied to a pure computation.
 
 Only a few of the other arrow laws play a role in our semantics and its correctness.
@@ -770,7 +779,7 @@ If we assume that $\arrowlift\genb$ defines correct behavior for arrow $b$ in te
 	&\begin{aligned}[t]
 		&\ifbot : (x \botto Bool) \tto (x \botto y) \tto (x \botto y) \tto (x \botto y) \\
 		&\ifbot~f_1~f_2~f_3~a \ := \
-			\lzfccase{f_1~a}{true & f_2~a \\ false & f_3~a \\ else & \bot}
+			\lzfccase{f_1~a}{true & f_2~a \\ false & f_3~a \\ \bot & \bot}
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
@@ -957,7 +966,7 @@ Starting with the left side of~\eqref{eqn:lift-distributes-over-if}, we expand d
 	&\liftmap~(\ifbot~f_1~f_2~f_3)~A \\
 	&\tab \equiv \ 
 		\lzfclet{
-			f & \fun{a}{\lzfccase{f_1~a}{true & f_2~a \\ false & f_3~a \\ else & \bot}}
+			f & \fun{a}{\lzfccase{f_1~a}{true & f_2~a \\ false & f_3~a \\ \bot & \bot}}
 		}{mapping~f~(domain_\bot~f~A)} \\
 	&\tab \equiv \ 
 		\lzfclet{
@@ -1261,7 +1270,7 @@ Starting from the right side, for all $C \subseteq Z$,
 \subsection{Preimage Mapping Disjoint Union}
 
 \begin{lemma}[$preimage$ distributes over $(\uplus\map)$]
-Let $g_1 \in X \pto Y$ and $g_2 \in X \pto Y$ be disjoint mappings.
+Let $g_1 \in X \pto Y$ and $g_2 \in X \pto Y$ have disjoint domains.
 For all $B \subseteq Y$, $preimage~(g_1 \uplus\map g_2)~B = (preimage~g_1~B) \uplus (preimage~g_2~B)$.
 \label{lem:preimage-under-piecewise}
 \end{lemma}
@@ -1507,7 +1516,7 @@ We would like to assume that each $h : X \preto Y$ acts as if it always computes
 The following equivalent property is easier to state, and makes proving the arrow laws simple.
 
 \begin{definition}[preimage arrow law]
-Let $h : X \preto Y$. If there exists an $g : X \mapto Y$ such that $h \equiv \liftpre~g$, then $h$ obeys the \mykeyword{preimage arrow law}.
+Let $h : X \preto Y$. If there exists a $g : X \mapto Y$ such that $h \equiv \liftpre~g$, then $h$ obeys the \mykeyword{preimage arrow law}.
 \label{def:preimage-arrow-law}
 \end{definition}
 
@@ -1653,7 +1662,7 @@ The applicative store arrow transformer's type constructor takes a store type $s
 \begin{equation}
 	AStore~s~(x \arrow\gen y) \ ::= \ J \tto (\pair{s,x} \arrow\gen y)
 \end{equation}
-Reading the type, we see that computations receive an index and produce a computation that receives a store as well as an $x$.
+Reading the type, we see that computations receive an index $j \in J$ and produce a computation that receives a store as well as an $x$.
 Lifting extracts the $x$ from the input pair and sends it on to the original computation:
 \begin{equation}
 \begin{aligned}
@@ -1869,6 +1878,8 @@ For all programs $\mathit{e}$,
 \end{equation}
 \end{corollary}
 
+\subsection{Convergence}
+
 To relate $\meaningofconv{\mathit{e}}\genc$ computations to $\meaningof{\mathit{e}}\genc$ computations, we need to find the largest domain on which they should agree.
 
 \begin{definition}[maximal domain]
@@ -1878,7 +1889,7 @@ A computation's \mykeyword{maximal domain} is the largest $A^*$ for which
 	\item For $g : X \mapto Y$, $domain~(g~A^*) = A^*$.
 	\item For $h : X \preto Y$, $domain\pre~(h~A^*) = A^*$.
 \end{itemize}
-The maximal domain of $k : X \arrow\genc Y$ is that of $k~j_0$, and is a subset of $(R \times T) \times X$.
+The maximal domain of $k : X \arrow\genc Y$ is that of $k~j_0$.
 \label{def:maximal-domain}
 \end{definition}
 
@@ -3029,11 +3040,15 @@ Splitting each axis into only 4 disjoint intervals yields a partition of $R$ of 
 
 To avoid this explosion in time and space in the main implementation, we sample from the discretization instead of enumerating it.
 
+XXX: finish section
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Unrelated Work}
+
+XXX: todo
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3041,11 +3056,15 @@ To avoid this explosion in time and space in the main implementation, we sample 
 
 \section{Related Work}
 
+XXX: todo
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Conclusions and Future Work}
+
+XXX: todo
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
