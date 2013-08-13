@@ -286,7 +286,7 @@ From here on, significant terms are introduced in \keyword{bold}, with those we 
 
 \section{Operational Metalanguage}
 
-We write all of the programs in this paper in \lzfclang~\cite{cit:toronto-2012flops-lzfc}, an untyped, call-by-value lambda calculus designed for deriving implementable programs from contemporary mathematics.
+We write all of the programs in this paper in \lzfclang~\cite{cit:toronto-2012flops-lzfc}, an untyped, call-by-value $\lambda$-calculus designed for deriving implementable programs from contemporary mathematics.
 
 Generally, contemporary mathematics---measure theory in particular---is done in \keyword{ZFC}: \keyword{Zermelo-Fraenkel} set theory extended with the axiom of \keyword{Choice} (equivalently unique \keyword{Cardinality}).
 ZFC has only first-order functions and no general recursion, which makes implementing a language defined by a transformation into ZFC quite difficult.
@@ -2369,7 +2369,7 @@ The predicate ``is measurable'' means ``is measurable with respect to standard $
 \label{def:standard-sigma-algebra}
 \end{definition}
 
-For $\ifpmap$ measurability and later proofs, we define
+So that we can measure boolean singletons and any set of branch traces, we define
 \begin{align}
 	\Sigma~Bool &\ ::=\ \powerset~Bool
 	\label{eqn:standard-boolean-rule}
@@ -2426,6 +2426,8 @@ Let $j \in J$ be the largest for which $t~j \neq \bot$.
 To construct $\mathit{e'}$, exhaustively apply first-order functions in $\mathit{e}$, but replace any $\convifpmap$ whose condition's index is greater than $j$ with the equivalent expression $\bot$.
 Because $g$ converges, recurrences must be guarded by $if$, so this process terminates after finitely many applications.
 \end{proof}
+
+XXX: the above proof is messed: there is not necessarily a largest $j$; what we probably want is a suffix $J' \subseteq J$
 
 \begin{theorem}[all probabilistic programs are measurable]
 If $\meaningofconv{\mathit{e}}\pmap$ converges, it is measurable.
@@ -2966,7 +2968,7 @@ XXX: todo
 For all $A \in Rect~\pair{S,X}$ and $B \in Rect~Y$, $refine'~A \subseteq A$.
 \end{theorem}
 \begin{proof}
-XXX: todo
+By construction.
 \end{proof}
 
 
