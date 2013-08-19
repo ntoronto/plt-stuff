@@ -141,13 +141,19 @@
 \maketitle
 
 \begin{abstract}
-Problem: doesn't exist: probabilistic programming language that doesn't restrict legal programs, allows conditioning, and has a mathematical specification
+It is primarily Bayesian statistical practice that drives probabilistic language development.
+Unfortunately, languages developed by programming language researchers most often lack probabilitic conditioning, making them nearly useless in Bayesian practice.
+Languages developed by Bayesian practitioners can be useful, but they lack specifications and are limited in seemingly arbitrary ways.
 
-Why problem:
+We develop a mathematical specification for a first-order language with recursion, extended with probabilistic choice and conditioning.
+Our semantics interprets programs as functions that compute preimages of sets of outputs.
+Distributions over outputs are defined by the probabilities of their preimages, a measure-theoretic approach that ensures the language is not artificially limited.
 
-Solution:
+Measurability is a basic property similar to continuity that is critical, but often neglected.
+As part of proving correctness, we prove that all programs, including partial programs with real arithmetic, are measurable..
 
-Why solution:
+Functions that compute preimages are generally uncomputable, so we develop an additional approximating semantics for computing rectangular covers of preimages.
+We implement the approximating semantics directly in Typed Racket and Haskell.
 \end{abstract}
 
 \category{XXX-CR-number}{XXX-subcategory}{XXX-third-level}
@@ -162,6 +168,8 @@ XXX, XXX
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+XXX: consider using paragraph headers instead of subsections and subsubsections
+
 \section{Introduction}
 
 There is currently no efficient probabilistic language implementation that simultaneously
@@ -170,11 +178,11 @@ There is currently no efficient probabilistic language implementation that simul
 	\item Allows \keyword{conditioning}, or restricting the output in a way that preserves relative probabilities.
 	\item Has a semantics, or a mathematical specification.
 \end{enumerate}
-In the field of programming languages, there are a few examples of languages that do not restrict legal programs and have a semantics (XXX: cite all).
+In the field of programming language research, there are a few examples of languages that do not restrict legal programs and have a semantics (XXX: cite all).
 Unfortunately, most of the demand for probabilistic languages comes from Bayesian practice, which requires conditioning.
 
 Bayesian practitioners have implemented many probabilistic languages with conditioning (XXX: cite all).
-Almost all lack a semantics, so it is impossible to distinguish between an implementation error and an opportunity to learn.
+Almost all lack a semantics, so it is impossible to distinguish between implementation errors and errors in users' understanding.
 Almost all place restrictions on programs, most commonly disallowing recursion, allowing only continuous distributions, and allowing only very limited forms of conditioning.
 
 These common restrictions arise from reasoning about probability using \keyword{densities}, which are functions from random values to \emph{changes} in probability.
@@ -182,6 +190,7 @@ While simple and convenient, densities have many limitations.
 Densities for random values with different dimension are incomparable.
 Densities cannot be defined on infinite products.
 Densities can only be used to reason about conditioning in limited cases.
+(XXX: make the last sentence more specific, or remove it because it communicates nothing extra)
 
 Densities cannot define distributions of discontinuous functions of random variables.
 For example, suppose we want to model a thermometer that reports in the range $[0,100]$, and that the temperature it would report (if it could) is distributed according to a bell curve.
@@ -223,11 +232,11 @@ It seems this approach should make it easy to interpret probabilistic programs m
 For a probabilistic program $f : X \to Y$, the probability measure on output sets $B \subseteq Y$ should be defined by preimages of $B$ under $f$ and the probability measure on $X$.
 Unfortunately, it is difficult to turn this simple-sounding idea into a compositional semantics, for the following reasons.
 \begin{enumerate}
-	\item Preimages are defined for extensional functions. \label{problem:observable-domain}
+	\item Preimages can be defined only for functions with observable domains, which excludes lambdas. \label{problem:observable-domain}
 	\item Requiring subsets of $X$ and $Y$ to be measurable constrains $f$: preimages of measurable subsets of $Y$ must be measurable subsets of $X$. Proving the conditions under which this is true is difficult, especially when $f$ may diverge. \label{problem:measurability}
 	\item It is very difficult to define probability measures for arbitrary spaces of measurable functions (XXX: cite Aumann). \label{problem:higher-orderness}
 \end{enumerate}
-Implementing a language based on such a semantics is complicated by these facts:
+Implementing a language based on such a semantics is complicated because
 \begin{enumerate}
 	\setcounter{enumi}{3}
 	\item Contemporary mathematics is unlike any implementation's host language. \label{problem:different-language}
@@ -272,7 +281,7 @@ We can do this because in \lzfclang, Turing-uncomputable programs are definable.
 
 Our approximating semantics consists of the same semantic function and an arrow $X \ppreto' Y$, derived from $X \ppreto Y$, for computing conservative approximations of preimages.
 
-An implementation implements the semantic function, and the $X \botto Y$ and $X \ppreto' Y$ arrows' combinators.
+An implementation implements (XXX: badness) the semantic function, and the $X \botto Y$ and $X \ppreto' Y$ arrows' combinators.
 
 Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram1} is a homomorphism.
 We use $\arrowlift$ and $\arrowtrans$ to define the correctness of one arrow in terms of another arrow.
@@ -549,6 +558,7 @@ which diverges only when applied to $false$ in any $\lambda$-calculus.
 \label{eqn:arrow-combinators}
 \end{equation}
 define an \keyword{arrow} if certain monoid, homomorphism, and structural laws hold.
+(XXX: need to require $\arrowarr\gen$'s argument to be total)
 The additional combinators
 \begin{equation}
 \begin{aligned}
@@ -590,6 +600,7 @@ A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeywor
 
 The arrow homomorphism laws state that $\arrowarr\gen$ must be a homomorphism from the function arrow~\eqref{eqn:function-arrow} to arrow $a$.
 Roughly, arrow computations that do not use additional combinators can be transformed into $\arrowarr\gen$ applied to a pure computation.
+They must be \emph{function-like}.
 
 Only a few of the other arrow laws play a role in our semantics and its correctness.
 We need associativity of $(\arrowcomp\gen)$:
@@ -622,7 +633,7 @@ and distribution of pure computations over effectful:
 \label{eqn:pure-distributes-over-lazy}
 \end{align}
 Because arrows have traditionally been defined in nonstrict and strongly normalizing $\lambda$-calculii, we could not derive~\eqref{eqn:pure-distributes-over-lazy} from existing arrow laws.
-We are sure it is reasonable.
+We are sure it is reasonable. (XXX: need better reason)
 
 Rather than prove each necessary arrow law, we prove the arrows are \emph{epimorphic} (not necessarily \emph{isomorphic}) to arrows for which the laws hold.
 
@@ -658,6 +669,10 @@ The proofs for every other law are similar.
 Figure~\ref{fig:semantic-function} defines a transformation $\meaningof{\cdot}\gen$ from a first-order let-calculus to arrow computations for any arrow $a$.
 
 \begin{figure*}[t]\centering
+\begin{align*}
+	\mathit{p} \ ::\equiv \ 
+\end{align*}
+
 \begin{align*}
 \begin{aligned}[t]
 	\meaningof{\mathit{x} := \mathit{e};\ \cdots\ ; \mathit{e_{body}}}\gen &\ :\equiv\
@@ -715,7 +730,7 @@ First-order functions have type $\pair{x,\pair{}} \arrow\gen y$ where $x$ is the
 Application sends a stack containing just $x$.
 
 It is not difficult to allow named bindings, but it is better to do so in a separate semantic function.
-Baking such support into $\meaningof{\cdot}\gen$ might complicate the simple proof of the following theorem, which underlies most of our semantic correctness claims.
+Baking such support into $\meaningof{\cdot}\gen$ might complicate the simple proof of the following theorem, which underlies most of our semantic correctness claims. (XXX: just say it's trivial and well-understood)
 
 \begin{theorem}[homomorphisms distribute over programs]
 Let $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ be an arrow homomorphism.
@@ -743,6 +758,7 @@ For example, for pairing:
 \end{align*}
 It is not hard to check the remaining cases.
 \end{proof}
+XXX: restructure to have the proofs go left-to-right
 
 If we assume that $\arrowlift\genb$ defines correct behavior for arrow $b$ in terms of arrow $a$, and prove that $\arrowlift\genb$ is a homomorphism, then by Theorem~\ref{thm:homomorphism-implies-correct}, $\meaningof{\cdot}\genb$ is correct.
 
@@ -797,7 +813,7 @@ Using the diagram in~\eqref{eqn:roadmap-diagram1} as a sort of map, we are start
 \youarehere{eqn:roadmap-diagram2}
 Through Section~\ref{sec:preimage-arrow}, we move across the top to $X \preto Y$.
 
-To use Theorem~\ref{thm:homomorphism-implies-correct} to prove correct the interpretations of programs as preimage arrow computations, we need to define a simpler arrow whose behavior is easily understood.
+To use Theorem~\ref{thm:homomorphism-implies-correct} to prove correct the interpretations of programs as preimage arrow computations, we need the preimage arrow to be homomorphic to a simpler arrow whose behavior is obviously correct.
 One obvious candidate is the function arrow~\eqref{eqn:function-arrow}.
 However, we will need to explicitly handle divergence as an error value, so we need a slightly more complicated arrow for which running computations may raise an error.
 
@@ -930,7 +946,7 @@ For any $f_1 : X \botto Y$, $f_2 : X \botto Z$, and $A \subseteq X$,
 		}{mapping~f~(domain_\bot~f~A)}
 \numberthis
 \end{align*}
-Next, we replace the definition of $A'$ with one that does not depend on $f$, and rewrite in terms of $\liftmap~f_1$ and $\liftmap~f_2$:
+Next, we replace the definition of $A'$ (XXX: fix) with one that does not depend on $f$, and rewrite in terms of $\liftmap~f_1$ and $\liftmap~f_2$:
 \begin{align*}
 	&\liftmap~(f_1~\pairbot~f_2)~A
 \\
@@ -1045,7 +1061,7 @@ Without restrictions, mapping arrow computations can be quite unruly.
 For example, the following computation is well-typed, but returns the identity mapping on $Bool$ when applied to an empty domain, and the empty mapping when applied to any other domain:
 \begin{equation}
 \begin{aligned}
-	&g :: Bool \mapto Bool \\
+	&g : Bool \mapto Bool \\
 	&g~A \ := \ if~(A = \emptyset)~(mapping~id~Bool)~\emptyset
 \end{aligned}
 \end{equation}
@@ -1157,7 +1173,7 @@ Converting a mapping to a lazy preimage mapping requires constructing a delayed 
 	&pre~g \ := \ \pair{range~g,\fun{B}{preimage~g~B}}
 \end{aligned}
 \end{equation}
-Applying a preimage mapping to any subset of its codomain:
+Applying a preimage mapping to any subset of its codomain: (XXX: unclear prose)
 \begin{equation}
 \begin{aligned}
 	&ap\pre : (X \prepto Y) \tto Set~Y \tto Set~X \\
@@ -1192,6 +1208,8 @@ Two preimage mappings $h_1 : X \prepto Y$ and $h_2 : X \prepto Y$ are equivalent
 \end{definition}
 
 The following subsections prove distributive laws for preimage mapping pairing, composition, and disjoint union.
+
+XXX: moar text in following subsections
 
 \subsection{Preimage Mapping Pairing}
 
@@ -1344,6 +1362,8 @@ $h_1~A \equiv h_2~A$ for all $A \subseteq X$.
 
 As with $\arrmap$, defining $\arrpre$ as a composition meets~\eqref{eqn:lift-distributes-over-arr}.
 The following subsections derive $(\pairpre)$, $(\comppre)$, $\ifpre$ and $\lazypre$ from mapping arrow combinators, in a way that ensures $\liftpre$ is an arrow homomorphism from the mapping arrow to the preimage arrow. Figure~\ref{fig:preimage-arrow-defs} contains the resulting definitions.
+
+XXX: try paragraph headings instead of subsections
 
 \begin{figure*}
 \begin{align*}
@@ -1557,7 +1577,7 @@ The following function, which defines the well-known \keyword{geometric distribu
 \label{eqn:geometric-def}
 \end{equation}
 For any $p > 0$, $geometric~p$ may diverge, but the probability of always taking the false branch is $(1-p) \times (1-p) \times (1-p) \times \cdots = 0$.
-Divergence with probability $0$ simply does not happen in practice.
+Therefore, for $p > 0$, $geometric~p$ converges with probability $1$.
 
 Suppose we interpret~\eqref{eqn:geometric-def} as $h : R \preto \Nat$, a preimage arrow computation from random sources in $R$ to natural numbers, and that we have a probability measure $P \in \powerset~R \pto [0,1]$.
 We could compute the probability of any output set $N \subseteq \Nat$ using $P~(h~R'~N)$, where $R' \subseteq R$ and $P~R' = 1$. We have three hurdles to overcome:
@@ -1569,6 +1589,8 @@ We could compute the probability of any output set $N \subseteq \Nat$ using $P~(
 Ensuring $h~R'$ converges is the most difficult, but doing the other two will provide structure that makes it much easier.
 
 \subsection{Threading and Indexing}
+
+XXX: `Prior to defn 7.1, you need a transition that communicates ``I've just given you the intuition, now let's do the work'''
 
 We clearly need a new arrow that threads a random source through its computations.
 To ensure it contains enough random numbers, the source should be infinite.
@@ -1607,7 +1629,7 @@ Values of type $J \to R$ encode an infinite binary tree as an infinite vector (i
 
 \subsection{Applicative, Associative Store Transformer}
 
-We thread a random store through bottom, mapping, and preimage arrow computations by defining an \keyword{arrow transformer}: a type constructor that receives and produces an arrow type, and combinators for arrows of the produced type. (XXX: find better cite than the experimental-looking Hackage package)
+We thread a random store through bottom, mapping, and preimage arrow computations by defining an \keyword{arrow transformer}: a type constructor that receives and produces an arrow type, and combinators for arrows of the produced type. (XXX: ask Dan B for a cite or Brent Yorgey (tell him I'm Jay's student, who is friends with his advisor))
 
 \begin{figure*}[t]\centering
 \begin{align*}
@@ -1745,7 +1767,7 @@ If the branch trace agrees with the test expression, it computes a branch; other
 Every computation defined using the let-calculus semantic function $\meaningof{\cdot}\gen$, whose \emph{defining expression} converges, must have its recurrences guarded by an $if$.
 Thus, if we stick to well-defined let-calculus programs, we need only replace $\arrowif\genc$ with $\arrowconvif\genc$ to ensure \emph{computations} always converge.
 
-We extend $\meaningof{\cdot}\genc$ by replacing the $if$ rule:
+We define $\meaningofconv{\cdot}\genc$ as nearly identical to $\meaningof{\cdot}\genc$, but with a different $if$ rule:
 \begin{equation}
 \begin{aligned}
 	\meaningofconv{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\genc &\ :\equiv\
@@ -1753,8 +1775,6 @@ We extend $\meaningof{\cdot}\genc$ by replacing the $if$ rule:
 			&\meaningofconv{\mathit{e_c}}\genc \\
 			&(\arrowlazy\gen~\fun{0}{\meaningofconv{\mathit{e_t}}\genc}) \\
 			&(\arrowlazy\gen~\fun{0}{\meaningofconv{\mathit{e_f}}\genc})}
-\\
-	\meaningofconv{\mathit{e}}\genc &\ :\equiv\ \meaningof{\mathit{e}}\genc
 \end{aligned}
 \end{equation}
 If $\meaningofconv{\mathit{e}}\genc$ is well-defined, it always converges.
@@ -2096,22 +2116,34 @@ For all $A \subseteq (R \times T) \times X$ and $B \subseteq Y$, $ap\pre~(\meani
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\section{Measurability}
+\section{Probabilities}
 \label{sec:measurability}
 
-We have not assigned probabilities to any sets yet.
+We have not assigned probabilities to any output sets yet.
 
-For $g : X \pto Y$, the probability of an output set $B \subseteq Y$ is
+Typically, for $g \in X \pto Y$, the probability of $B \subseteq Y$ is
 \begin{equation}
 	P~(preimage~g~B)
 \end{equation}
-where $P \in \powerset~X \pto [0,1]$ is a probability measure on $X$.
-This was the motivation for defining arrows to compute preimages in the first place.
-$P$ is a \emph{partial} function: $domain~P$ consists only of \emph{measurable} subsets of $X$.
-Before we can compute probabilities, we need to ensure $P$ is applied only to measurable sets, which requires preimages of measurable subsets under $g$ to be measurable.
+where $P \in \powerset~X \pto [0,1]$.
+
+However, a mapping* computation's domain is $(R \times T) \times X$, not $X$.
+We assume each $r \in R$ is randomly chosen, but not each $t \in T$ nor each $x \in X$; therefore, neither $T$ nor $X$ should affect the probabilities of output sets.
+We clearly must measure \emph{projections} of preimage sets, or
+\begin{equation}
+	P~(image~(fst~\arrowcomp~fst)~A)
+\end{equation}
+for preimage sets $A \subseteq (R \times T) \times X$. 
+
+$P$ is partial, so not every preimage set has a sensible measure.
+Sets that do are called \emph{measurable}.
+Computing preimages and ``projecting out'' $T$ and $X$ should preserve measurability.
+
+\subsection{Measurability}
 
 To save space, we assume readers are familiar with either topology or measure theory.
 Readers unfamiliar with both may wish to skip to the next section.
+(XXX: ``If you know topology, we relate it that, if you don't need this, skip to xxx'')
 
 Many topological concepts have analogues in measure theory; e.g. the analogue of a topology is a $\sigma$-algebra.
 
@@ -2453,30 +2485,15 @@ More generally, any continuous or (countably) piecewise continuous function can 
 It is not difficult to compose $\meaningof{\cdot}\gen$ with another semantic function that lifts and defunctionalizes lambda expressions.
 Thus, all higher-order programs are measurable.
 
-\subsection{Random Store Probabilities}
+\subsection{Measurable Projections}
 
-Preimages under probabilistic programs are measurable subsets of $(R \times T) \times X$.
-While it is possible to put probability measures on such domains, doing so would be surprising for end-users.
-For example, the probabilities of outputs of the $geometric$ function defined in~\eqref{eqn:geometric-def} would depend not only on the probability of $random < p$, but also on some arbitrary probability that each branch is taken.
-It would not define the geometric distribution.
-
-We therefore have to measure \emph{projections} of subsets of $(R \times T) \times X$.
+If $g := \meaningofconv{\mathit{e}}\pmap : X \pmapto Y$, then the probability of a measurable output set $B \in \Sigma~Y$ is
+\begin{equation}
+	P~(image~(fst~\arrowcomp~fst)~(preimage~(g~j_0~A)~B))
+\end{equation}
+where $A \in \Sigma~\pair{\pair{R,T},X}$ and $domain~P = \Sigma~R$. 
 Unfortunately, projected sets are generally not measurable.
-Fortunately, ours is a special case: the excluded dimensions are countable.
-
-As previously, we start with measuring the maximal domain.
-
-\begin{definition}[standard probability measure]
-For a type $X$, a \mykeyword{standard probability measure} is a probability measure $P \in \powerset~X \pto [0,1]$ where $domain~P = \Sigma~X$.
-\end{definition}
-
-\begin{definition}[maximal probability]
-Let $g : X \pmapto Y$ be measurable, with $A^*$ its maximal domain.
-Let $P \in \powerset~R \pto [0,1]$ be a standard probability measure over random stores.
-The \keyword{maximal probability} of $g$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
-\end{definition}
-
-XXX: not too happy with the proof below, or with focusing on maximal probabilities
+Fortunately, if $X$ is at most countable and $\Sigma~X = \powerset~X$, we have a special case.
 
 \begin{theorem}[measurable finite projections]
 Let $A \in \Sigma~\pair{X_1,X_2}$.
@@ -2487,6 +2504,12 @@ If $X_2$ is at most countable and $\Sigma~X_2 = \powerset~X_2$, then $image~fst~
 Because $\Sigma~X_2 = \powerset~X_2$, $A$ is a countable union of rectangles of the form $A_1 \times \set{a_2}$, where $A_1 \in \Sigma~X_1$ and $a_2 \in X_2$.
 Because $image~fst$ distributes over unions, $image~fst~A$ is a countable union of sets in $\Sigma~X_1$.
 \end{proof}
+
+\begin{definition}[maximal probability]
+Let $g : X \pmapto Y$ be measurable, with $A^*$ its maximal domain.
+Let $P \in \powerset~R \pto [0,1]$ be a standard probability measure over random stores.
+The \keyword{maximal probability} of $g$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
+\end{definition}
 
 \begin{theorem}
 Let $g : X \pmapto Y$ be measurable.
@@ -2536,7 +2559,7 @@ We recover some generality by stating correctness theorems in terms of general p
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&unproj_{fst} :: Set~\pair{X_1,X_2} \tto Set~X_1 \tto Set~\pair{X_1,X_2} \\
+		&unproj_{fst} : Set~\pair{X_1,X_2} \tto Set~X_1 \tto Set~\pair{X_1,X_2} \\
 		&unproj_{fst}~A~B \lzfcsplit{
 			&\ :=\ preimage~(mapping~fst~A)~B \\[2pt]
 			&\ \;\equiv\ A \i (B \times proj_{snd}~A)
@@ -2554,12 +2577,12 @@ We recover some generality by stating correctness theorems in terms of general p
 \hline
 \\[-6pt]
 	&\begin{aligned}[t]
-		&project :: J \tto Set~(J \to X) \tto Set~X \\
+		&project : J \tto Set~(J \to X) \tto Set~X \\
 		&project~j~A \ := \ image~(\pi~j)~A
 	\end{aligned} \\
 \\[-6pt]
 	&\begin{aligned}[t]
-		&unproject :: J \tto Set~(J \to X) \tto Set~X \tto Set~(J \to X) \\
+		&unproject : J \tto Set~(J \to X) \tto Set~X \tto Set~(J \to X) \\
 		&unproject~j~A~B \lzfcsplit{
 			&\ :=\ preimage~(mapping~(\pi~j)~A)~B \\[2pt]
 			&\ \;\equiv\ A \i \prod_{i \in J} if~(j = i)~B~(project~j~A)
@@ -2713,6 +2736,8 @@ which overapproximates $(\uplus\pre)$.
 
 
 \subsection{Partial Programs}
+
+XXX: too much yanking the user's chain here
 
 We have enough of the specification to implement the preimage arrow and the $AStore$ arrow transformer.
 But we cannot yet deal with programs that may diverge, or that converge with probability $1$.
@@ -2968,7 +2993,7 @@ XXX: todo
 For all $A \in Rect~\pair{S,X}$ and $B \in Rect~Y$, $refine'~A \subseteq A$.
 \end{theorem}
 \begin{proof}
-By construction.
+XXX: todo
 \end{proof}
 
 
@@ -2976,7 +3001,7 @@ By construction.
 If $A_1$ and $A_2$ are disjoint, then $refine'~A_1$ and $refine'~A_2$ are disjoint.
 \end{corollary}
 
-\subsection{Limitations}
+\subsection{Preimage Refinement}
 \label{sec:discretization}
 
 With disjointness and monotonicity properties, it is natural to suppose that we can compute probabilities of preimages of $B$ by computing preimages with respect to increasingly fine discretizations of $A$.
@@ -2987,16 +3012,12 @@ For example, starting with any partition $\A : Set~(Rect~\pair{S,X})$, we might 
 \end{enumerate}
 If the second step yields finer partitions, it seems the sum of the measures of each rectangle in $\A$ should approach the probability of $B$.
 
-We are not so fortunate: in the limit, we would be computing the \keyword{Jordan outer measure}~(XXX: cite) of the preimage of $B$, which is not always equal to its measure.
+In general, however, we are computing the \keyword{Jordan outer measure}~(XXX: cite) of the preimage of $B$, which is not always equal to its measure.
+An example of a program for which preimage refinement diverges is $rational?~random$, where $rational?$ returns $true$ when its argument is rational and diverges otherise: the preimage of $\set{true}$ has measure $0$, but its Jordan outer measure is $1$.
 
-For example, suppose we extend the language with real numbers---which is reasonable, given that Bayesian practice requires them.
-If it also has $(<)$, which is also a reasonable extension, it is possible to define $(\ge)$ and thus $(=)$ for real numbers, and thus a $rational?$ function that semidecides rationality by enumerating the rationals and returning $true$ when it finds its input.
-The preimage of $\set{true}$ under $\meaningof{rational?~random}\pmap\conv$ has measure $0$, but its outer Jordan measure is $1$.
-Roughly, it is impossible to tightly cover a dense set like $\Rat$ using finite partitions.
-
-For programs that halt with probability 1, finite discretization tends to work out anyway.
-Unfortunately, the sparsity of work on Jordan measure, especially in general spaces, makes it difficult to characterize the conditions under which converging approximations converge.
-We leave this for future work.
+We conjecture that a minimal requirement for preimage refinement's measures to converge is that a program must converge with probability $1$.
+There are certainly other requirements.
+We leave these and proof of convergence of measures to future work.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3019,7 +3040,7 @@ Both implementations' arrow combinator definitions are almost line-for-line tran
 
 Making the rectangular set type polymorphic seems to require the equivalent of a typeclass system.
 In Haskell, it also requires GHC's multi-parameter typeclasses or indexed type families~(XXX: cite) to associate set types with the types of their members.
-Using indexed type families, the only significant differences between the Haskell implementation and the approximating semantics are type contexts and newtype wrappers for arrow types.
+Using indexed type families, the only significant differences between the Haskell implementation and the approximating semantics are type contexts, \texttt{newtype} wrappers for arrow types, and using \texttt{Maybe} types as bottom arrow return types.
 
 Typed Racket has no typeclass system on top of its type system, so the rectangular set type is monomorphic; thus, so are the arrow types.
 The lack of type variables in the combinator types is the only significant difference between the implementation and the approximating semantics.
@@ -3029,20 +3050,103 @@ All three direct implementations can currently be found at XXX: URL.
 \subsection{Dr. Bayes}
 
 Our main implementation, \mykeyword{Dr. Bayes}, is written in Typed Racket.
-Roughly, it consists of a monomorphic rectangular set data type, the semantic function $\meaningof{\cdot}\gen$ from Figure~\ref{fig:semantic-function} and its extension $\meaningof{\cdot}\gen\conv$, the bottom* arrow as defined in Figures~\ref{fig:bottom-arrow-defs} and~\ref{fig:astore-arrow-defs}, the approximating preimage and preimage* arrows as defined in Figures~\ref{fig:extra-preimage-arrow-defs} and~\ref{fig:approximating-preimage-arrow-defs}, and algorithms to compute approximate probabilities.
-We use it to test the feasibility of solving real-world problems.
+It consists of the semantic function $\meaningof{\cdot}\genc$ from Figure~\ref{fig:semantic-function} and its extension $\meaningof{\cdot}\genc\conv$, the bottom* arrow as defined in Figures~\ref{fig:bottom-arrow-defs} and~\ref{fig:astore-arrow-defs}, the approximating preimage and preimage* arrows as defined in Figures~\ref{fig:extra-preimage-arrow-defs} and~\ref{fig:approximating-preimage-arrow-defs}, and algorithms to compute approximate probabilities.
+We use it to test the feasibility of solving real-world problems by computing the measures of approximate preimages.
 
-%The arrow definitions are similar enough to those given in this paper that we do not need to report on them.
+Dr. Bayes's preimage arrow implementation operates on a monomorphic rectangular set data type.
+It includes floating-point intervals to overapproximate real intervals, with which we compute approximate preimages under arithmetic and inequalities.
+Finding the smallest covering rectangle for images and preimages under $add : \pair{\Re,\Re} \tto \Re$ and other monotone functions is fairly straightforward.
+For piecewise monotone functions, we distinguish cases using $\ifpre$; e.g.
+\begin{equation}
+	mul\pre := 
+		\lzfcsplit{\ifpre~
+			&(fst\pre~\comppre~positive?\pre) \\
+			&(\lzfcsplit{\ifpre~
+				&(snd\pre~\comppre~positive?\pre) \\
+				&mul^{++}\pre \\
+				&(\lzfcsplit{\ifpre~
+					&(snd\pre~\comppre~negative?\pre) \\
+					&mul^{+-}\pre \\
+					&(const\pre~0)))
+				}
+			} \\
+			&\cdots
+		}
+\end{equation}
+To support data types, the set type includes tagged rectangles; for ad-hoc polymorphism, it includes disjoint unions.
 
-Section~\ref{sec:discretization} outlines a discretization algorithm that seems to converge for programs that halt with probability 1, consisting of repeatedly refining a program's domain and repartitioning it.
-We do not use this algorithm in our main implementation, not only because it may not converge: it is also terribly inefficient.
+Section~\ref{sec:discretization} outlines preimage refinement: a discretization algorithm that seems to converge for programs that halt with probability 1, consisting of repeatedly refining a program's domain and repartitioning it.
+We do not use this algorithm directly in our main implementation because it is inefficient.
 Good accuracy requires fine discretization, which is \emph{exponential} in the number of discretized axes.
 For example, a nonrecursive program that contains only 10 uses of $random$ would need to partition 10 axes of $R$, the set of random sources.
 Splitting each axis into only 4 disjoint intervals yields a partition of $R$ of size $4^{10} = 1,048,576$.
 
-To avoid this explosion in time and space in the main implementation, we sample from the discretization instead of enumerating it.
+Fortunately, Bayesian practitioners do not care much about measuring preimages for its own sake.
+They are concerned with the renormalized distribution of outputs given some condition.
+Further, they are perfectly satisfied with sampling methods, which are usually much more efficient than methods based on enumeration.
 
-XXX: finish section
+Let $g : X \mapto Y$ be the interpretation of a program as a mapping arrow computation.
+A Bayesian is primarily interested in the probability of $B^* \subseteq Y$ given some condition set $B \subseteq Y$.
+If $A := preimage~(g~X)~B$ and $A^* := preimage~(g~X)~B^*$, the probability of $B^*$ given $B$ is
+\begin{equation}
+	Pr[A^*|A] \ := \ P~(A^* \i A) / P~A
+\label{eqn:conditional-probability}
+\end{equation}
+
+One way to approximately compute probabilities is using \keyword{rejection sampling}.
+Given a list of samples $xs$ of $X$,
+\begin{equation}
+	P~A \ \approx \ \frac{length~(filter~(\in A)~xs)}{length~xs}
+\label{eqn:sampling-approx}
+\end{equation}
+Here, ``$\approx$'' roughly denotes probabilistic convergence as the length of $xs$ increases.
+Combining~\eqref{eqn:conditional-probability} and~\eqref{eqn:sampling-approx} yields
+\begin{equation}
+\begin{aligned}
+	Pr[A^* | A]
+		&\ = \ P~(A^* \i A) / P~A
+\\
+		&\ \approx \ \frac{length~(filter~(\in A^* \i A)~xs) / length~xs}{length~(filter~(\in A)~xs) / length~xs}
+\\
+		&\ \approx \ \frac{length~(filter~(\in A^* \i A)~xs)}{length~(filter~(\in A)~xs)}
+\end{aligned}
+\label{eqn:sampling-approx-conditional}
+\end{equation}
+to compute approximate conditional probabilities.
+
+The probability that any given element of $xs$ is in $A$ can be extremely small, so it would clearly be best to sample only within $A$.
+While we cannot do that, we can quite easily sample $xs$ from a rectangular cover $A' \supseteq A$.
+
+To compute these probabilities, we use the fact that $A$ and $A^*$ are preimages:
+\begin{equation}
+\begin{aligned}
+	filter~(\in A)~xs
+		&\ = \ filter~(\in preimage~(g~X)~B)~xs
+\\
+		&\ = \ filter~(\fun{a}{g~X~a \in B})~xs
+\\
+		&\ = \ filter~(\fun{a}{f~a \in B})~xs
+\end{aligned}
+\end{equation}
+Here, $f : X \botto Y$ is the interpretation of the program as a bottom arrow computation.
+Thus,
+\begin{equation}
+	Pr[A^* | A] \ \approx \ \frac{filter~(\fun{a}{f~a \in B^* \i B})~xs}{filter~(\fun{a}{f~a \in B})~xs}
+\end{equation}
+converges to the probability of $B^*$ given $B$ as the number of samples $xs$ from the rectangular cover $A'$ increases.
+
+The rectangular cover $A'$ does not have to be enumerated: the rectangles that comprise it can be sampled.
+Sampling from each sampled rectangle yields $xs$.
+
+The preceeding discussion does not treat 
+
+$P~(image~(fst~\arrowcomp~fst)~A)$
+
+about computations of type $X \botto Y$, $X \mapto Y$ and $X \preto' Y$.
+Sampling correctly from preimages computed by $X \ppreto' Y$ 
+
+
+For programs interpreted using $\meaningofconv{\cdot}_\pbot$ and $\meaningofconv{\cdot}\ppre$
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
