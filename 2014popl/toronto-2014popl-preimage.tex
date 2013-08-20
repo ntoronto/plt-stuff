@@ -150,7 +150,7 @@ Our semantics interprets programs as functions that compute preimages of sets of
 Distributions over outputs are defined by the probabilities of their preimages, a measure-theoretic approach that ensures the language is not artificially limited.
 
 Measurability is a basic property similar to continuity that is critical, but often neglected.
-As part of proving correctness, we prove that all programs, including partial programs with real arithmetic, are measurable..
+As part of proving correctness, we prove that all programs, including partial programs with real arithmetic, are measurable.
 
 Functions that compute preimages are generally uncomputable, so we develop an additional approximating semantics for computing rectangular covers of preimages.
 We implement the approximating semantics directly in Typed Racket and Haskell.
@@ -329,8 +329,8 @@ For this work, we use a manually checked, polymorphic type system characterized 
 	\item $\pair{x,y}$ denotes a pair of values with types $x$ and $y$.
 	\item $Set~x$ denotes a set with members of type $x$.
 \end{itemize}
-The type $Set~X$ denotes the same values as the powerset $\powerset~X$, or \emph{subsets} of $X$.
-Similarly, the type $\pair{X,Y}$ denotes the same values as the product set $X \times Y$.
+Because the type $Set~X$ denotes the same values as the set $\powerset~X$ (i.e. subsets of $X$) we regard them as equivalent.
+Similarly, the type $\pair{X,Y}$ is equivalent to the set $X \times Y$.
 
 We write \lzfclang programs in heavily sugared $\lambda$-calculus syntax, with an $if$ expression and these additional primitives:
 \begin{equation}
@@ -502,7 +502,7 @@ Unlike monad and idiom computations, arrow computations are always
 	\item Function-like: An arrow computation of type $x \arrow y$ must behave like a corresponding function of type $x \tto y$ (in a sense we formalize shortly).
 	\item First-order: There is no way to derive a computation $app : \pair{x \arrow y, x} \arrow y$ from an arrow's minimal definition.
 \end{itemize}
-The first property makes arrows a perfect fit for a compositional translation from programs to intensional or extensional functions---or, as we will see, to computations that compute preimages.
+The first property makes arrows a perfect fit for a compositional translation from expressions to intensional or extensional functions---or, as we will see, to computations that compute preimages.
 The second property makes them a perfect fit for a measure-theoretic semantics in particular, as $app$ in the function arrow is generally not measurable (XXX: cite Aumann).
 Targeting arrows in the semantics therefore gives some assurance that we can meet measure theory's requirement that preimage measure be defined only for measurable functions.
 We prove in Section~\ref{sec:measurability} that it is sufficient.
@@ -668,15 +668,16 @@ The proofs for every other law are similar.
 
 Figure~\ref{fig:semantic-function} defines a transformation $\meaningof{\cdot}\gen$ from a first-order let-calculus to arrow computations for any arrow $a$.
 
-\begin{figure*}[t]\centering
+\begin{figure*}[t]
 \begin{align*}
-	\mathit{p} \ ::\equiv \ 
+	\mathit{p} &\ ::\equiv \ \mathit{x := e};\ ...\ ; \mathit{e} \\
+	\mathit{e} &\ ::\equiv \ \mathit{x~e}\ |\ let~\mathit{e~e}\ |\ env~\mathit{n}\ |\ \mathit{\pair{e,e}}\ |\ fst~\mathit{e}\ |\ snd~\mathit{e}\ |\ if~\mathit{e~e~e}\ |\ \mathit{v}\ |\ \cdots \\
+	\mathit{v} &\ ::\equiv \ \text{[first-order constants]}
 \end{align*}
-
 \begin{align*}
 \begin{aligned}[t]
-	\meaningof{\mathit{x} := \mathit{e};\ \cdots\ ; \mathit{e_{body}}}\gen &\ :\equiv\
-		\mathit{x} := \meaningof{\mathit{e}}\gen;\ \cdots \ ; \meaningof{\mathit{e_{body}}}\gen \\
+	\meaningof{\mathit{x} := \mathit{e};\ ...\ ; \mathit{e_{body}}}\gen &\ :\equiv\
+		\mathit{x} := \meaningof{\mathit{e}}\gen;\ ...\ ; \meaningof{\mathit{e_{body}}}\gen \\
 	\meaningof{\mathit{x}~\mathit{e}}\gen &\ :\equiv\
 		\meaningof{\pair{\mathit{e},\pair{}}}\gen~\arrowcomp\gen~\mathit{x}
 \\
@@ -688,11 +689,14 @@ Figure~\ref{fig:semantic-function} defines a transformation $\meaningof{\cdot}\g
 	\meaningof{env~0}\gen &\ :\equiv\ \arrowarr\gen~fst
 \\
 	\meaningof{env~(\mathit{n}+1)}\gen &\ :\equiv\ \arrowarr\gen~snd~\arrowcomp\gen~\meaningof{env~\mathit{n}}\gen
-\end{aligned}
-&\tab
-\begin{aligned}[t]
-	\meaningof{\mathit{v}}\gen &\ :\equiv\ \arrowarr\gen~(const~\mathit{v})
+\\[6pt]
+	id &\ := \ \fun{a} a
 \\
+	const~b &\ := \ \fun{a} b
+\\
+\end{aligned}
+&\tab\tab\tab
+\begin{aligned}[t]
 	\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen &\ :\equiv\
 		\meaningof{\mathit{e}_1}\gen~\arrowpair\gen~\meaningof{\mathit{e}_2}\gen
 \\
@@ -707,10 +711,14 @@ Figure~\ref{fig:semantic-function} defines a transformation $\meaningof{\cdot}\g
 			\meaningof{\mathit{e_c}}\gen~
 			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_t}}\gen})~
 			(\arrowlazy\gen~\fun{0}{\meaningof{\mathit{e_f}}\gen})
+\\
+	\meaningof{\mathit{v}}\gen &\ :\equiv\ \arrowarr\gen~(const~\mathit{v})
+\\
+	&\ \cdots
+\\[6pt]
+	\text{subject to} &\ \meaningof{\mathit{p}}\gen : \pair{} \arrow\gen \ \text{for some $y$}
 \end{aligned}
 \end{align*}
-where $~const~b := \fun{a}{b}~$ and $~id := \fun{a}{a}~$
-\vspace{0.5\baselineskip}
 \hrule
 \caption{Transformation from a let-calculus with first-order definitions and De-Bruijn-indexed bindings to computations in arrow $\mathrm{a}$.
 %The type of a transformed expression is $1 \arrow\gen X$, or an arrow from the empty stack $\gamma = 0$ to a value of type $X$.
@@ -726,39 +734,49 @@ Instead, variables are referred to by De Bruijn indexes, with $0$ referring to t
 Perhaps unsurprisingly, the interpretation acts like a stack machine.
 The final expression has type $\pair{} \arrow\gen y$, where $y$ is the type of the program's value, and $\pair{}$ denotes an empty list.
 Let-bindings push values onto the stack.
-First-order functions have type $\pair{x,\pair{}} \arrow\gen y$ where $x$ is the argument type.
-Application sends a stack containing just $x$.
+First-order functions have type $\pair{x,\pair{}} \arrow\gen y$ where $x$ is the argument type and $y$ is the return type.
+Application sends a stack containing just an $x$.
 
-It is not difficult to allow named bindings, but it is better to do so in a separate semantic function.
-Baking such support into $\meaningof{\cdot}\gen$ might complicate the simple proof of the following theorem, which underlies most of our semantic correctness claims. (XXX: just say it's trivial and well-understood)
+Unless there is a reason to distinguish programs and expressions, we regard programs as if they were their final expressions.
+Thus, the following definition applies to both.
 
-\begin{theorem}[homomorphisms distribute over programs]
+\begin{definition}[well-defined expression]
+An expression $\mathit{e}$ is \keyword{well-defined} under arrow $a$ if $\meaningof{\mathit{e}}\gen : x \arrow\gen y$ for some $x$ and $y$, and $\meaningof{\mathit{e}}\gen$ converges.
+\label{def:well-defined-expression}
+\end{definition}
+
+From here on, we assume all expressions are well-defined.
+(The arrow $a$ will be clear from context.)
+This does not guarantee that \emph{running} any given interpretation converges; it just simplifies unqualified statements about expressions.
+
+An example is the following theorem, on which most of our semantic correctness theorems rely.
+
+\begin{theorem}[homomorphisms distribute over expressions]
 Let $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ be an arrow homomorphism.
-For all programs $\mathit{e}$, $\meaningof{\mathit{e}}\genb \equiv \arrowlift\genb~\meaningof{\mathit{e}}\gen$.
+For all expressions $\mathit{e}$, $\meaningof{\mathit{e}}\genb \equiv \arrowlift\genb~\meaningof{\mathit{e}}\gen$.
 \label{thm:homomorphism-implies-correct}
 \end{theorem}
 \begin{proof}
-By structural induction on program terms.
+By structural induction.
 
-Bases cases proceed by expansion and using $\arrowlift\genb \circ \arrowarr\gen \equiv \arrowarr\genb$~\eqref{eqn:lift-distributes-over-arr}. For example, for constants:
+Bases cases proceed by expansion and using $\arrowarr\genb \equiv \arrowlift\genb \circ \arrowarr\gen$~\eqref{eqn:lift-distributes-over-arr}. For example, for constants:
 \begin{align*}
-	\arrowlift\genb~\meaningof{\mathit{v}}\gen
-		&\ \equiv\ \arrowlift\genb~(\arrowarr\gen~(const~v)) \\
-		&\ \equiv\ \arrowarr\genb~(const~v) \\
-		&\ \equiv\ \meaningof{\mathit{v}}\genb
+	\meaningof{\mathit{v}}\genb
+		&\ \equiv\ \arrowarr\genb~(const~\mathit{v}) \\
+		&\ \equiv\ \arrowlift\genb~(\arrowarr\gen~(const~\mathit{v})) \\
+		&\ \equiv\ \arrowlift\genb~\meaningof{\mathit{v}}\gen
 \end{align*}
-Inductive cases proceed by expansion, applying one or more distributive laws~(\ref{eqn:lift-distributes-over-comp}--\ref{eqn:lift-distributes-over-lazy}), and applying the inductive hypothesis on subterms.
+Inductive cases proceed by expansion, applying the inductive hypothesis on subterms, and applying one or more distributive laws~\eqref{eqn:lift-distributes-over-comp}--\eqref{eqn:lift-distributes-over-lazy}.
 For example, for pairing:
 \begin{align*}
-	\arrowlift\genb~\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen
-		&\ \equiv\ \arrowlift\genb~(\meaningof{\mathit{e}_1}\gen~\arrowpair\gen~\meaningof{\mathit{e}_2}\gen) \\
-		&\ \equiv\ (\arrowlift\genb~\meaningof{\mathit{e}_1}\gen)~\arrowpair\genb~(\arrowlift\genb~\meaningof{\mathit{e}_2}\gen) \\
+	\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\genb
 		&\ \equiv\ \meaningof{\mathit{e}_1}\genb~\arrowpair\genb~\meaningof{\mathit{e}_2}\genb \\
-		&\ \equiv\ \meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\genb
+		&\ \equiv\ (\arrowlift\genb~\meaningof{\mathit{e}_1}\gen)~\arrowpair\genb~(\arrowlift\genb~\meaningof{\mathit{e}_2}\gen) \\
+		&\ \equiv\ \arrowlift\genb~(\meaningof{\mathit{e}_1}\gen~\arrowpair\gen~\meaningof{\mathit{e}_2}\gen) \\
+		&\ \equiv\ \arrowlift\genb~\meaningof{\pair{\mathit{e}_1,\mathit{e}_2}}\gen
 \end{align*}
 It is not hard to check the remaining cases.
 \end{proof}
-XXX: restructure to have the proofs go left-to-right
 
 If we assume that $\arrowlift\genb$ defines correct behavior for arrow $b$ in terms of arrow $a$, and prove that $\arrowlift\genb$ is a homomorphism, then by Theorem~\ref{thm:homomorphism-implies-correct}, $\meaningof{\cdot}\genb$ is correct.
 
@@ -813,7 +831,7 @@ Using the diagram in~\eqref{eqn:roadmap-diagram1} as a sort of map, we are start
 \youarehere{eqn:roadmap-diagram2}
 Through Section~\ref{sec:preimage-arrow}, we move across the top to $X \preto Y$.
 
-To use Theorem~\ref{thm:homomorphism-implies-correct} to prove correct the interpretations of programs as preimage arrow computations, we need the preimage arrow to be homomorphic to a simpler arrow whose behavior is obviously correct.
+To use Theorem~\ref{thm:homomorphism-implies-correct} to prove correct the interpretations of expressions as preimage arrow computations, we need the preimage arrow to be homomorphic to a simpler arrow whose behavior is obviously correct.
 One obvious candidate is the function arrow~\eqref{eqn:function-arrow}.
 However, we will need to explicitly handle divergence as an error value, so we need a slightly more complicated arrow for which running computations may raise an error.
 
@@ -905,7 +923,7 @@ To parameterize mapping arrow computations on a domain, we define the \mykeyword
 The fact that $\bot$ is absent from $Y$ in $Set~X \tto (X \pto Y)$ will make it easier to exclude diverging inputs.
 Its absence and the fact that the type parameters denote sets will make it easier to apply well-known theorems from measure theory, which know nothing of lambda types and propagating error values.
 
-To use Theorem~\ref{thm:homomorphism-implies-correct} to prove that programs interpreted using $\meaningof{\cdot}\map$ behave correctly, we need to define correctness using a lift from the bottom arrow to the mapping arrow.
+To use Theorem~\ref{thm:homomorphism-implies-correct} to prove that expressions interpreted using $\meaningof{\cdot}\map$ behave correctly, we need to define correctness using a lift from the bottom arrow to the mapping arrow.
 It is helpful to have a standalone function $domain_\bot$ that computes the subset of $A$ on which $f$ does not return $\bot$.
 We define that first, and then define $\liftmap$ in terms of it:
 \begin{align}
@@ -1052,7 +1070,7 @@ By construction.
 \end{proof}
 
 \begin{corollary}[semantic correctness]
-For all programs $\mathit{e}$, $\meaningof{\mathit{e}}\map \equiv \liftmap~\meaningof{\mathit{e}}_\bot$.
+For all expressions $\mathit{e}$, $\meaningof{\mathit{e}}\map \equiv \liftmap~\meaningof{\mathit{e}}_\bot$.
 \end{corollary}
 
 \subsubsection{Arrow Laws}
@@ -1061,17 +1079,19 @@ Without restrictions, mapping arrow computations can be quite unruly.
 For example, the following computation is well-typed, but returns the identity mapping on $Bool$ when applied to an empty domain, and the empty mapping when applied to any other domain:
 \begin{equation}
 \begin{aligned}
-	&g : Bool \mapto Bool \\
-	&g~A \ := \ if~(A = \emptyset)~(mapping~id~Bool)~\emptyset
+	&nonmonotone : Bool \mapto Bool \\
+	&nonmonotone~A \ := \ if~(A = \emptyset)~(mapping~id~Bool)~\emptyset
 \end{aligned}
 \end{equation}
-It would be nice if we could be sure that every $g : X \mapto Y$ is not only monotone, but acts as if it returned restricted mappings.
+It would be nice if we could be sure that every $X \mapto Y$ is not only monotone, but acts as if it returned restricted mappings.
 The following equivalent property is easier to state, and makes proving the arrow laws simple.
 
 \begin{definition}[mapping arrow law]
 Let $g : X \mapto Y$. If there exists an $f : X \botto Y$ such that $g \equiv \liftmap~f$, then $g$ obeys the \mykeyword{mapping arrow law}.
 \label{def:mapping-arrow-law}
 \end{definition}
+
+XXX: mapping arrow restriction theorem
 
 We assume from here on that the mapping arrow law holds for all $g : X \mapto Y$.
 By homomorphism of $\liftmap$, mapping arrow combinators return computations that obey this law.
@@ -1329,11 +1349,11 @@ Starting from the right side, for all $B \subseteq Y$,
 \section{Deriving the Preimage Arrow}
 \label{sec:preimage-arrow}
 
-We are ready to define an arrow that runs programs backward on sets of outputs.
+We are ready to define an arrow that runs expressions backward on sets of outputs.
 Its computations should produce preimage mappings or be preimage mappings themselves.
 
 As with the mapping arrow and mappings, we cannot have $X \preto Y ::= X \prepto Y$: we run into trouble trying to define $\arrpre$ because a preimage mapping needs an observable range.
-To get one, it is easiest to parameterize preimage computations on a $Set~X$:
+To get one, it is easiest to parameterize preimage computations on a $Set~X$; therefore the \mykeyword{preimage arrow} type constructor is
 \begin{equation}
 	X \preto Y \ ::= \ Set~X \tto (X \prepto Y)
 \end{equation}
@@ -1525,7 +1545,7 @@ By construction.
 \end{proof}
 
 \begin{corollary}[semantic correctness]
-For all programs $\mathit{e}$, $\meaningof{\mathit{e}}\pre \equiv \liftpre~\meaningof{\mathit{e}}\map$.
+For all expressions $\mathit{e}$, $\meaningof{\mathit{e}}\pre \equiv \liftpre~\meaningof{\mathit{e}}\map$.
 \label{cor:preimage-arrow-correctness}
 \end{corollary}
 
@@ -1609,7 +1629,7 @@ Fortunately, assigning each subcomputation a unique index into a tree-shaped ran
 We need a way to assign unique indexes to expressions.
 
 \begin{definition}[binary indexing scheme]
-Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto J$ and $right : J \tto J$ be total, injective functions. If for all $j \in J$, $j = next~j_0$ for some finite composition $next$, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
+Let $J$ be an index set, $j_0 \in J$ a distinguished element, and $left : J \tto J$ and $right : J \tto J$ be total, injective functions. If for all $j \in J$, $j = next~j_0$ for some finite composition $next$ of $left$ and $right$, then $J$, $j_0$, $left$ and $right$ define a \mykeyword{binary indexing scheme}.
 \end{definition}
 
 For example, let $J$ be the set of lists of $\set{0,1}$, $j_0 := \pair{}$, and $left~j := \pair{0,j}$ and $right~j := \pair{1,j}$.
@@ -1624,8 +1644,8 @@ Alternatively, let $J$ be the set of dyadic rationals in $(0,1)$ (i.e. those wit
 \end{equation}
 With this alternative, left-to-right evaluation order can be made to correspond with the natural order $(<)$ over $J$.
 
-In any case, $J$ is always countable, and can be thought of as a set of indexes into an infinite binary tree.
-Values of type $J \to R$ encode an infinite binary tree as an infinite vector (i.e. total mapping).
+In any case, the index set $J$ is always countable, and can be thought of as a set of indexes into an infinite binary tree.
+Values of type $J \to A$ encode an infinite binary tree of $A$ values as an infinite vector (i.e. total mapping).
 
 \subsection{Applicative, Associative Store Transformer}
 
@@ -1697,18 +1717,21 @@ Because $f$ never accesses the store, $j$ is ignored.
 Figure~\ref{fig:astore-arrow-defs} defines the remaining combinators.
 Each subcomputation receives $left~j$, $right~j$, or some other unique binary index.
 We thus think of programs interpreted as $AStore$ arrows as being completely unrolled into an infinite binary tree, with each expression labeled with its tree index.
-Probabilistic and partial programs are interpreted using combinators that read a store at their expression index.
 
-\subsection{Probabilistic Programs}
+\subsection{Partial, Probabilistic Programs}
 \label{sec:probabilistic-programs}
+
+We interpret partial and probabilistic programs using combinators that read a store at an expression index.
+
+\paragraph{Probabilitic Programs} To interpret probabilitic programs, we use a random tree as the store.
 
 \begin{definition}[random source]
 Let $R := J \to [0,1]$.
-A \keyword{random source} is any $r \in R$.
+A \keyword{random source} is any infinite binary tree $r \in R$.
 \end{definition}
 
 Let $x \arrow\genc y ::= AStore~R~(x \arrow\gen y)$.
-The following combinator returns the number at its own index in the random source:
+This combinator returns the number at its tree index in the random source:
 \begin{equation}
 \begin{aligned}
 	&random\genc : x \arrow\genc [0,1] \\
@@ -1721,11 +1744,9 @@ We extend the let-calculus semantic function with
 \end{equation}
 for arrows $a^*$ for which $random\genc$ is defined.
 
-\subsection{Partial Programs}
-\label{sec:partial-programs}
+\paragraph{Partial Programs}
 
-%Divergence is an applicative effect, so it should not be too surprising that it can be modeled using an applicative store.
-One utimately implementable way to avoid divergence in computing preimages is to use a store to dictate which branch of each conditional, if any, is allowed to be taken.
+One utimately implementable way to avoid divergence is to use the store to dictate which branch of each conditional, if any, is allowed to be taken.
 
 \begin{definition}[branch trace]
 A \mykeyword{branch trace} is any $t \in J \to Bool_\bot$ such that $t~j = true$ or $t~j = false$ for no more than finitely many $j \in J$.
@@ -1739,7 +1760,7 @@ The following combinator returns $t~j$ using its own index $j$:
 	&branch\genc~j \ := \ \arrowarr\gen~(fst~\arrowcomp~\pi~j)
 \end{aligned}
 \end{equation}
-Using $branch\genc$, we define an additional if-then-else combinator, which ensures its test expression agrees with the branch trace:
+Using $branch\genc$, we define an if-then-else combinator that ensures its test expression agrees with the branch trace:
 \begin{align}
 	&\begin{aligned}
 		&agrees : \pair{Bool,Bool} \tto Bool_\bot \\
@@ -1764,10 +1785,9 @@ Using $branch\genc$, we define an additional if-then-else combinator, which ensu
 \end{align}
 If the branch trace agrees with the test expression, it computes a branch; otherwise, it returns an error.
 
-Every computation defined using the let-calculus semantic function $\meaningof{\cdot}\gen$, whose \emph{defining expression} converges, must have its recurrences guarded by an $if$.
-Thus, if we stick to well-defined let-calculus programs, we need only replace $\arrowif\genc$ with $\arrowconvif\genc$ to ensure \emph{computations} always converge.
-
-We define $\meaningofconv{\cdot}\genc$ as nearly identical to $\meaningof{\cdot}\genc$, but with a different $if$ rule:
+We assume every expression is well-defined (Definition~\ref{def:well-defined-expression}), so every expression must have its recurrences guarded by $if$.
+Thus, to ensure running their interpretations always converges, we should only need to replace $\arrowif\genc$ with $\arrowconvif\genc$.
+We define a new semantic function $\meaningofconv{\cdot}\genc$ by
 \begin{equation}
 \begin{aligned}
 	\meaningofconv{if~\mathit{e_c}~\mathit{e_t}~\mathit{e_f}}\genc &\ :\equiv\
@@ -1777,9 +1797,9 @@ We define $\meaningofconv{\cdot}\genc$ as nearly identical to $\meaningof{\cdot}
 			&(\arrowlazy\gen~\fun{0}{\meaningofconv{\mathit{e_f}}\genc})}
 \end{aligned}
 \end{equation}
-If $\meaningofconv{\mathit{e}}\genc$ is well-defined, it always converges.
+with the remaining rules similar to those of $\meaningof{\cdot}\genc$.
 
-\subsection{Partial, Probabilistic Programs}
+\paragraph{Partial, Probabilistic Programs}
 
 Let $S ::= R \times T$ and $x \arrow\genc y ::= AStore~S~(x \arrow\gen y)$, and update the $random\genc$ and $branch\genc$ combinators to reflect that the store is now a pair:
 \begin{align}
@@ -1797,14 +1817,16 @@ The definitions of $\arrowconvif\genc$ and $\meaningofconv{\cdot}\genc$ remain t
 
 \subsection{Correctness}
 
-The combinator $\arrowtrans\genc$ lifts the interpretations of \emph{pure} programs (i.e. those that do not access the store) to $AStore$ arrow computations.
-To prove it is a homomorphism, and thus that \emph{pure} programs interpreted using $\meaningof{\cdot}\genc$ are correct, we need to extend equivalence to be more extensional.
+We have two arrow lifts to prove homomorphic: one from pure computations to effectful (i.e. from those that do not access the store to those that do), and one from effectful computations to effectful.
+For both, we need $AStore$ arrow equivalence to be more extensional.
 
 \begin{definition}[$AStore$ arrow equivalence]
 Two $AStore$ arrow computations $k_1$ and $k_2$ are equivalent, or $k_1 \equiv k_2$, when $k_1~j \equiv k_2~j$ for all $j \in J$.
 \end{definition}
 
-Because $AStore$ accepts any arrow type $x \arrow\gen y$, we can prove homomorphism of $\arrowtrans\genc$ using only general properties.
+\paragraph{Pure Expressions}
+Proving $\arrowtrans\genc$ is a homomorphism proves $\meaningof{\cdot}\genc$ correctly interprets pure expressions.
+Because $AStore$ accepts any arrow type $x \arrow\gen y$, we can do so using only general properties.
 From here on, we assume every $AStore$ arrow's base type's combinators obey the arrow laws listed in Section~\ref{sec:arrow-definitions}.
 
 \begin{theorem}[pure $AStore$ arrow correctness]
@@ -1818,11 +1840,11 @@ For~\eqref{eqn:lift-distributes-over-lazy}, additionally $\beta$-expand within t
 \end{proof}
 
 \begin{corollary}[pure semantic correctness]
-For all pure programs $\mathit{e}$, $\meaningof{\mathit{e}}\genc \equiv \arrowtrans\genc~\meaningof{\mathit{e}}\gen$ and $\meaningofconv{\mathit{e}}\genc \equiv \arrowtrans\genc~\meaningofconv{\mathit{e}}\gen$.
+For all pure expressions $\mathit{e}$, $\meaningof{\mathit{e}}\genc \equiv \arrowtrans\genc~\meaningof{\mathit{e}}\gen$ and $\meaningofconv{\mathit{e}}\genc \equiv \arrowtrans\genc~\meaningofconv{\mathit{e}}\gen$.
 \label{cor:pure-astore-semantic-correctness}
 \end{corollary}
 
-To prove correct the interpretations of effectful programs (i.e. those that access the store), we need a lift between $AStore$ arrows.
+\paragraph{Effectful Expressions} To prove all interpretations of effectful expressions correct, we need a lift between $AStore$ arrows.
 Let $x \arrow\genc y ::= AStore~s~(x \arrow\gen y)$ and $x \arrow\gend y ::= AStore~s~(x \arrow\gend y)$.
 Define
 \begin{equation}
@@ -1869,11 +1891,12 @@ XXX: do this
 \end{proof}
 
 \begin{corollary}[effectful semantic correctness]
-For all programs $\mathit{e}$, $\meaningof{\mathit{e}}\gend \equiv \arrowlift\gend~\meaningof{\mathit{e}}\genc$ and $\meaningofconv{\mathit{e}}\gend \equiv \arrowlift\gend~\meaningofconv{\mathit{e}}\genc$.
+If $\arrowlift\genb$ is an arrow homomorphism, then for all expressions $\mathit{e}$, $\meaningof{\mathit{e}}\gend \equiv \arrowlift\gend~\meaningof{\mathit{e}}\genc$ and $\meaningofconv{\mathit{e}}\gend \equiv \arrowlift\gend~\meaningofconv{\mathit{e}}\genc$.
 \label{cor:astore-semantic-correctness}
 \end{corollary}
 
-From here on, let $x \pbotto y ::= AStore~(R \times T)~(x \botto y)$; similarly for $X \pmapto Y$ and $X \ppreto Y$.
+From here on, let $x \pbotto y ::= AStore~(R \times T)~(x \botto y)$, called the \mykeyword{bottom* arrow};
+similarly for $X \pmapto Y$ (the \mykeyword{mapping* arrow}) and $X \ppreto Y$ (the \mykeyword{preimage* arrow}).
 
 \begin{corollary}[mapping* and preimage* arrow correctness]
 The following diagram commutes:
@@ -1888,7 +1911,7 @@ Further, $\liftpmap$ and $\liftppre$ are arrow homomorphisms.
 \end{corollary}
 
 \begin{corollary}[effectful semantic correctness]
-For all programs $\mathit{e}$,
+For all expressions $\mathit{e}$,
 \begin{equation}
 \begin{aligned}
 	\meaningof{\mathit{e}}\ppre &\ \equiv \ \liftppre~(\liftpmap~\meaningof{\mathit{e}}_\pbot)
@@ -1914,45 +1937,86 @@ The maximal domain of $k : X \arrow\genc Y$ is that of $k~j_0$.
 \end{definition}
 
 Because the above statements imply convergence, $A^*$ is a subset of the largest domain for which the computations converge.
-It is not too hard (but is a bit tedious) to show that lifting computations preserves the maximal domain; e.g. the maximal domain of $\liftmap~f$ is the same as $f$'s, and the maximal domain of $\liftppre~g$ is the same as $g$'s.
+It is not too hard to show (but is a bit tedious) that lifting computations preserves the maximal domain; e.g. the maximal domain of $\liftmap~f$ is the same as $f$'s, and the maximal domain of $\liftppre~g$ is the same as $g$'s.
 
 To ensure maximal domains exist, we need the domain operations above to have certain properties.
 
 \begin{theorem}[domain closure operators]
-If $f : X \botto Y$, $g : X \mapto Y$ and $h : X \preto Y$, then $domain_\bot~f$, $domain \circ g$, and $domain\pre \circ h$ are monotone, nonincreasing, and idempotent.
+If $f : X \botto Y$, $g : X \mapto Y$ and $h : X \preto Y$, then $domain_\bot~f$, $domain \circ g$, and $domain\pre \circ h$ are monotone, nonincreasing, and idempotent in the subdomains on which they converge.
 \label{thm:domain-closure-operators}
 \end{theorem}
 \begin{proof}
 These properties follow from the same properties of selection, restriction, and of preimages of images.
 \end{proof}
 
-(XXX: idempotence isn't necessary for maximal domains to exist)
+For any input for which $\meaningof{\mathit{e}}_\pbot$ converges, there should be a branch trace for which $\meaningofconv{\mathit{e}}_\pbot$ returns the correct output; it should otherwise return $\bot$.
 
-\begin{theorem}[divergence as an error]
-Suppose $\meaningofconv{\mathit{e}}_\pbot : X \pbotto Y$ converges.
-Let $f := \meaningof{\mathit{e}}_\pbot~j_0$ and $f' := \meaningofconv{\mathit{e}}_\pbot~j_0$.
-For all $r \in R$, $t \in T$ and $a \in X$,
-\begin{enumerate}
-	\item If $~f~\pair{\pair{r,t},a} = b$, then $f'~\pair{\pair{r,t'},a} = b$ for some $t' \in T$.
-	\item If $~f~\pair{\pair{r,t},a}$ diverges, $f'~\pair{\pair{r,t'},a} = \bot$ for all $t' \in T$.
-\end{enumerate}
+\begin{theorem}
+Let $f := \meaningof{\mathit{e}}_\pbot : X \pbotto Y$ with maximal domain $A^*$, and $f' := \meaningofconv{\mathit{e}}_\pbot$.
+For all $\pair{\pair{r,t},a} \in A^*$, there exists a $T' \subseteq T$ such that
+\begin{itemize}
+	\item If $t' \in T'$ then $f'~j_0~\pair{\pair{r,t'},a} = f~j_0~\pair{\pair{r,t},a}$.
+	\item If $t' \in T \w T'$ then $f'~j_0~\pair{\pair{r,t'},a} = \bot$.
+\end{itemize}
 \end{theorem}
 \begin{proof}
-\emph{Case 1.}
-Define $t' \in J \to Bool_\bot$ such that $t'~j = z$ if the subcomputation with index $j$ is an $if$ whose test returns $z$, otherwise $t'~j = \bot$.
-Because $f~\pair{\pair{r,t},a}$ converges, $t'~j \neq \bot$ for at most finitely many $j$, so $t' \in T$.
-%Exists $t'$.
+Define $T'$ as the set of all $t' \in J \to Bool_\bot$ such that $t'~j = z$ if the subcomputation with index $j$ is an $if$ whose test returns $z$.
+Because $f~j_0~\pair{\pair{r,t},a}$ converges, $t'~j \neq \bot$ for at most finitely many $j$, so each $t' \in T$.
 
-\emph{Case 2.}
-Let $t' \in T$.
-There exists an infinite \emph{suffix} $J' \subset J$ closed under $left$ and $right$, such that for all $j \in J'$, $t'~j = \bot$.
-Because $f~\pair{\pair{r,t},a}$ diverges, the indexes of its $if$ computations are unbounded; there is therefore an $if$ at some index $j$ such that $j \in J'$.
-It returns $\bot$, so $f'~\pair{\pair{r,t'},a} = \bot$.
+Let $t' \in T'$.
+Because the test of every $if$ subcomputation at index $j$ agrees with $t'~j$ and $f$ ignores branch traces, $f'~j_0~\pair{\pair{r,t'},a} = f~j_0~\pair{\pair{r,t},a}$.
+
+Let $t' \in T \w T'$.
+There exists an $if$ subexpression with a test that does not agree with $t'$; therefore $f'~j_0~\pair{\pair{r,t'},a} = \bot$.
 \end{proof}
 
+For any input for which $\meaningof{\mathit{e}}_\pbot$ diverges or returns $\bot$, $\meaningofconv{\mathit{e}}_\pbot$ should return $\bot$.
+Proving this is a little easier if we first identify subsets of $J$ that correspond with finite prefixes of an infinite binary tree.
+
+\begin{definition}[index prefix]
+$J' \subset J$ is an \mykeyword{index prefix} of $J$ if $J' = \set{j_0}$ or at least one of the following is true:
+\begin{itemize}
+	\item For some finite prefix $J''$ and $j \in J''$, $J' = J'' \uplus \set{left~j}$.
+	\item For some finite prefix $J''$ and $j \in J''$, $J' = J'' \uplus \set{right~j}$.
+\end{itemize}
+\end{definition}
+
+The corresponding \mykeyword{index suffix} is $J \w J'$, which is closed under $left$ and $right$.
+
+For a given $t \in T$, an index prefix $J'$ serves as a convenient bounding set for the finitely many indexes $j$ for which $t~j \neq \bot$.
+Applying $left$ and/or $right$ repeatedly to any $j \in J'$ eventually yields a $j' \in J \w J'$, for which $t~j' = \bot$.
+
+\begin{theorem}
+Let $f := \meaningof{\mathit{e}}_\pbot : X \pbotto Y$ with maximal domain $A^*$, and $f' := \meaningofconv{\mathit{e}}_\pbot$.
+For all $a \in ((R \times T) \times X) \w A^*$, $f'~j_0~a = \bot$.
+\end{theorem}
+\begin{proof}
+Let $t := snd~(fst~a)$ be the branch trace element of $a$.
+
+Suppose $f~j_0~a$ converges.
+If an $if$ subcomputation's test does not agree with $t$, then $f'~j_0~a = \bot$.
+If every $if$'s test agrees, $f'~j_0~a = f~j_0~a = \bot$.
+
+Suppose $f~j_0~a$ diverges.
+The set of all indexes $j$ for which $t~j \neq \bot$, because it is finite, is contained within an index prefix $J'$.
+By hypothesis, there is an $if$ subcomputation at some index $j'$ such that $j' \in J \w J'$.
+Because $t~j' = \bot$, $f'~j_0~a = \bot$.
+\end{proof}
+
+\begin{corollary}
+For all expressions $\mathit{e}$, the maximal domain of $\meaningofconv{\mathit{e}}_\pbot$ is a subset of that of $\meaningof{\mathit{e}}_\pbot$.
+\end{corollary}
+
+\begin{corollary}
+Let $f' := \meaningofconv{\mathit{e}}_\pbot : X \pbotto Y$ with maximal domain $A^*$, and $f := \meaningof{\mathit{e}}_\pbot$.
+For all $a \in A^*$, $f'~j_0~a = f~j_0~a$.
+\end{corollary}
+
+
 \begin{corollary}[correct convergence everywhere]
-Suppose $\meaningofconv{\mathit{e}}_\pbot : X \pbotto Y$ converges and has maximal domain $A^*$.
-For any $a \in (R \times T) \times X$, $A \subseteq (R \times T) \times X$, and $B \subseteq Y$,
+Suppose $\meaningofconv{\mathit{e}}_\pbot : X \pbotto Y$ has maximal domain $A^*$.
+Let $X' := (R \times T) \times X$.
+For all $a \in X'$, $A \subseteq X'$ and $B \subseteq Y$,
 \begin{equation}
 \begin{aligned}
 	&\meaningofconv{\mathit{e}}_\pbot &&\!\!\!\!j_0~a &&\!\!\!\!= \ if~(a \in A^*)~(\meaningof{\mathit{e}}_\pbot~j_0~a)~\bot \\
@@ -2137,13 +2201,12 @@ for preimage sets $A \subseteq (R \times T) \times X$.
 
 $P$ is partial, so not every preimage set has a sensible measure.
 Sets that do are called \emph{measurable}.
-Computing preimages and ``projecting out'' $T$ and $X$ should preserve measurability.
+Computing preimages and projecting onto $R$ must preserve measurability.
 
 \subsection{Measurability}
 
-To save space, we assume readers are familiar with either topology or measure theory.
-Readers unfamiliar with both may wish to skip to the next section.
-(XXX: ``If you know topology, we relate it that, if you don't need this, skip to xxx'')
+We assume readers are familiar with topology.
+Readers unfamiliar with topology or measure theory may wish to skip to Section~\ref{sec:approximating-semantics}.
 
 Many topological concepts have analogues in measure theory; e.g. the analogue of a topology is a $\sigma$-algebra.
 
@@ -2183,7 +2246,7 @@ The \keyword{product $\sigma$-algebra} $\A^{\otimes J}$ is the smallest $\sigma$
 \subsection{Measurable Pure Computations}
 
 It is easier to prove measurability of pure computations than to prove measurability of partial, probabilistic ones.
-Further, we can use the resulting theorems to prove that all partial, probabilistic programs are measurable.
+Further, we can use the resulting theorems to prove that the interpretations of all partial, probabilistic expressions are measurable.
 
 We first need to define what it means for a \emph{computation} to be measurable.
 
@@ -2371,7 +2434,7 @@ If $A^{**} = \emptyset$, then $\lazymap~g~A^{**} = \emptyset$; apply Theorem~\re
 If $A^{**} \neq \emptyset$, then $\lazymap~g = g~0$, which is $\A!\B$-measurable.
 \end{proof}
 
-\subsection{Measurable Probabilistic Programs}
+\subsection{Measurable Probabilistic Computations}
 
 As before, we first need to define what it means for a computation to be measurable.
 
@@ -2439,8 +2502,8 @@ $\convifpmap$ is measurable.
 $branch\pmap$ is measurable, and $\arrmap~agrees$ is measurable by~\eqref{eqn:standard-boolean-rule}.
 \end{proof}
 
-\begin{theorem}[all expressions are measurable]
-For any program $\mathit{e}$ lacking function definitions, $\meaningof{\mathit{e}}\pmap$ is measurable.
+\begin{theorem}[finite expressions are measurable]
+For any expression $\mathit{e}$ lacking first-order applications, $\meaningof{\mathit{e}}\pmap$ is measurable.
 \label{thm:nonrecursive-programs-are-measurable}
 \end{theorem}
 \begin{proof}
@@ -2448,21 +2511,19 @@ By structural induction and the above theorems.
 \end{proof}
 
 \begin{theorem}[approximation with expressions]
-Let $g := \meaningofconv{\mathit{e}}\pmap$ converge, where $g : X \pmapto Y$.
+Let $g := \meaningofconv{\mathit{e}}\pmap : X \pmapto Y$.
 For all $t \in T$, let $A := (R \times \set{t}) \times X$.
 There is an expression $\mathit{e'}$ for which $\meaningof{\mathit{e'}}\pmap~j_0~A = g~j_0~A$.
 \label{thm:nonrecursive-approximation}
 \end{theorem}
 \begin{proof}
-Let $j \in J$ be the largest for which $t~j \neq \bot$.
-To construct $\mathit{e'}$, exhaustively apply first-order functions in $\mathit{e}$, but replace any $\convifpmap$ whose condition's index is greater than $j$ with the equivalent expression $\bot$.
-Because $g$ converges, recurrences must be guarded by $if$, so this process terminates after finitely many applications.
+Let the index prefix $J'$ contain every $j$ for which $t~j \neq \bot$.
+To construct $\mathit{e'}$, exhaustively apply first-order functions in $\mathit{e}$, but replace any $\convifpmap$ whose index $j$ is not in $J$ with the equivalent expression $\bot$.
+Because $\mathit{e}$ is well-defined, recurrences must be guarded by $if$, so this process terminates after finitely many applications.
 \end{proof}
 
-XXX: the above proof is messed: there is not necessarily a largest $j$; what we probably want is a suffix $J' \subseteq J$
-
-\begin{theorem}[all probabilistic programs are measurable]
-If $\meaningofconv{\mathit{e}}\pmap$ converges, it is measurable.
+\begin{theorem}[all probabilistic expressions are measurable]
+For all expressions $\mathit{e}$, $\meaningofconv{\mathit{e}}\pmap$ is measurable.
 \label{thm:everything-is-measurable}
 \end{theorem}
 \begin{proof}
@@ -2483,17 +2544,17 @@ Theorem~\ref{thm:everything-is-measurable} remains true when $\meaningof{\cdot}\
 More generally, any continuous or (countably) piecewise continuous function can be made available as a language primitive, as long as its domain's and codomain's standard $\sigma$-algebras are generated from their topologies.
 
 It is not difficult to compose $\meaningof{\cdot}\gen$ with another semantic function that lifts and defunctionalizes lambda expressions.
-Thus, all higher-order programs are measurable.
+Thus, the interpretations of all expressions in higher-order languages are measurable.
 
 \subsection{Measurable Projections}
 
 If $g := \meaningofconv{\mathit{e}}\pmap : X \pmapto Y$, then the probability of a measurable output set $B \in \Sigma~Y$ is
 \begin{equation}
-	P~(image~(fst~\arrowcomp~fst)~(preimage~(g~j_0~A)~B))
+	P~(image~(fst~\arrowcomp~fst)~(preimage~(g~j_0~A^*)~B))
 \end{equation}
-where $A \in \Sigma~\pair{\pair{R,T},X}$ and $domain~P = \Sigma~R$. 
+if $domain~P = \Sigma~R$. 
 Unfortunately, projected sets are generally not measurable.
-Fortunately, if $X$ is at most countable and $\Sigma~X = \powerset~X$, we have a special case.
+Fortunately, for interpretations of programs $\meaningofconv{\mathit{p}}\pmap$, for which $X = \set{\pair{}}$, we have a special case.
 
 \begin{theorem}[measurable finite projections]
 Let $A \in \Sigma~\pair{X_1,X_2}$.
@@ -2505,34 +2566,25 @@ Because $\Sigma~X_2 = \powerset~X_2$, $A$ is a countable union of rectangles of 
 Because $image~fst$ distributes over unions, $image~fst~A$ is a countable union of sets in $\Sigma~X_1$.
 \end{proof}
 
-\begin{definition}[maximal probability]
-Let $g : X \pmapto Y$ be measurable, with $A^*$ its maximal domain.
-Let $P \in \powerset~R \pto [0,1]$ be a standard probability measure over random stores.
-The \keyword{maximal probability} of $g$ is $P~(image~(fst~\arrowcomp~fst)~A^*)$.
-\end{definition}
-
 \begin{theorem}
 Let $g : X \pmapto Y$ be measurable.
-If $X$ is at most countable and $\Sigma~X = \powerset~X$, then $g$'s maximal probability is well-defined.
+If $X$ is at most countable and $\Sigma~X = \powerset~X$, then for all $B \in \Sigma~Y$,
+\begin{equation}
+	image~(fst~\arrowcomp~fst)~(preimage~(g~j_0~A^*)~B) \ \in\ \Sigma~R
+\end{equation}
 \end{theorem}
 \begin{proof}
-$T$ is countable; apply Theorem~\ref{thm:measurable-projections} twice.
+$T$ is countable and $\Sigma~T = \powerset~T$ by definition~\eqref{eqn:standard-traces-rule}; apply Theorem~\ref{thm:measurable-projections} twice.
 \end{proof}
 
-In particular, for programs interpreted using $\meaningof{\cdot}\pmap$, typically $X = \set{\pair{}}$ (the empty list/stack), so their maximal probabilities are well-defined.
-
-\begin{corollary}
-Let $g : X \pmapto Y$ be measurable, with $X$ at most countable and $\Sigma~X = \powerset~X$. Let $A \subseteq A^*$ be a measurable set.
-$P~(image~(fst~\arrowcomp~fst)~A)$ is well-defined.
-\end{corollary}
-
-In particular, for any converging $g := \meaningofconv{\mathit{e}}\pmap$, preimages $A$ of measurable subsets $B$ are measurable, and the random store component of $A$ has a well-defined probability.
+In particular, for any well-defined $\meaningofconv{\mathit{p}}\pmap : \set{\pair{}} \pmapto Y$, the probabilities of measurable output sets are well-defined.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \section{Approximating Semantics}
+\label{sec:approximating-semantics}
 
 If we were to confine preimage computation to finite sets, we could implement the preimage arrow directly.
 But we would like something that works efficiently on infinite sets, even if it means approximating.
@@ -2603,7 +2655,7 @@ Further, because $pre$, $\liftpre$ and $\arrpre$ are ultimately defined in terms
 
 Fortunately, we need only certain lifts.
 Figure~\ref{fig:semantic-function} (which defines $\meaningof{\cdot}\gen$) lifts $id$, $const~b$, $fst$ and $snd$.
-Sections~\ref{sec:probabilistic-programs} and~\ref{sec:partial-programs}, which define the combinators used to interpret partial, probabilistic programs, lift $\pi~j$ and $agrees$.
+Section~\ref{sec:probabilistic-programs}, which defines the combinators used to interpret partial, probabilistic programs, lifts $\pi~j$ and $agrees$.
 Measurable functions made available as language primitives of course must be lifted to the preimage arrow.
 
 Figure~\ref{fig:extra-preimage-arrow-defs} gives expressions equivalent to $\arrpre~id$, $\arrpre~fst$, $\arrpre~snd$, $\arrpre~(const~b)$ and $\arrpre~(\pi~j)$.
