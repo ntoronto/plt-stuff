@@ -208,7 +208,7 @@ We cannot even model measuring devices correctly.
 
 \subsection{Measure-Theoretic Probability}
 
-Measure-theoretic probability (XXX: cite) is widely believed to be able to define everything reasonable that densities cannot.
+Measure-theoretic probability~\cite{cit:klenke-2006-probability} is widely believed to be able to define everything reasonable that densities cannot.
 It mainly does this by \emph{assigning probabilities to sets} instead of \emph{assigning changes in probability to values}.
 
 If $P$ assigns probabilities to subsets of $X$ and $f : X \to Y$, then the \keyword{preimage measure}
@@ -234,7 +234,7 @@ Unfortunately, it is difficult to turn this simple-sounding idea into a composit
 \begin{enumerate}
 	\item Preimages can be defined only for functions with observable domains, which excludes lambdas. \label{problem:observable-domain}
 	\item Requiring subsets of $X$ and $Y$ to be measurable constrains $f$: preimages of measurable subsets of $Y$ must be measurable subsets of $X$. Proving the conditions under which this is true is difficult, especially when $f$ may diverge. \label{problem:measurability}
-	\item It is very difficult to define probability measures for arbitrary spaces of measurable functions (XXX: cite Aumann). \label{problem:higher-orderness}
+	\item It is very difficult to define probability measures for arbitrary spaces of measurable functions~\cite{cit:aumann-1961ijm-borel}. \label{problem:higher-orderness}
 \end{enumerate}
 Implementing a language based on such a semantics is complicated because
 \begin{enumerate}
@@ -251,7 +251,7 @@ The outcome is worth it: we prove that all probabilistic programs are measurable
 This includes uncomputable programs; for example, those that contain real equality tests and limits.
 We believe this result is the first of its kind, and is general enough to apply to almost all past and future work on probabilistic programming languages.
 
-For difficulty~\ref{problem:higher-orderness}, we have discovered that the ``first-orderness'' of arrows is a perfect fit for the ``first-orderness'' of measure theory.
+For difficulty~\ref{problem:higher-orderness}, we have discovered that the ``first-orderness'' of arrows~\cite{cit:hughes-2005afp-arrows} is a perfect fit for the ``first-orderness'' of measure theory.
 
 \subsection{Arrow Solution Overview}
 
@@ -270,22 +270,19 @@ X \pbotto Y  @>>\liftpmap>  X \pmapto Y  @>>\liftppre>  X \ppreto Y%
 Using arrows, we define an \emph{exact} semantics and an \emph{approximating} semantics.
 Our exact semantics consists of
 \begin{itemize}
-	\item A semantic function which, like the semantic function for the arrow calculus~(XXX: cite Hughes or Lindley), transforms first-order programs into the computations of an arbitrary arrow.
+	\item A semantic function which, like the semantic function for the arrow calculus~\cite{cit:lindley-2010jfp-arrow-calculus}, transforms first-order programs into the computations of an arbitrary arrow.
 	\item Arrows for evaluating expressions in different ways.
 \end{itemize}
 This commutative diagram describes the relationships among the arrows used to define the exact semantics:
 \youarehere{eqn:roadmap-diagram1}
 From top-left to top-right, $X \botto Y$ computations are intensional functions that may raise errors, $X \mapto Y$ computations produce extensional functions, and $X \preto Y$ computations compute preimages.
-The computations of the arrows in the bottom row are equivalent to those in the top, except they always converge.
-We can do this because in \lzfclang, Turing-uncomputable programs are definable.
+The computations of the arrows in the bottom row are like those in the top, except they thread an infinite store of random values, and always converge.
+(We can do this because in \lzfclang, Turing-uncomputable programs are definable.)
+Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram1} is a homomorphism.
 
 Our approximating semantics consists of the same semantic function and an arrow $X \ppreto' Y$, derived from $X \ppreto Y$, for computing conservative approximations of preimages.
 
 An implementation implements (XXX: badness) the semantic function, and the $X \botto Y$ and $X \ppreto' Y$ arrows' combinators.
-
-Most of our correctness theorems rely on proofs that every $\arrowlift$ and $\arrowtrans$ in~\eqref{eqn:roadmap-diagram1} is a homomorphism.
-We use $\arrowlift$ and $\arrowtrans$ to define the correctness of one arrow in terms of another arrow.
-Homomorphism properties allow $\arrowlift$ and $\arrowtrans$ to distribute over the other arrow's computations.
 
 From here on, significant terms are introduced in \keyword{bold}, with those we invent introduced in \mykeyword{bold italics}.
 
@@ -303,15 +300,15 @@ The problem is exacerbated if implementing the language requires approximation.
 Targeting \lzfclang instead allows creating a precise mathematical specification and deriving an approximating specification without changing languages.
 
 In \lzfclang, essentially every set is a value, as well as every lambda and every set of lambdas.
-All operations, including operations on infinite sets, are assumed to complete instantly if they converge.\footnote{An example of a diverging \lzfclang function is one that attempts to decide whether arbitrary \lzfclang expressions converge.}
+All operations, including operations on infinite sets, are assumed to complete instantly if they converge.
 
 Almost everything definable in ZFC can be formally defined by a finite \lzfclang program, except objects that most mathematicians would agree are nonconstructive.
 More precisely, any set that \emph{must} be defined by a statement of existence and uniqueness without giving a bounding set is not definable by a \emph{finite} \lzfclang program.
 
 Because \lzfclang includes an inner model of ZFC, essentially every ZFC theorem applies to \lzfclang's set values without alteration.
-Further, proofs about \lzfclang's set values apply to ZFC sets.\footnote{Assuming the existence of an inaccessible cardinal.}
+Further, proofs about \lzfclang's set values apply directly to ZFC sets, assuming the existence of a single inaccessible cardinal.\footnote{A mild assumption, as ZFC+$\kappa$ is a smaller theory than Coq's~\cite{cit:barras-2010-sets-coq}, and algebraic geometers assume a proper class of inaccessibles.}
 
-In \lzfclang, algebraic data structures are encoded as sets; e.g. a \mykeyword{primitive ordered pair} of $x$ and $y$ is $\set{\set{x},\set{x,y}}$.
+In \lzfclang, algebraic data structures are encoded as sets; e.g. $\pair{x,y}$ can be encoded as $\set{\set{x},\set{x,y}}$.
 Only the \emph{existence} of encodings into sets is important, as it means data structures inherit a defining characteristic of sets: strictness.
 More precisely, the lengths of paths to data structure leaves is unbounded, but each path must be finite.
 Less precisely, data may be ``infinitely wide'' (such as $\Re$) but not ``infinitely tall'' (such as infinite trees and lists).
@@ -383,13 +380,13 @@ Therefore, while the terms $(\fun{x}{x})~1$ and $1$ are (externally, extensional
 Any truth statement $\mathit{e}$ implies that $\mathit{e}$ converges.
 In particular, the truth statement $\mathit{e}_1 = \mathit{e}_2$ implies that both $\mathit{e}_1$ and $\mathit{e}_2$ converge.
 However, we often want to say that $\mathit{e}_1$ and $\mathit{e}_1$ are equivalent when they both diverge.
-In these cases, we use a slightly weaker equivalence.
+In these cases, we use something slightly weaker.
 
 \begin{definition}[observational equivalence]
 Two \lzfclang terms $\mathit{e_1}$ and $\mathit{e_2}$ are \keyword{observationally equivalent}, written $\mathit{e_1} \equiv \mathit{e_2}$, when $\mathit{e_1} = \mathit{e_2}$ or both $\mathit{e_1}$ and $\mathit{e_2}$ diverge.
 \end{definition}
 
-It might seem helpful to introduce even coarser notions of equivalence, such as applicative or logical bisimilarity (XXX: cite).
+It might seem helpful to introduce even coarser notions of equivalence, such as applicative bisimilarity~\cite{cit:abramsky-1990rtfp-bisimilarity}.
 However, we do not want internal equality and external equivalence to differ too much, and we want the flexibility of extending ``$\equiv$'' with type-specific rules.
 
 \subsection{Additional Functions and Forms}
@@ -463,7 +460,7 @@ $A \uplus B$ diverges when $A$ and $B$ overlap.
 
 In set theory, functions are extensional---everything about them is observable---because they are encoded as sets of input-output pairs.
 The increment function for the natural numbers, for example, is $\set{\pair{0,1},\pair{1,2},\pair{2,3},...}$.
-We call extensional functions \mykeyword{mappings} and intensional functions \keyword{lambdas}, and use the word \keyword{function} to mean either.
+We call extensional functions \keyword{mappings} and intensional functions \keyword{lambdas}, and use the word \keyword{function} to mean either.
 For convenience, as with lambdas, we use adjacency (e.g. $(f~x)$) to apply mappings.
 
 Syntax for unnamed mappings is defined by
@@ -496,14 +493,14 @@ which is particularly useful when $f$ is unnamed.
 
 \section{Arrows and First-Order Semantics}
 
-Like monads and idioms (XXX: cite Wadler, McBride), arrows (XXX: cite Hughes) are used in functional programming to thread effects through computations in a way that imposes structure on the computations.
+Like monads and idioms~\cite{cit:wadler-2001-monads,cit:mcbride-2008jfp-idiom}, arrows~\cite{cit:hughes-2005afp-arrows} are used in functional programming to thread effects through computations in a way that imposes structure on the computations.
 Unlike monad and idiom computations, arrow computations are always
 \begin{itemize}
-	\item Function-like: An arrow computation of type $x \arrow y$ must behave like a corresponding function of type $x \tto y$ (in a sense we formalize shortly).
+	\item Function-like: An arrow computation of type $x \arrow y$ must behave like a corresponding function of type $x \tto y$ (in a sense we explain shortly in terms of homomorphisms).
 	\item First-order: There is no way to derive a computation $app : \pair{x \arrow y, x} \arrow y$ from an arrow's minimal definition.
 \end{itemize}
 The first property makes arrows a perfect fit for a compositional translation from expressions to intensional or extensional functions---or, as we will see, to computations that compute preimages.
-The second property makes them a perfect fit for a measure-theoretic semantics in particular, as $app$ in the function arrow is generally not measurable (XXX: cite Aumann).
+The second property makes them a perfect fit for a measure-theoretic semantics in particular, as $app$ in the function arrow is generally not measurable~\cite{cit:aumann-1961ijm-borel}.
 Targeting arrows in the semantics therefore gives some assurance that we can meet measure theory's requirement that preimage measure be defined only for measurable functions.
 We prove in Section~\ref{sec:measurability} that it is sufficient.
 
@@ -558,7 +555,6 @@ which diverges only when applied to $false$ in any $\lambda$-calculus.
 \label{eqn:arrow-combinators}
 \end{equation}
 define an \keyword{arrow} if certain monoid, homomorphism, and structural laws hold.
-(XXX: need to require $\arrowarr\gen$'s argument to be total)
 The additional combinators
 \begin{equation}
 \begin{aligned}
@@ -572,8 +568,7 @@ where $1 = \set{0}$, define an \keyword{arrow with choice} if certain additional
 
 From here on, as all of our arrows are arrows with choice, we simply call them arrows.
 
-The necessary homomorphism laws ensure that $\arrowarr\gen$ distributes over function arrow combinators.
-These laws can be put in terms of more general homomorphism properties that deal with distributing an arrow-to-arrow lift, which we use extensively to prove correctness.
+The necessary homomorphism laws can be put in terms of more general homomorphism properties that deal with distributing an arrow-to-arrow lift, which we use extensively to prove correctness.
 
 \begin{definition}[arrow homomorphism]
 A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeyword{arrow homomorphism} from arrow $\mathrm{a}$ to arrow $\mathrm{b}$ if the following distributive laws hold for appropriately typed $f$, $f_1$, $f_2$ and $f_3$:
@@ -598,7 +593,7 @@ A function $lift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeywor
 \label{def:arrow-homomorphism}
 \end{definition}
 
-The arrow homomorphism laws state that $\arrowarr\gen$ must be a homomorphism from the function arrow~\eqref{eqn:function-arrow} to arrow $a$.
+The arrow homomorphism laws state that $\arrowarr\gen : (x \tto y) \tto (x \arrow\gen y)$ must be a homomorphism from the function arrow~\eqref{eqn:function-arrow} to arrow $a$.
 Roughly, arrow computations that do not use additional combinators can be transformed into $\arrowarr\gen$ applied to a pure computation.
 They must be \emph{function-like}.
 
@@ -632,13 +627,20 @@ and distribution of pure computations over effectful:
 		\arrowlazy\gen~\fun{0}{\arrowarr\gen~f_1~\arrowcomp\gen~f_2~0}
 \label{eqn:pure-distributes-over-lazy}
 \end{align}
-Because arrows have traditionally been defined in nonstrict and strongly normalizing $\lambda$-calculii, we could not derive~\eqref{eqn:pure-distributes-over-lazy} from existing arrow laws.
-We are sure it is reasonable. (XXX: need better reason)
+
+Equivalence between different arrow representations is usually proved in a strongly normalizing $\lambda$-calculus~\cite{cit:lindley-2008entcs-idiom-arrow-monad,cit:lindley-2010jfp-arrow-calculus}, in which every function is free of effects, including divergence.
+Such a $\lambda$-calculus has no need for $\arrowlazy\gen$, so we could not derive~\eqref{eqn:pure-distributes-over-lazy} from existing arrow laws.
+But (XXX: justify).
+
+The pair extraction law~\eqref{eqn:pair-extraction}, which \emph{can} be derived from existing arrow laws, is a little more problematic, in nonstrict $\lambda$-calculii as well as \lzfclang.
+If $f_1$ can diverge, using~\eqref{eqn:pair-extraction} to transform a computation can turn a diverging expression into a converging one, or vice-versa.
+We could condition the pair extraction law on $f_1$'s totality.
+Instead, we require every argument to $\arrowarr\gen$ to be total, which simplifies more proofs.
 
 Rather than prove each necessary arrow law, we prove the arrows are \emph{epimorphic} (not necessarily \emph{isomorphic}) to arrows for which the laws hold.
 
 \begin{definition}[arrow epimorphism]
-An arrow homomorphism $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ is an \mykeyword{arrow epimorphism} from arrow $a$ to $b$ if it has a right inverse.
+An arrow homomorphism $\arrowlift\genb : (x \arrow\gen y) \tto (x \arrow\genb y)$ that has a right inverse (equiv. surjective) is an \mykeyword{arrow epimorphism} from $a$ to $b$.
 \label{def:arrow-epimorphism}
 \end{definition}
 
@@ -716,7 +718,7 @@ Figure~\ref{fig:semantic-function} defines a transformation $\meaningof{\cdot}\g
 \\
 	&\ \cdots
 \\[6pt]
-	\text{subject to} &\ \meaningof{\mathit{p}}\gen : \pair{} \arrow\gen \ \text{for some $y$}
+	\text{subject to} &\ \meaningof{\mathit{p}}\gen : \pair{} \arrow\gen y \ \text{for some $y$}
 \end{aligned}
 \end{align*}
 \hrule
@@ -831,7 +833,7 @@ Using the diagram in~\eqref{eqn:roadmap-diagram1} as a sort of map, we are start
 \youarehere{eqn:roadmap-diagram2}
 Through Section~\ref{sec:preimage-arrow}, we move across the top to $X \preto Y$.
 
-To use Theorem~\ref{thm:homomorphism-implies-correct} to prove correct the interpretations of expressions as preimage arrow computations, we need the preimage arrow to be homomorphic to a simpler arrow whose behavior is obviously correct.
+To use Theorem~\ref{thm:homomorphism-implies-correct} to prove correct the interpretations of expressions as preimage arrow computations, we need the preimage arrow to be homomorphic to a simpler arrow whose behavior is well-understood.
 One obvious candidate is the function arrow~\eqref{eqn:function-arrow}.
 However, we will need to explicitly handle divergence as an error value, so we need a slightly more complicated arrow for which running computations may raise an error.
 
@@ -1072,8 +1074,6 @@ By construction.
 \begin{corollary}[semantic correctness]
 For all expressions $\mathit{e}$, $\meaningof{\mathit{e}}\map \equiv \liftmap~\meaningof{\mathit{e}}_\bot$.
 \end{corollary}
-
-\subsubsection{Arrow Laws}
 
 Without restrictions, mapping arrow computations can be quite unruly.
 For example, the following computation is well-typed, but returns the identity mapping on $Bool$ when applied to an empty domain, and the empty mapping when applied to any other domain:
@@ -1369,7 +1369,7 @@ To use Theorem~\ref{thm:homomorphism-implies-correct}, we need to define correct
 \end{equation}
 By Theorem~\ref{thm:pre-like-preimage}, for all $g : X \mapto Y$, $A \subseteq X$ and $B \subseteq Y$,
 \begin{equation}
-	ap\pre~(\liftpre~g~A)~B \equiv preimage~(g~A)~B
+	ap\pre~(\liftpre~g~A)~B \ \equiv \ preimage~(g~A)~B
 \end{equation}
 Roughly, lifted mapping arrow computations compute correct preimages, exactly as we should expect them to.
 
@@ -1548,8 +1548,6 @@ By construction.
 For all expressions $\mathit{e}$, $\meaningof{\mathit{e}}\pre \equiv \liftpre~\meaningof{\mathit{e}}\map$.
 \label{cor:preimage-arrow-correctness}
 \end{corollary}
-
-\subsection{Arrow Laws}
 
 As with the mapping arrow, preimage arrow computations can be unruly.
 We would like to assume that each $h : X \preto Y$ acts as if it always computes preimages under restricted mappings.
@@ -1942,7 +1940,7 @@ It is not too hard to show (but is a bit tedious) that lifting computations pres
 To ensure maximal domains exist, we need the domain operations above to have certain properties.
 
 \begin{theorem}[domain closure operators]
-If $f : X \botto Y$, $g : X \mapto Y$ and $h : X \preto Y$, then $domain_\bot~f$, $domain \circ g$, and $domain\pre \circ h$ are monotone, nonincreasing, and idempotent in the subdomains on which they converge.
+If $f : X \botto Y$, $g : X \mapto Y$ and $h : X \preto Y$, then $domain_\bot~f$, $domain \circ g$, and $domain\pre \circ h$ are monotone, decreasing, and idempotent in the subdomains on which they converge.
 \label{thm:domain-closure-operators}
 \end{theorem}
 \begin{proof}
@@ -1973,15 +1971,14 @@ There exists an $if$ subexpression with a test that does not agree with $t'$; th
 For any input for which $\meaningof{\mathit{e}}_\pbot$ diverges or returns $\bot$, $\meaningofconv{\mathit{e}}_\pbot$ should return $\bot$.
 Proving this is a little easier if we first identify subsets of $J$ that correspond with finite prefixes of an infinite binary tree.
 
-\begin{definition}[index prefix]
-$J' \subset J$ is an \mykeyword{index prefix} of $J$ if $J' = \set{j_0}$ or at least one of the following is true:
-\begin{itemize}
-	\item For some finite prefix $J''$ and $j \in J''$, $J' = J'' \uplus \set{left~j}$.
-	\item For some finite prefix $J''$ and $j \in J''$, $J' = J'' \uplus \set{right~j}$.
-\end{itemize}
+\begin{definition}[index prefix/suffix]
+A finite $J' \subset J$ is an \mykeyword{index prefix} if $J' = \set{j_0}$ or, for some index prefix $J''$ and $j \in J''$, $J' = J'' \uplus \set{left~j}$ or $J' = J'' \uplus \set{right~j}$.
+
+$J \w J'$ is the corresponding \mykeyword{index suffix}.
+\label{def:index-prefix}
 \end{definition}
 
-The corresponding \mykeyword{index suffix} is $J \w J'$, which is closed under $left$ and $right$.
+It is not hard to show that every index suffix is closed under $left$ and $right$.
 
 For a given $t \in T$, an index prefix $J'$ serves as a convenient bounding set for the finitely many indexes $j$ for which $t~j \neq \bot$.
 Applying $left$ and/or $right$ repeatedly to any $j \in J'$ eventually yields a $j' \in J \w J'$, for which $t~j' = \bot$.
@@ -2180,7 +2177,7 @@ For all $A \subseteq (R \times T) \times X$ and $B \subseteq Y$, $ap\pre~(\meani
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\section{Probabilities}
+\section{Output Probabilities and Measurability}
 \label{sec:measurability}
 
 We have not assigned probabilities to any output sets yet.
@@ -2199,9 +2196,9 @@ We clearly must measure \emph{projections} of preimage sets, or
 \end{equation}
 for preimage sets $A \subseteq (R \times T) \times X$. 
 
-$P$ is partial, so not every preimage set has a sensible measure.
+Not all preimage sets have sensible measures.
 Sets that do are called \emph{measurable}.
-Computing preimages and projecting onto $R$ must preserve measurability.
+Computing preimages and projecting them onto $R$ must preserve measurability.
 
 \subsection{Measurability}
 
@@ -2502,18 +2499,22 @@ $\convifpmap$ is measurable.
 $branch\pmap$ is measurable, and $\arrmap~agrees$ is measurable by~\eqref{eqn:standard-boolean-rule}.
 \end{proof}
 
-\begin{theorem}[finite expressions are measurable]
-For any expression $\mathit{e}$ lacking first-order applications, $\meaningof{\mathit{e}}\pmap$ is measurable.
+\begin{definition}[finite expression]
+A \mykeyword{finite expression} is any expression for which no subexpression is a first-order application.
+\label{def:finite-expression}
+\end{definition}
+
+\begin{theorem}[all finite expressions are measurable]
+For all finite expressions $\mathit{e}$, $\meaningof{\mathit{e}}\pmap$ is measurable.
 \label{thm:nonrecursive-programs-are-measurable}
 \end{theorem}
 \begin{proof}
 By structural induction and the above theorems.
 \end{proof}
 
-\begin{theorem}[approximation with expressions]
+\begin{theorem}[approximation with finite expressions]
 Let $g := \meaningofconv{\mathit{e}}\pmap : X \pmapto Y$.
-For all $t \in T$, let $A := (R \times \set{t}) \times X$.
-There is an expression $\mathit{e'}$ for which $\meaningof{\mathit{e'}}\pmap~j_0~A = g~j_0~A$.
+For all $t \in T$, there is a finite expression $\mathit{e'}$ for which $\meaningof{\mathit{e'}}\pmap~j_0~A = g~j_0~A$, where $A := (R \times \set{t}) \times X$.
 \label{thm:nonrecursive-approximation}
 \end{theorem}
 \begin{proof}
@@ -2577,7 +2578,7 @@ If $X$ is at most countable and $\Sigma~X = \powerset~X$, then for all $B \in \S
 $T$ is countable and $\Sigma~T = \powerset~T$ by definition~\eqref{eqn:standard-traces-rule}; apply Theorem~\ref{thm:measurable-projections} twice.
 \end{proof}
 
-In particular, for any well-defined $\meaningofconv{\mathit{p}}\pmap : \set{\pair{}} \pmapto Y$, the probabilities of measurable output sets are well-defined.
+In particular, for any $\meaningofconv{\mathit{p}}\pmap : \set{\pair{}} \pmapto Y$, the probabilities of measurable output sets are well-defined.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -2673,10 +2674,10 @@ the following are representable and can be computed in finite time:
 \end{equation}
 Before addressing computability, we need to define families of sets under which these operations are closed.
 
-\subsection{Rectangular Families}
-
 \begin{definition}[rectangular family]
-For a set $X$ used as a type, $Rect~X$ denotes the \mykeyword{rectangular family} of subsets of $X$, which must be satisfy the following rules:
+For a set $X$ used as a type, $Rect~X$ denotes the \mykeyword{rectangular family} of subsets of $X$.
+For nonproduct $X$, $\emptyset \in Rect~X$ and $X \in Rect~X$, and $Rect~X$ must be closed under finite intersections.
+Products must satisfy the following rules:
 \begin{align}
 	Rect~\pair{X_1,X_2} &\ = \ (Rect~X_1) \boxtimes (Rect~X_2)
 	\label{eqn:standard-rect-finite-product-rule}
@@ -2690,47 +2691,40 @@ For a set $X$ used as a type, $Rect~X$ denotes the \mykeyword{rectangular family
 where
 \begin{align}
 	\A_1 \boxtimes \A_2 &\ := \ \setb{A_1 \times A_2}{A_1 \in \A_1, A_2 \in \A_2} \\
-	\A^{\boxtimes J} &\ := \ \setb{\textstyle\prod_{j \in J} A_j}{\Forall{j \in J}{A_j \in \A}}
+	%\A^{\boxtimes J} &\ := \ \setb{\textstyle\prod_{j \in J} A_j}{\Forall{j \in J}{A_j \in \A}}
+	\A^{\boxtimes J} &\ := \ \!\!\!\!\!\!\!\displaystyle\bigcup_{J' \subset J \text{ finite}}\!\!\!\!\!\! \left\{\textstyle\prod_{j \in J} A_j\ \middle|\ A_j \in \A, j \in J' \iff A_j \subset \U \A\right\}
 \end{align}
 lift cartesian products to sets of sets.
 \label{def:standard-rectangle}
 \end{definition}
 
-XXX: consider baking ``no more than finitely many non-full axes'' into the definition of rectangular family
-
 For example, if $Rect~\Re$ contains all the closed real intervals, then by~\eqref{eqn:standard-rect-finite-product-rule}, $[0,2] \times [1,\pi] \in Rect~\pair{\Re,\Re}$.
 
-For every non-product type $X$, we require $\emptyset \in Rect~X$, a universal set $X \in Rect~X$, singletons $\set{a} \in Rect~X$ for all $a \in X$, and for $Rect~X$ to be closed under intersection.
-It is not hard to show that these properties extend to rectangular families, and that the collection of all rectangular families is closed under products, projections, and $unproject$.
+We additionally define $Rect~Bool ::= \powerset~Bool$.
+It is easy to show that every product rectangular family $Rect~X$ contains $\emptyset$ and $X$, and that the collection of all rectangular families is closed under products, projections, and $unproject$.
 
 Further, all of the operations in~\eqref{eqn:exact-rectangle-ops} can be exactly implemented if finite sets are modeled directly, sets in an ordered space (such as $\Re$) are modeled by intervals, and sets in $Rect~\pair{X_1,X_2}$ are modeled by pairs of type $\pair{Rect~X_1,Rect~X_2}$.
-Though $J$ is infinite, sets in $Rect~(J \to X)$ can be modeled by \emph{finite} binary trees of sets in $Rect~X$, because a converging preimage computation can apply $unproject$ only finitely many times to $J \to X$.
+By~\eqref{eqn:standard-rect-arbitrary-product-rule}, sets in $Rect~(J \to X)$ have no more than finitely many axes that are proper subsets of $X$.
+They can be modeled by \emph{finite} binary trees, whose nodes contain axes for an index prefix $J' \subset  J$ (Definition~\ref{def:index-prefix}).
+Axes with indexes in the suffix $J \w J'$ are implicitly $X$.
 
-We defined one nonrectangular domain: the set of branch traces $T$, which contains every $t \in J \to Bool_\bot$ for which $t~j \neq \bot$ for no more than finitely many $J$.
-Fortunately, under conditions that are always met while computing approximate preimages, we can represent $T$ subsets as $J \to Bool_\bot$ rectangles, implicitly intersected with $T$.
+The set of branch traces $T$ is nonrectangular, containing every $t \in J \to Bool_\bot$ for which $t~j \neq \bot$ for no more than finitely many $J$.
+Fortunately, we can model $T$ subsets by $J \to Bool_\bot$ rectangles, implicitly intersected with $T$.
 
-\begin{theorem}
-Let $T' \in Rect~(J \to Bool_\bot)$ such that $\bot \notin project~j~T'$ for no more than finitely many $j \in J$.
-Then $project~j~(T' \i T) = project~j~T'$.
+\begin{theorem}[rectangular $T$ projection]
+If $T' \in Rect~(J \to Bool_\bot)$, then $project~j~(T' \i T) = project~j~T'$ for all $j \in J$.
 \end{theorem}
 \begin{proof}
-The subset case is by monotonicity of projections.
-For the superset case, let $b \in project~j~T'$.
-Define $t$ by
-\begin{equation}
-	t~j' =
-	\begin{cases}
-		b & j' = j \\
-		\text{any member of } project~j'~T' & \bot \notin project~j'~T' \\
-		\bot & \bot \in project~j'~T'
-	\end{cases}
-\end{equation}
+The subset case is by projection monotonicity.
+For the superset, let $b \in project~j~T'$.
+Define $t$ by $t~j' = b$ if $j' = j$, $t~j' = \bot$ if $\bot \in project~j'~T'$, and $t~j' \in project~j'~T'$ otherwise.
+
 For no more than finitely many $j' \in J$, $t~j' \neq \bot$, so $t \in T$; also $t \in T'$ by construction.
 Thus, there exists a $t \in T' \i T$ such that $t~j = b$, so $b \in project~j~(T' \i T)$.
 \end{proof}
 
 \begin{corollary}
-Under the same conditions, for all $B \subseteq Bool$, $unproject~j~(T' \i T)~B = T \i unproject~j~T'~B$.
+Under the same conditions, for all $B \subseteq Bool$, $unproject~j~(T' \i T)~B = unproject~j~T'~B \i T$.
 \end{corollary}
 
 \subsection{Approximate Preimage Mapping Operations}
@@ -2745,12 +2739,13 @@ At this point, we need to approximate.
 \begin{theorem}[pair preimage overapproximation]
 Let $g_1 \in X \pto Y_1$ and $g_2 \in X \pto Y_2$.
 For all $B \subseteq Y_1 \times Y_2$, $preimage~\pair{g_1,g_2}\map~B \subseteq preimage~g_1~(proj_{fst}~B) \i preimage~g_2~(proj_{snd}~B)$.
+\label{thm:pair-preimage-approximation}
 \end{theorem}
 \begin{proof}
 By monotonicity of preimages and projections, and by Lemma~\ref{lem:preimage-under-pairing}.
 \end{proof}
 
-It is not hard to show that the following replacement:
+It is not hard to use Theorem~\ref{thm:pair-preimage-approximation} to show that
 \begin{equation}
 \begin{aligned}
 	&\pair{\cdot,\cdot}\pre' : (X \prepto Y_1) \tto (X \prepto Y_2) \tto (X \prepto Y_1 \times Y_2) \\
@@ -2761,7 +2756,7 @@ It is not hard to show that the following replacement:
 computes covering rectangles of preimages under pairing.
 
 For $(\uplus\pre)$, we need an approximating replacement for $(\u)$ under which rectangular families are closed.
-In other words, we need a lattice join with respect to $(\subseteq)$, with the following additional properties:
+In other words, we need a lattice join $(\join)$ with respect to $(\subseteq)$, with the following additional properties:
 \begin{equation}
 \begin{aligned}
 	(A_1 \times A_2) \join (B_1 \times B_2) &\ = \ (A_1 \join B_1) \times (A_2 \join B_2) \\
@@ -2769,7 +2764,7 @@ In other words, we need a lattice join with respect to $(\subseteq)$, with the f
 \label{eqn:join-laws}
 \end{aligned}
 \end{equation}
-If for every non-product type $X$, $Rect~X$ is closed under $(\join)$, then rectangular families are clearly closed under $(\join)$. Further, for any $A$ and $B$, $A \u B \subseteq A \join B$.
+If for every nonproduct type $X$, $Rect~X$ is closed under $(\join)$, then rectangular families are clearly closed under $(\join)$. Further, for any $A$ and $B$, $A \u B \subseteq A \join B$.
 
 Replacing each union in $(\uplus\pre)$ with a join results in
 \begin{equation}
@@ -2786,30 +2781,14 @@ Replacing each union in $(\uplus\pre)$ with a join results in
 \end{equation}
 which overapproximates $(\uplus\pre)$.
 
+To interpret programs that may diverge, or that converge with probability $1$, we need to approximate $\convifppre$~\eqref{eqn:ifppre-def}.
 
-\subsection{Partial Programs}
-
-XXX: too much yanking the user's chain here
-
-We have enough of the specification to implement the preimage arrow and the $AStore$ arrow transformer.
-But we cannot yet deal with programs that may diverge, or that converge with probability $1$.
-For that, we need to approximate $\convifppre$~\eqref{eqn:ifppre-def}.
-
-Directly implementing $\convifppre$, and thus $agrees$, cannot work.
-Turning $agrees$ into a mapping shows why:
-\begin{equation}
-\begin{aligned}
-	&\arrmap~agrees~(Bool \times Bool) = \\
-	&\tab\set{\pair{\pair{true,true},true},\pair{\pair{false,false},false}}
-\end{aligned}
-\end{equation}
-The preimage of $Bool$ is $\set{\pair{true,true},\pair{false,false}}$, which is not rectangular.
-
+Directly implementing $\convifppre$ in terms of $agrees$ cannot work: the preimage of $Bool$ under $agrees$ (as a mapping) is $\set{\pair{true,true},\pair{false,false}}$, which is not rectangular.
 A lengthy (elided) sequence of substitutions to the defining expression for $\convifppre$ results in
 \begin{equation}
 \begin{aligned}
-	&\convifppre~k_1~k_2~k_3~j~A\ \equiv \\
-	&\tab\lzfclet{
+	&\convifppre~k_1~k_2~k_3~j~A\ \equiv 
+	\ \lzfclet{
 		\pair{C_k,p_k} & k_1~j_1~A \\
 		\pair{C_b,p_b} & branch\ppre~j~A \\
 		C_2 & C_k \i C_b \i \set{true} \\
@@ -2821,31 +2800,19 @@ A lengthy (elided) sequence of substitutions to the defining expression for $\co
 \label{eqn:expanded-convifppre}
 \end{equation}
 where $j_1 = left~j$ and so on.
-This has no trace of $agrees$ and clearly preserves rectangularity if $k_1$, $k_2$ and $k_3$ do.
-Yet it is still not good enough.
-When $A_2$ and $A_3$ overapproximate $\emptyset$, it takes unnecessary branches, which can lead to divergence.
-In the exact semantics, a well-defined program interpreted using $\convifppre$ never diverges.
+This does not use $agrees$ and preserves rectangularity if $k_1$, $k_2$ and $k_3$ do.
+Unfortunately, if $A_2$ or $A_3$ overapproximates $\emptyset$, it takes unnecessary branches, which can cause divergence.
+In the exact semantics, expressions interpreted using $\convifppre$ never diverge.
 
-Suppose we defined the approximating ${\convifppre}'$ to take \emph{no branches} when $branch\ppre~j~A$ contains both $true$ and $false$.
-Because $branch\ppre~j~A$ can return $\set{true}$ or $\set{false}$ for at most finitely many $j \in J$, there exists a suffix set $J' \subseteq J$ for which no branches will be taken.
+$C_b$ is the branch trace projection at $j$ (with $\bot$ removed).
+The set of indexes for which $C_b$ is either $\set{true}$ or $\set{false}$ is finite, so it is bounded by an index prefix, outside of which branch trace projections are $\set{true,false}$.
+Therefore, if the approximating ${\convifppre}'$ takes \emph{no branches} when $C_b = \set{true,false}$, but approximates with a finite computation, expressions interpreted using ${\convifppre}'$ will always converge.
 
-The returned preimage mapping's range is a subset of $Y$, and the preimages it computes must be subsets of $A_2 \join A_3$.
-Therefore, we might replace the $let$ body in~\eqref{eqn:expanded-convifppre} with
-\begin{equation}
-\begin{aligned}
-	\lzfcsplit{if~
-		&(C_b = \set{true,false}) \\
-		&\pair{Y,\fun{B}\lzfcsplit{A_2 \join A_3}} \\
-		&(k_2~j_2~A_2 \uplus\pre k_3~j_3~A_3)}
-\end{aligned}
-\end{equation}
-which computes the same preimages if $C_b \subset \set{true,false}$, and takes no branches and overapproximates otherwise.
-A well-defined program interpreted using a conditional defined this way should always converge.
-
-Unfortunately, we cannot refer to $Y$ in a function definition: it is only part of the type of $\convifppre$.
-We need a value $\top \in Rect~X$ for every $X$ to represent $X$ itself.
-It should behave exactly as $X$; e.g. $x \in \top$ for all $x \in X$ and $\top \i X' = X'$ for all $X' \subseteq X$.
-Thus, the approximating ${\convifppre}'$ can be written in terms of $\top$ instead of in terms of its (erased) type $Y$.
+We need an overapproximation for the non-branching case.
+In the exact semantics, the returned preimage mapping's range is a subset of $Y$, and it returns subsets of $A_2 \uplus A_3$.
+Therefore, ${\convifppre}'$ may return $\pair{Y,\fun{B}\lzfcsplit{A_2 \join A_3}}$ when $C_b = \set{true,false}$.
+We cannot refer to the type $Y$ in the function definition, so we represent it using $\top$ in the approximating semantics.
+Implementations can model it by a singleton ``universe'' instance for every $Rect~Y$.
 
 \begin{figure*}[t]\centering
 \begin{minipage}{\textwidth}
@@ -3017,59 +2984,133 @@ This arrow, the lifts in Figure~\ref{fig:extra-preimage-arrow-defs}, and the sem
 \subsection{Correctness}
 
 From here on, ${\meaningof{\cdot}\conv\ppre}'$ interprets programs as approximating preimage* arrow computations using ${\convifppre}'$.
-
-The following theorems assume $h := \meaningof{\mathit{e}}\conv\ppre : X \ppreto Y$ and $h' := {\meaningof{\mathit{e}}\conv\ppre}' : X \ppreto' Y$ for some program $\mathit{e}$.
-Further, define
-\begin{equation}
-\begin{aligned}
-	refine~A &:= ap\pre~(h~j_0~A)~B \\
-	refine'~A &:= ap\pre'~(h'~j_0~A)~B
-\end{aligned}
-\end{equation}
+The following theorems assume $h := \meaningofconv{\mathit{e}}\ppre : X \ppreto Y$ and $h' := {\meaningofconv{\mathit{e}}\ppre}' : X \ppreto' Y$ for some expression $\mathit{e}$.
 
 \begin{theorem}[approximation]
-For all $A \in Rect~\pair{S,X}$ and $B \in Rect~Y$, $refine~A \subseteq refine'~A$.
+For all $A \in Rect~\pair{\pair{R,T},X}$ and $B \in Rect~Y$, $ap\pre~(h~j_0~A)~B \subseteq ap\pre'~(h'~j_0~A)~B$.
+\label{thm:approximation}
 \end{theorem}
-\begin{proof}By construction.\end{proof}
+\begin{proof}
+By construction.
+\end{proof}
+
+To use structural induction on the interpretation of $\mathit{e}$, we need a theorem that allows representing it as a finite expression (Definition~\ref{def:finite-expression}).
+Because ${\convifppre}'$ does not branch when either branch could be taken, an equivalent finite expression exists for each rectangular domain subset $A$.
+
+\begin{theorem}[equivalent finite expression]
+Let $A \in Rect~\pair{\pair{R,T},X}$.
+There is a finite expression $\mathit{e'}$ for which $ap\pre'~(h''~j_0~A)~B = ap\pre'~(h'~j_0~A)~B$ for all $B \in Rect~Y$, where $h'' := {\meaningofconv{\mathit{e'}}\ppre}'$.
+\end{theorem}
+\begin{proof}
+Let $T' := proj_{snd}~(proj_{fst}~A)$, and the index prefix $J'$ contain every $j'$ for which $(project~j'~T') \w \set{\bot}$ is either $\set{true}$ or $\set{false}$.
+To construct $\mathit{e'}$, exhaustively apply first-order functions in $\mathit{e}$, but replace any $if~\mathit{e}_1~\mathit{e}_2~\mathit{e}_3$ whose index is not in $J'$ with the equivalent expression $if~\mathit{e}_1~\bot~\bot$.
+Because $\mathit{e}$ is well-defined, recurrences must be guarded by $if$, so this process terminates after finitely many applications.
+\label{thm:equivalent-finite-expression}
+\end{proof}
+
+\begin{corollary}[convergence]
+For all $A \in Rect~\pair{\pair{R,T},X}$ and $B \in Rect~Y$, $ap\pre'~(h'~j_0~A)~B$ converges.
+\end{corollary}
 
 \begin{theorem}[monotonicity]
 $ap\pre'~(h'~j_0~A)~B$ is monotone in both $A$ and $B$.
+\label{thm:monotonicity}
 \end{theorem}
 \begin{proof}
-XXX: todo
-%Monotonicity of $ap\pre~(h~j_0~A)~B$ is a property of preimages.
-%For $ap\pre'~(h'~j_0~A)~B$, lattice operations, which replace set operations in the approximating combinators, are monotone.
+Lattice operators $(\i)$ and $(\join)$ are monotone, as is $(\times)$.
+Therefore, $id\pre$ and the other lifts in Figure~\ref{fig:extra-preimage-arrow-defs} are monotone, and each approximating preimage arrow combinator preserves monotonicity.
+Approximating preimage* arrow combinators, which are defined in terms of approximating preimage arrow combinators (Figure~\ref{fig:approximating-preimage-arrow-defs}) likewise preserve monotonicity, as does $\arrowtrans\ppre'$; therefore $id\ppre$ and other lifts are monotone.
+
+The definition of ${\convifppre}'$ can be written in terms of lattice operators and approximating preimage arrow combinators for any $A$ for which $C_b \subset \set{true,false}$, and thus preserves monotonicity in that case.
+If $C_b = \set{true,false}$, which is an upper bound for $C_b$, the returned value is an upper bound.
+
+For monotonicity in $A$, let $A' \in Rect~\pair{\pair{R,T},X}$, and $\mathit{e'}$ be a finite expression equivalent to $\mathit{e}$ for $A'$ (Theorem~\ref{thm:equivalent-finite-expression}).
+Monotonicity for rectangular subsets of $A'$ follows from structural induction on the interpretation of $\mathit{e'}$.
+
+For monotonicity in $B$, let $\mathit{e'}$ be the finite expression equivalent to $\mathit{e}$ for any fixed $A$.
+Monotonicity follows from structural induction on the interpretation of $\mathit{e'}$.
 \end{proof}
 
-\begin{theorem}[approximate preimages are nonincreasing]
-For all $A \in Rect~\pair{S,X}$ and $B \in Rect~Y$, $refine'~A \subseteq A$.
+\begin{theorem}[approximate preimages are decreasing]
+For $A \in Rect~\pair{\pair{R,T},X}$ and $B \in Rect~Y$, $ap\pre'~(h'~j_0~A)~B \subseteq A$.
+\label{thm:decreasing}
 \end{theorem}
 \begin{proof}
-XXX: todo
+Because they compute exact preimages of rectangular sets under restriction to rectangular domains, $id\pre$ and the other lifts in Figure~\ref{fig:extra-preimage-arrow-defs} are decreasing.
+
+By definition and applying basic lattice properties,
+\begin{align*}
+	ap\pre'~((h_1~\comppre'~h_2)~A)~B &\ \equiv\  ap\pre'~(h_1~A)~B'\ \text{ for some $B'$}
+\\
+	ap\pre'~((h_1~\pairpre'~h_2)~A)~B &\ \equiv\
+		\lzfcsplit{
+			&ap\pre'~(h_1~A)~(proj_{fst}~B)\ \i \\
+			&ap\pre'~(h_2~A)~(proj_{snd}~B)
+		}
+\\
+	ap\pre'~(\ifpre'~h_1~h_2~h_3~A)~B &\ \equiv\
+		\lzfclet{
+			A_2 & ap\pre'~(h_1~A)~\set{true} \\
+			A_3 & ap\pre'~(h_1~A)~\set{false}
+		}{\lzfcsplit{
+			&ap\pre'~(h_2~A_2)~B\ \join \\
+			&ap\pre'~(h_3~A_3)~B
+		}}
+\\
+	ap\pre'~(\lazypre'~h~A)~B &\ \equiv\ if~(A = \emptyset)~\emptyset~(ap\pre'~(h~0~A)~B)
+\end{align*}
+Thus, approximating preimage arrow combinators return decreasing computations when given decreasing computations.
+This property transfers trivially to approximating preimage* arrow combinators.
+
+Let $\mathit{e'}$ be the finite expression equivalent to $\mathit{e}$ for $A$; that approximate preimages are decreasing follows from structural induction on the interpretation of $\mathit{e'}$.
 \end{proof}
 
 
-\begin{corollary}[disjointness of approximate preimages]
-If $A_1$ and $A_2$ are disjoint, then $refine'~A_1$ and $refine'~A_2$ are disjoint.
+\begin{corollary}[approximate preimages preserve disjointness]
+If $A_1 \i A_2 = \emptyset$, then $ap\pre'~(h'~j_0~A_1)~B \i ap\pre'~(h'~j_0~A_2)~B = \emptyset$.
+\label{cor:disjointness}
 \end{corollary}
 
-\subsection{Preimage Refinement}
+\subsection{Preimage Refinement Algorithm}
 \label{sec:discretization}
 
-With disjointness and monotonicity properties, it is natural to suppose that we can compute probabilities of preimages of $B$ by computing preimages with respect to increasingly fine discretizations of $A$.
-For example, starting with any partition $\A : Set~(Rect~\pair{S,X})$, we might repeat the following:
-\begin{enumerate}
-	\item Refine every rectangle in $\A$: let $\A' := image~refine'~\A$.
-	\item Partition the rectangles in $\A'$: let $\A := \bigcup\limits_{A' \in \A'} partition~A'$.
-\end{enumerate}
-If the second step yields finer partitions, it seems the sum of the measures of each rectangle in $\A$ should approach the probability of $B$.
+With disjointness and monotonicity properties proved, it is natural to suppose that we can compute probabilities of preimages of $B$ by computing preimages with respect to increasingly fine discretizations of $A$.
 
-In general, however, we are computing the \keyword{Jordan outer measure}~(XXX: cite) of the preimage of $B$, which is not always equal to its measure.
-An example of a program for which preimage refinement diverges is $rational?~random$, where $rational?$ returns $true$ when its argument is rational and diverges otherise: the preimage of $\set{true}$ has measure $0$, but its Jordan outer measure is $1$.
+\begin{definition}[preimage refinement algorithm]
+Let $h' := {\meaningofconv{\mathit{e}}\ppre}' : X \ppreto' Y$, $B \in Rect~Y$, and define
+\begin{equation}
+\begin{aligned}
+	&refine : Rect~\pair{\pair{R,T},X} \tto Rect~\pair{\pair{R,T},X} \\
+	&refine~A := ap\pre'~(h'~j_0~A)~B
+\end{aligned}
+\end{equation}
+Define $partition : Rect~\pair{\pair{R,T},X} \tto Set~(Rect~\pair{\pair{R,T},X})$ to produce positive-measure, disjoint rectangles, and define
+\begin{equation}
+\begin{aligned}
+	&refine^* : Set~(Rect~\pair{\pair{R,T},X}) \tto Set~(Rect~\pair{\pair{R,T},X}) \\
+	&refine^*~\A := image~refine~\left(\U_{A \in \A} partition~A \right)
+\end{aligned}
+\end{equation}
+For any $A \in Rect~\pair{\pair{R,T},X}$, iterate $refine^*$ on $\set{A}$.
+\label{def:preimage-refinement}
+\end{definition}
+
+
+Theorem~\ref{thm:monotonicity} (monotonicity) guarantees that the union of preimage refinements of a \emph{partition} of $A$ is never larger than the refinement of $A$ itself.
+Corollary~\ref{cor:disjointness} (disjointness) guarantees that the refinements of a partition of $A$ are a partition; thus, its measure is the sum of the measures of the rectangles that comprise it.
+Theorem~\ref{thm:approximation} guarantees that the algorithm is \keyword{sound}: the true preimage of $B$ is always contained in the covering partition $refine^*$ returns.
+
+We would like it to be \keyword{complete} up to null sets; i.e. covering partitions' measures should converge to the true preimage measure.
+Unfortunately, preimage refinement appears to compute the \keyword{Jordan outer measure} of a preimage, which is not always its measure.
+A counterexample is the expression $rational?~random$, where $rational?$ returns $true$ when its argument is rational and diverges otherwise.
+(This is definable using a $(\leq)$ primitive.)
+The preimage of $\set{true}$ has measure $0$, but its Jordan outer measure is $1$.
 
 We conjecture that a minimal requirement for preimage refinement's measures to converge is that a program must converge with probability $1$.
 There are certainly other requirements.
-We leave these and proof of convergence of measures to future work.
+We leave these and proof of convergence of measures for future work.
+
+For now, we use algorithms that depend only on preimage refinement's soundness.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3084,14 +3125,14 @@ We have four implementations: one of the exact semantics, two direct implementat
 
 If sets are restricted to be finite, the arrows used as translation targets in the exact semantics, defined in Figures~\ref{fig:mapping-defs}, \ref{fig:bottom-arrow-defs}, \ref{fig:mapping-arrow-defs}, \ref{fig:preimage-mapping-defs}, \ref{fig:preimage-arrow-defs} and~\ref{fig:astore-arrow-defs}, can be implemented directly in any practical $\lambda$-calculus with a set data type.
 Computing exact preimages is very inefficient, even under the interpretations of very small programs.
-However, we have found our Typed Racket~(XXX: cite) implementation useful for finding theorem candidates.
+However, we have found our Typed Racket~\cite{cit:tobin-hochstadt-2008popl-typed-scheme} implementation useful for finding theorem candidates.
 
 Given a rectangular set library, the approximating preimage arrows defined in Figures~\ref{fig:extra-preimage-arrow-defs} and~\ref{fig:approximating-preimage-arrow-defs} can be implemented with few changes in any practical $\lambda$-calculus.
-We have done so in Typed Racket and Haskell~(XXX: cite).
+We have done so in Typed Racket and Haskell~\cite{cit:haskell-lang}.
 Both implementations' arrow combinator definitions are almost line-for-line transliterations from the figures.
 
 Making the rectangular set type polymorphic seems to require the equivalent of a typeclass system.
-In Haskell, it also requires GHC's multi-parameter typeclasses or indexed type families~(XXX: cite) to associate set types with the types of their members.
+In Haskell, it also requires multi-parameter typeclasses or indexed type families~\cite{cit:chakravarty-2005popl-type-families} to associate set types with the types of their members.
 Using indexed type families, the only significant differences between the Haskell implementation and the approximating semantics are type contexts, \texttt{newtype} wrappers for arrow types, and using \texttt{Maybe} types as bottom arrow return types.
 
 Typed Racket has no typeclass system on top of its type system, so the rectangular set type is monomorphic; thus, so are the arrow types.
@@ -3103,9 +3144,9 @@ All three direct implementations can currently be found at XXX: URL.
 
 Our main implementation, \mykeyword{Dr. Bayes}, is written in Typed Racket.
 It consists of the semantic function $\meaningof{\cdot}\genc$ from Figure~\ref{fig:semantic-function} and its extension $\meaningof{\cdot}\genc\conv$, the bottom* arrow as defined in Figures~\ref{fig:bottom-arrow-defs} and~\ref{fig:astore-arrow-defs}, the approximating preimage and preimage* arrows as defined in Figures~\ref{fig:extra-preimage-arrow-defs} and~\ref{fig:approximating-preimage-arrow-defs}, and algorithms to compute approximate probabilities.
-We use it to test the feasibility of solving real-world problems by computing the measures of approximate preimages.
+We use it to test the feasibility of solving real-world problems by computing approximate preimages.
 
-Dr. Bayes's preimage arrow implementation operates on a monomorphic rectangular set data type.
+Dr. Bayes's arrows operate on a monomorphic rectangular set data type.
 It includes floating-point intervals to overapproximate real intervals, with which we compute approximate preimages under arithmetic and inequalities.
 Finding the smallest covering rectangle for images and preimages under $add : \pair{\Re,\Re} \tto \Re$ and other monotone functions is fairly straightforward.
 For piecewise monotone functions, we distinguish cases using $\ifpre$; e.g.
@@ -3127,49 +3168,35 @@ For piecewise monotone functions, we distinguish cases using $\ifpre$; e.g.
 \end{equation}
 To support data types, the set type includes tagged rectangles; for ad-hoc polymorphism, it includes disjoint unions.
 
-Section~\ref{sec:discretization} outlines preimage refinement: a discretization algorithm that seems to converge for programs that halt with probability 1, consisting of repeatedly refining a program's domain and repartitioning it.
+Section~\ref{sec:discretization} outlines preimage refinement: a discretization algorithm that seems to converge for programs that halt with probability 1, consisting of repeatedly shrinking and repartitioning a program's domain.
 We do not use this algorithm directly in our main implementation because it is inefficient.
 Good accuracy requires fine discretization, which is \emph{exponential} in the number of discretized axes.
 For example, a nonrecursive program that contains only 10 uses of $random$ would need to partition 10 axes of $R$, the set of random sources.
 Splitting each axis into only 4 disjoint intervals yields a partition of $R$ of size $4^{10} = 1,048,576$.
 
-Fortunately, Bayesian practitioners do not care much about measuring preimages for its own sake.
-They are concerned with the renormalized distribution of outputs given some condition.
-Further, they are perfectly satisfied with sampling methods, which are usually much more efficient than methods based on enumeration.
+Fortunately, Bayesian practitioners tend to be satisified with sampling methods, which are usually much more efficient than exact methods based on enumeration.
 
 Let $g : X \mapto Y$ be the interpretation of a program as a mapping arrow computation.
-A Bayesian is primarily interested in the probability of $B^* \subseteq Y$ given some condition set $B \subseteq Y$.
-If $A := preimage~(g~X)~B$ and $A^* := preimage~(g~X)~B^*$, the probability of $B^*$ given $B$ is
+A Bayesian is primarily interested in the probability of $B' \subseteq Y$ given some condition set $B \subseteq Y$.
+If $A := preimage~(g~X)~B$ and $A' := preimage~(g~X)~B'$, the probability of $B'$ given $B$ is
 \begin{equation}
-	Pr[A^*|A] \ := \ P~(A^* \i A) / P~A
+	Pr[B'|B] \ := \ P~(A' \i A) / P~A
 \label{eqn:conditional-probability}
 \end{equation}
-
-One way to approximately compute probabilities is using \keyword{rejection sampling}.
-Given a list of samples $xs$ of $X$,
+This can be approximated using \keyword{rejection sampling}.
+Given a nonempty list of samples $xs$ from any superset of $A$, the conditional probability in~\eqref{eqn:conditional-probability} is approximately
 \begin{equation}
-	P~A \ \approx \ \frac{length~(filter~(\in A)~xs)}{length~xs}
-\label{eqn:sampling-approx}
-\end{equation}
-Here, ``$\approx$'' roughly denotes probabilistic convergence as the length of $xs$ increases.
-Combining~\eqref{eqn:conditional-probability} and~\eqref{eqn:sampling-approx} yields
-\begin{equation}
-\begin{aligned}
-	Pr[A^* | A]
-		&\ = \ P~(A^* \i A) / P~A
-\\
-		&\ \approx \ \frac{length~(filter~(\in A^* \i A)~xs) / length~xs}{length~(filter~(\in A)~xs) / length~xs}
-\\
-		&\ \approx \ \frac{length~(filter~(\in A^* \i A)~xs)}{length~(filter~(\in A)~xs)}
-\end{aligned}
+	Pr[B'|B] \ \approx \ \frac{length~(filter~(\in A' \i A)~xs)}{length~(filter~(\in A)~xs)}
 \label{eqn:sampling-approx-conditional}
 \end{equation}
-to compute approximate conditional probabilities.
+where `$\approx$' (rather loosely) denotes convergence as the length of $xs$ increases.
+The probability that any given element of $xs$ is in $A$ is often extremely small, so it would clearly be best to sample only within $A$.
+While we cannot do that, we can easily sample from a partition covering $A$.
 
-The probability that any given element of $xs$ is in $A$ can be extremely small, so it would clearly be best to sample only within $A$.
-While we cannot do that, we can quite easily sample $xs$ from a rectangular cover $A' \supseteq A$.
+For a fixed number $\mathit{d}$ of uses of $random$, $\mathit{n}$ samples, and $\mathit{m}$ repartitions that split each rectangle in two, enumerating and sampling from a covering partition has time complexity $\mathit{O}(2^\mathit{md} + \mathit{n})$.
+Fortunately, we do not have to enumerate the rectangles in the partition: we sample them instead, and sample one $x$ from each rectangle, which is $\mathit{O(mdn)}$.
 
-To compute these probabilities, we use the fact that $A$ and $A^*$ are preimages:
+We cannot directly compute $a \in A$ or $a \in A' \i A$ in~\eqref{eqn:sampling-approx-conditional}, but we can use the fact that $A$ and $A'$ are preimages, and use the interpretation of the program as a bottom arrow computation $f : X \botto Y$:
 \begin{equation}
 \begin{aligned}
 	filter~(\in A)~xs
@@ -3180,33 +3207,34 @@ To compute these probabilities, we use the fact that $A$ and $A^*$ are preimages
 		&\ = \ filter~(\fun{a}{f~a \in B})~xs
 \end{aligned}
 \end{equation}
-Here, $f : X \botto Y$ is the interpretation of the program as a bottom arrow computation.
-Thus,
+Substituting into~\eqref{eqn:sampling-approx-conditional} gives
 \begin{equation}
-	Pr[A^* | A] \ \approx \ \frac{filter~(\fun{a}{f~a \in B^* \i B})~xs}{filter~(\fun{a}{f~a \in B})~xs}
+	Pr[B'|B] \ \approx \ \frac{length~(filter~(\fun{a}{f~a \in B' \i B})~xs)}{length~(filter~(\fun{a}{f~a \in B})~xs)}
 \end{equation}
-converges to the probability of $B^*$ given $B$ as the number of samples $xs$ from the rectangular cover $A'$ increases.
+which converges to the probability of $B'$ given $B$ as the number of samples $xs$ from the covering partition increases.
 
-The rectangular cover $A'$ does not have to be enumerated: the rectangles that comprise it can be sampled.
-Sampling from each sampled rectangle yields $xs$.
-
-The preceeding discussion does not treat 
-
-$P~(image~(fst~\arrowcomp~fst)~A)$
-
-about computations of type $X \botto Y$, $X \mapto Y$ and $X \preto' Y$.
-Sampling correctly from preimages computed by $X \ppreto' Y$ 
+For simplicity, the preceeding discussion does not deal with projecting preimages from the domain of programs $(R \times T) \times \set{\pair{}}$ onto the set of random sources $R$.
+Shortly, Dr. Bayes samples rectangles from covering partitions of $(R \times T) \times \set{\pair{}}$ subsets, weights each rectangle by the inverse of the probability with which it is sampled, and projects onto $R$.
+This alogorithm is a variant of \keyword{importance sampling}~\cite[Section 12.4]{cit:degroot-2012book-probability}, where the candidate distribution is defined by the sampling algorithm's partitioning choices, and the target distribution is $P$.
 
 
-For programs interpreted using $\meaningofconv{\cdot}_\pbot$ and $\meaningofconv{\cdot}\ppre$
+
+XXX: specific problems
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\section{Unrelated Work}
+\section{Loosely Related Work}
 
-XXX: todo
+XXX: possible citations:
+\begin{itemize}
+	\item labeling/numbering expressions (check CFA lit.)
+	\item bananas and lenses
+	\item isomorphic data structure transformations
+	\item prolog stuff
+	\item constraint-functional programming
+\end{itemize}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3214,7 +3242,22 @@ XXX: todo
 
 \section{Related Work}
 
-XXX: todo
+XXX: copy citations below to appropriate places in the introduction
+
+XXX: moar citations
+
+XXX: rework prose below to fit paper better
+
+Koller and Pfeffer~\cite{cit:koller-1997aaai-bayes-programs-short} efficiently compute exact distributions for the outputs of programs in a Scheme-like language. BUGS~\cite{cit:winbugs-language-short} focuses on efficient approximate computation for probabilistic theories with a finitely many statements, with distributions that practitioners typically use. BLOG~\cite{cit:blog-language-short} exists specifically to allow stating distributions over countably infinite vectors. BLAISE~\cite{cit:blaise-language} allows stating both distribution and approximation method for each random variable. Church~\cite{cit:church-language-short} is a Scheme-like probabilistic language with approximate inference, and focuses on expressiveness.
+
+Kiselyov~\cite{cit:kiselyov-2008uai-monolingual} embeds a probabilistic language in O'Caml for efficient computation. It uses continuations to enumerate or sample random variable values, and has a \texttt{fail} construct for the \textit{complement} of conditioning. The sampler looks ahead for \texttt{fail} and can handle it efficiently. This may be justified by commutativity (Thm.~\ref{thm:commutativity}), depending on interaction with other language features.
+
+There is a fair amount of semantics work in probabilistic languages. Most of it is not motivated by Bayesian concerns, and thus does not define conditioning. Kozen~\cite{cit:kozen-1979fcs-prob-programs-short} defines the meaning of bounded-space, imperative ``while'' programs as functions from probability measures to probability measures. Hurd~\cite{cit:hurd-2002thesis} proves properties about programs with binary random choice by encoding programs and portions of measure theory in HOL.
+
+Jones~\cite{cit:jones-1990thesis} develops a domain-theoretic variation of probability theory, and with it defines the probability monad, whose discrete version is a distribution-valued variation of the set or list monad. Ramsey and Pfeffer~\cite{cit:ramsey-2002popl-stochastic-short} define the probability monad measure-theoretically and implement a language for finite probability. We do not build on this work because the probability monad does not build a probability space, making it difficult to reason about conditioning.
+
+Pfeffer also develops IBAL~\cite{cit:pfeffer-2007chapter-ibal}, apparently the only lambda calculus with finite probabilistic choice that also defines conditional queries. Park~\cite{cit:park-2008toplas-prob} extends a lambda calculus with probabilistic choice, defining it for a very general class of probability measures using inverse transform sampling.
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -3238,6 +3281,6 @@ XXX: todo
 %Acknowledgments, if needed.
 
 \bibliographystyle{abbrvnat}
-\bibliography{plt}
+\bibliography{local-cites}
 
 \end{document}
