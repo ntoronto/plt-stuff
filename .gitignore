@@ -1,1 +1,11 @@
 compiled
+*.hi
+*.*~
+*.o
+*.aux
+*.bbl
+*.blg
+*.log
+*.tex.backup
+*.bib.backup
+
