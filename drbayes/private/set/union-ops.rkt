@@ -7,6 +7,8 @@
          "null-set.rkt"
          "bool-set.rkt"
          "pair-set.rkt"
+         "tree-set.rkt"
+         "tree-value.rkt"
          "extremal-set.rkt"
          "union.rkt"
          "value.rkt"
@@ -25,6 +27,8 @@
         [(and (bool-set? A) (boolean? x))  (bool-set-member? A x)]
         [(and (null-set? A) (null? x))     (null-set-member? A x)]
         [(and (pair-set? A) (pair? x))     (pair-set-member? A x)]
+        [(and (omega-set? A) (omega? x))   (omega-set-member? A x)]
+        [(and (trace-set? A) (trace? x))   (trace-set-member? A x)]
         [else  different]))
 
 (: basic-intersect (case-> (Nonfull-Basic Basic -> (U Different Nonfull-Basic))
@@ -35,6 +39,8 @@
         [(and (null-set? A) (null-set? B))  (null-set-intersect A B)]
         [(and (pair-set? A) (pair-set? B))  (pair-set-intersect A B)]
         [(and (bool-set? A) (bool-set? B))  (bool-set-intersect A B)]
+        [(and (omega-set? A) (omega-set? B))  (omega-set-intersect A B)]
+        [(and (trace-set? A) (trace-set? B))  (trace-set-intersect A B)]
         [else  different]))
 
 (: basic-join (case-> (Nonempty-Basic Basic -> (U Different Nonempty-Basic))
@@ -45,6 +51,8 @@
         [(and (bool-set? A) (bool-set? B))  (bool-set-union A B)]
         [(and (null-set? A) (null-set? B))  (null-set-union A B)]
         [(and (pair-set? A) (pair-set? B))  (pair-set-join A B)]
+        [(and (omega-set? A) (omega-set? B))  (omega-set-join A B)]
+        [(and (trace-set? A) (trace-set? B))  (trace-set-join A B)]
         [else  different]))
 
 (: basic-subseteq? (Basic Basic -> (U Different Boolean)))
@@ -53,6 +61,8 @@
         [(and (bool-set? A) (bool-set? B))  (bool-set-subseteq? A B)]
         [(and (null-set? A) (null-set? B))  (null-set-subseteq? A B)]
         [(and (pair-set? A) (pair-set? B))  (pair-set-subseteq? A B)]
+        [(and (omega-set? A) (omega-set? B))  (omega-set-subseteq? A B)]
+        [(and (trace-set? A) (trace-set? B))  (trace-set-subseteq? A B)]
         [else  different]))
 
 ;; ===================================================================================================

@@ -4,10 +4,13 @@
 
 (require (for-syntax racket/base)
          racket/match
+         racket/promise
          "real-set.rkt"
          "bool-set.rkt"
          "null-set.rkt"
          "extremal-set.rkt"
+         "tree-value.rkt"
+         "tree-set.rkt"
          "union.rkt")
 
 (struct: Bottom ([message : (Promise String)]) #:transparent)
@@ -16,7 +19,7 @@
 (define-syntax bottom? (make-rename-transformer #'Bottom?))
 (define-syntax bottom-message (make-rename-transformer #'Bottom-message))
 
-(define-type Value (Rec Value (U Flonum Boolean Null (Pair Value Value) tagged-value)))
+(define-type Value (Rec Value (U Flonum Boolean Null (Pair Value Value) Omega Trace tagged-value)))
 (define-type Maybe-Value (U Value Bottom))
 
 (struct: tagged-value ([tag : Symbol] [value : Value]) #:transparent)
@@ -29,17 +32,19 @@
         [(boolean? v)  bool-tag]
         [(null? v)     null-tag]
         [(pair? v)     pair-tag]
+        [(omega? v)    omega-tag]
+        [(trace? v)    trace-tag]
         [else          (tagged-value-tag v)]))
 
 ;; ===================================================================================================
 ;; Ref
 
-(: value-pair-ref (Value Pair-Index -> Value))
+(: value-pair-ref (Value Pair-Index -> Maybe-Value))
 (define (value-pair-ref v j)
   (cond [(pair? v)  (pair-ref v j)]
-        [else  (raise-argument-error 'value-pair-ref "Pair" 0 v j)]))
+        [else  (bottom (delay (format "value-pair-ref: expected Pair; given ~a" v)))]))
 
-(: pair-ref ((Pair Value Value) Pair-Index -> Value))
+(: pair-ref ((Pair Value Value) Pair-Index -> Maybe-Value))
 (define (pair-ref x j)
   (match-define (cons x1 x2) x)
   (cond [(eq? j 'fst)  x1]
@@ -56,16 +61,9 @@
         [(boolean? v)  (boolean->singleton v)]
         [(null? v)     nulls]
         [(pair? v)     (pair->singleton v)]
-        [else          (tagged-value->singleton v)]))
-
-(: flonum->singleton (Flonum -> Bot-Basic))
-(define (flonum->singleton x)
-  (cond [(< -inf.0 x +inf.0)  (Nonextremal-Interval x x #t #t)]
-        [else  (raise-argument-error 'flonum->singleton "rational Flonum" x)]))
-
-(: boolean->singleton (Boolean -> Bot-Basic))
-(define (boolean->singleton b)
-  (if b trues falses))
+        [(tagged-value? v)  (tagged-value->singleton v)]
+        [else  (raise-argument-error 'value->singleton
+                                     "Flonum, Boolean, Null, Pair or tagged-value" v)]))
 
 (: pair->singleton ((Pair Value Value) -> Bot-Basic))
 (define (pair->singleton x)

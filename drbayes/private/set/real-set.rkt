@@ -4,7 +4,7 @@
          Empty-Real-Set empty-real-set empty-real-set?
          Nonextremal-Interval Nonfull-Interval Nonempty-Interval Interval
          Nonextremal-Interval?
-         interval interval-fields interval?
+         interval flonum->singleton interval-fields interval?
          positive-interval negative-interval
          zero-interval nonpositive-interval nonnegative-interval
          unit-interval
@@ -107,6 +107,11 @@
                           ;[(fl= a -inf.0)  reals]  ; already checked above
                           [else  (Nonextremal-Interval a +inf.0 a? #f)])]
                    [else  (Nonextremal-Interval a b a? b?)]))]))
+  
+  (: flonum->singleton (Flonum -> Nonextremal-Real-Set))
+  (define (flonum->singleton x)
+    (cond [(< -inf.0 x +inf.0)  (Nonextremal-Interval x x #t #t)]
+          [else  (raise-argument-error 'flonum->singleton "rational Flonum" x)]))
   
   (: interval-fields (Nonempty-Interval -> (Values Flonum Flonum Boolean Boolean)))
   (define (interval-fields I)

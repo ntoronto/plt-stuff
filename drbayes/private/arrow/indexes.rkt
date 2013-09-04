@@ -3,7 +3,7 @@
 (require racket/flonum
          racket/match
          racket/list
-         "../set/omega-value.rkt"
+         "../set/tree-value.rkt"
          "../set/extremal-set.rkt"
          "../set/real-set.rkt")
 
@@ -19,8 +19,8 @@
   (Nonextremal-Interval -> (Values (Listof Nonextremal-Interval) (Listof Positive-Flonum))))
 
 (define-type Indexes (Listof (U interval-index if-indexes)))
-(struct: interval-index ([index : Omega-Index] [split : (U #f Interval-Splitter)]) #:transparent)
-(struct: if-indexes ([index : Omega-Index] [true : (-> Indexes)] [false : (-> Indexes)])
+(struct: interval-index ([index : Tree-Index] [split : (U #f Interval-Splitter)]) #:transparent)
+(struct: if-indexes ([index : Tree-Index] [true : (-> Indexes)] [false : (-> Indexes)])
   #:transparent)
 
 (: intersect-and-filter ((Listof Nonextremal-Interval) Nonextremal-Interval

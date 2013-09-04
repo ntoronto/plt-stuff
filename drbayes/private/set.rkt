@@ -9,8 +9,8 @@
          "set/value.rkt"
          "set/union-ops.rkt"
          "set/union-more-ops.rkt"
-         "set/omega-value.rkt"
-         "set/omega-set.rkt"
+         "set/tree-value.rkt"
+         "set/tree-set.rkt"
          )
 
 (provide (all-from-out
@@ -23,6 +23,6 @@
           "set/value.rkt"
           "set/union-ops.rkt"
           "set/union-more-ops.rkt"
-          "set/omega-value.rkt"
-          "set/omega-set.rkt"
+          "set/tree-value.rkt"
+          "set/tree-set.rkt"
           ))

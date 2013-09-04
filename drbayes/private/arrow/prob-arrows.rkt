@@ -1,16 +1,54 @@
 #lang typed/racket/base
 
-(require (for-syntax racket/base)
-         racket/match
+(require racket/match
          racket/list
          racket/promise
          "../set.rkt"
          "../untyped-utils.rkt"
          "indexes.rkt"
-         "arrow-common.rkt")
+         "prim-arrow.rkt")
 
 (provide (all-defined-out))
 
+(struct: (Arr) astore-interp ([arrow : Arr]
+                              [indexes : Indexes]))
+
+(define-type (AStore Arr) (Tree-Index -> Arr))
+
+(define-type Bot*-Arrow (AStore Bot-Arrow))
+(define-type Pre*-Arrow (AStore Pre-Arrow))
+(define-type Arrow (AStore prim-arrow))
+
+#|
+(: η/bot* (Bot-Arrow -> Bot*-Arrow))
+(define ((η/bot* f) j)
+  (astore-interp (>>>/bot (ref/bot 'snd) f)
+                 '()))
+
+(: η/pre* (Pre-Arrow -> Pre*-Arrow))
+(define ((η/pre* h) j)
+  (astore-interp (>>>/pre (ref/pre 'snd) h)
+                 '()))
+
+(: η (prim-arrow -> Arrow))
+(define ((η e) j)
+  (astore-interp (>>>/prim (ref/prim 'snd) e)
+                 '()))
+|#
+
+;; ===================================================================================================
+
+(: >>>/pre* (Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
+(define ((>>>/pre* k1 k2) j)
+  (>>>/pre (&&&/pre (ref/pre 'fst) (k1 (left j)))
+           (k2 (right j))))
+
+(: >>>/rand (Arrow Arrow -> Arrow))
+(define ((>>>/rand k1 k2) j)
+  (>>>/prim (&&&/prim (ref/prim 'fst) (k1 (left j)))
+            (k2 (right j))))
+
+#|
 (define check-rand-preimage-arguments? #t)
 
 
@@ -398,3 +436,4 @@
      (rand-expression-meaning (list (interval-index idx #f))
                               (random/fwd idx)
                               (random/comp idx)))))
+|#

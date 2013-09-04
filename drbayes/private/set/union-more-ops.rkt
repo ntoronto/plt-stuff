@@ -6,6 +6,7 @@
          "real-set.rkt"
          "null-set.rkt"
          "bool-set.rkt"
+         "tree-set.rkt"
          "extremal-set.rkt"
          "union.rkt"
          "value.rkt"
@@ -100,31 +101,50 @@
 (: set-take-pairs (Set -> Pair-Set))
 (define set-take-pairs (make-set-take-basic pair-set? pair-tag empty-pair-set pairs))
 
+(: set-take-omegas (Set -> Omega-Set))
+(define set-take-omegas (make-set-take-basic omega-set? omega-tag empty-omega-set omegas))
+
+(: set-take-traces (Set -> Trace-Set))
+(define set-take-traces (make-set-take-basic trace-set? trace-tag empty-trace-set traces))
+
 ;; ===================================================================================================
 ;; Pair ref and set
 
-(: set-pair-ref (Set Pair-Index -> Set))
-(define (set-pair-ref A j)
+(: set-proj-fst (Set -> Set))
+(define (set-proj-fst A)
+  (cond [(pairs? A)  universe]
+        [(Nonextremal-Pair-Set? A)  (Nonextremal-Pair-Set-fst A)]
+        [else  empty-set]))
+
+(: set-proj-snd (Set -> Set))
+(define (set-proj-snd A)
+  (cond [(pairs? A)  universe]
+        [(Nonextremal-Pair-Set? A)  (Nonextremal-Pair-Set-snd A)]
+        [else  empty-set]))
+
+(: set-projs (Set -> (Values Set Set)))
+(define (set-projs A)
+  (cond [(pairs? A)  (values universe universe)]
+        [(Nonextremal-Pair-Set? A)  (values (Nonextremal-Pair-Set-fst A)
+                                            (Nonextremal-Pair-Set-snd A))]
+        [else  (values empty-set empty-set)]))
+
+(: set-proj (Set Pair-Index -> Set))
+(define (set-proj A j)
   (let ([A  (set-take-pairs A)])
     (cond [(empty-pair-set? A)  empty-set]
-          [else
-           (define-values (A1 A2) (cond [(pairs? A)  (values universe universe)]
-                                        [else  (match-define (Nonextremal-Pair-Set A1 A2) A)
-                                               (values A1 A2)]))
-           (cond [(eq? j 'fst)  A1]
-                 [(eq? j 'snd)  A2]
-                 [(zero? j)     A1]
-                 [else  (set-pair-ref A2 (- j 1))])])))
+          [(eq? j 'fst)  (set-proj-fst A)]
+          [(eq? j 'snd)  (set-proj-snd A)]
+          [(zero? j)     (set-proj-fst A)]
+          [else  (set-proj (set-proj-snd A) (- j 1))])))
 
-(: set-pair-restrict (Set Pair-Index Set -> Set))
-(define (set-pair-restrict A j B)
+(: set-unproj (Set Pair-Index Set -> Set))
+(define (set-unproj A j B)
   (let ([A  (set-take-pairs A)])
     (cond [(or (empty-pair-set? A) (empty-set? B))  empty-set]
           [else
-           (define-values (A1 A2) (cond [(pairs? A)  (values universe universe)]
-                                        [else  (match-define (Nonextremal-Pair-Set A1 A2) A)
-                                               (values A1 A2)]))
+           (define-values (A1 A2) (set-projs A))
            (cond [(eq? j 'fst)  (set-pair (set-intersect A1 B) A2)]
                  [(eq? j 'snd)  (set-pair A1 (set-intersect A2 B))]
                  [(zero? j)     (set-pair (set-intersect A1 B) A2)]
-                 [else  (set-pair A1 (set-pair-restrict A2 (- j 1) B))])])))
+                 [else  (set-pair A1 (set-unproj A2 (- j 1) B))])])))

@@ -149,7 +149,7 @@
   (define C (meet A B))
   (for: ([x  (in-list (list x y))])
     (check-prop (implies (and (member? A x) (member? B x)) (member? C x))
-                (format "~a ~a: meet membership failed on ~v ~v ~v ~v" member? meet A B x))))
+                (format "~a ~a: meet membership failed on ~v ~v ~v" member? meet A B x))))
 
 ;; All membership lattice properties
 

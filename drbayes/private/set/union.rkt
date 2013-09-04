@@ -10,6 +10,7 @@
          "bool-set.rkt"
          "null-set.rkt"
          "extremal-set.rkt"
+         "tree-set.rkt"
          "../utils.rkt"
          "../untyped-utils.rkt")
 
@@ -27,6 +28,8 @@
 (define bool-tag 'bool)
 (define null-tag 'null)
 (define pair-tag 'pair)
+(define omega-tag 'omega)
+(define trace-tag 'trace)
 
 ;; Set tags
 (: make-set-tag (Symbol -> Tag))
@@ -64,14 +67,29 @@
 ;; ===================================================================================================
 ;; Basic sets
 
-(define-type  Full-Basic (U  Full-Real-Set  Full-Bool-Set  Full-Null-Set  Full-Pair-Set))
-(define-type Empty-Basic (U Empty-Real-Set Empty-Bool-Set Empty-Null-Set Empty-Pair-Set))
+(define-type Full-Basic
+  (U Full-Real-Set
+     Full-Bool-Set
+     Full-Null-Set
+     Full-Pair-Set
+     Full-Omega-Set
+     Full-Trace-Set))
+
+(define-type Empty-Basic
+  (U Empty-Real-Set
+     Empty-Bool-Set
+     Empty-Null-Set
+     Empty-Pair-Set
+     Empty-Omega-Set
+     Empty-Trace-Set))
 
 (define-type Nonextremal-Basic
   (U Nonextremal-Real-Set
      Nonextremal-Bool-Set
      ;Nonextremal-Null-Set  ; there aren't any nonextremal null sets
-     Nonextremal-Pair-Set))
+     Nonextremal-Pair-Set
+     Nonextremal-Omega-Set
+     Nonextremal-Trace-Set))
 
 (define-type Nonempty-Basic (U Nonextremal-Basic  Full-Basic))
 (define-type  Nonfull-Basic (U Nonextremal-Basic Empty-Basic))
@@ -79,11 +97,21 @@
 
 (: empty-basic? (Any -> Boolean : Empty-Basic))
 (define (empty-basic? A)
-  (or (empty-real-set? A) (empty-bool-set? A) (empty-null-set? A) (empty-pair-set? A)))
+  (or (empty-real-set? A)
+      (empty-bool-set? A)
+      (empty-null-set? A)
+      (empty-pair-set? A)
+      (empty-omega-set? A)
+      (empty-trace-set? A)))
 
 (: full-basic? (Any -> Boolean : Full-Basic))
 (define (full-basic? A)
-  (or (reals? A) (bools? A) (nulls? A) (pairs? A)))
+  (or (reals? A)
+      (bools? A)
+      (nulls? A)
+      (pairs? A)
+      (omegas? A)
+      (traces? A)))
 
 ;; ===================================================================================================
 ;; Top and bottom basic sets
@@ -117,7 +145,9 @@
   (cond [(real-set? A)  real-tag]
         [(bool-set? A)  bool-tag]
         [(null-set? A)  null-tag]
-        [else           pair-tag]))
+        [(pair-set? A)  pair-tag]
+        [(omega-set? A)  omega-tag]
+        [(trace-set? A)  trace-tag]))
 
 (: top-basic-tag (Top-Basic -> Tag))
 (define (top-basic-tag A) (basic-tag (top-basic-set A)))
@@ -136,6 +166,8 @@
 (define not-bools (Top-Basic empty-bool-set))
 (define not-nulls (Top-Basic empty-null-set))
 (define not-pairs (Top-Basic empty-pair-set))
+(define not-omega-set (Top-Basic empty-omega-set))
+(define not-trace-set (Top-Basic empty-trace-set))
 
 ;; ===================================================================================================
 ;; Tagged sets

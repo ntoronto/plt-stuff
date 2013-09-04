@@ -91,3 +91,7 @@
         [(bools? A)   (values #t #t)]
         [(trues? A)   (values #t #f)]
         [else         (values #f #t)]))
+
+(: boolean->singleton (Boolean -> Nonextremal-Bool-Set))
+(define (boolean->singleton b)
+  (if b trues falses))
