@@ -3,7 +3,8 @@
 (require racket/flonum
          math/flonum
          math/distributions
-         "../set.rkt")
+         "../set.rkt"
+         "../arrow.rkt")
 
 (provide (all-defined-out))
 
@@ -45,10 +46,6 @@
 
 (define-syntax-rule (strict-if e ...) (if e ...))
 (define-syntax-rule (strict-cond e ...) (cond e ...))
-(define-syntax-rule (prim-if e ...) (if e ...))
-(define-syntax-rule (prim-cond e ...) (cond e ...))
-(define-syntax-rule (lazy-if e ...) (if e ...))
-(define-syntax-rule (lazy-cond e ...) (if e ...))
 
 (define nonnegative? (λ: ([x : Real]) ((fl x) . >= . 0.0)))
 (define nonpositive? (λ: ([x : Real]) ((fl x) . <= . 0.0)))
@@ -56,25 +53,22 @@
 (define translate (λ: ([x : Real] [y : Real]) (+ (fl x) (fl y))))
 (define (fail) (error 'fail "failure"))
 
-(: uniform (case-> (-> Flonum)
-                   (Real -> Flonum)
-                   (Real Real -> Flonum)))
-(define uniform
-  (case-lambda
-    [()  (random)]
-    [(b)  (flvector-ref (fluniform-sample 0.0 (fl b) 1) 0)]
-    [(a b)  (flvector-ref (fluniform-sample (fl a) (fl b) 1) 0)]))
+(define (random-std-normal)
+  (flvector-ref (flnormal-sample 0.0 1.0 1) 0))
 
-(: normal (case-> (-> Flonum)
-                  (Real -> Flonum)
-                  (Real Real -> Flonum)))
-(define (normal [μ 0.0] [σ 1.0])
+(define (random-std-cauchy)
+  (flvector-ref (flcauchy-sample 0.0 1.0 1) 0))
+
+(: uniform (Real Real -> Flonum))
+(define (uniform a b)
+  (flvector-ref (fluniform-sample (fl a) (fl b) 1) 0))
+
+(: normal (Real Real -> Flonum))
+(define (normal μ σ)
   (flvector-ref (flnormal-sample (fl μ) (fl σ) 1) 0))
 
-(: cauchy (case-> (-> Flonum)
-                  (Real -> Flonum)
-                  (Real Real -> Flonum)))
-(define (cauchy [m 0.0] [s 1.0])
+(: cauchy (Real Real -> Flonum))
+(define (cauchy m s)
   (flvector-ref (flcauchy-sample (fl m) (fl s) 1) 0))
 
 (: boolean (Real -> Boolean))

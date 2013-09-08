@@ -6,434 +6,319 @@
          "../set.rkt"
          "../untyped-utils.rkt"
          "indexes.rkt"
-         "prim-arrow.rkt")
+         "preimage-mapping.rkt"
+         "pure-arrows.rkt"
+         "pure-lifts.rkt")
 
 (provide (all-defined-out))
-
-(struct: (Arr) astore-interp ([arrow : Arr]
-                              [indexes : Indexes]))
 
 (define-type (AStore Arr) (Tree-Index -> Arr))
 
 (define-type Bot*-Arrow (AStore Bot-Arrow))
 (define-type Pre*-Arrow (AStore Pre-Arrow))
-(define-type Arrow (AStore prim-arrow))
+(define-type Idx-Arrow (AStore Indexes))
 
-#|
 (: η/bot* (Bot-Arrow -> Bot*-Arrow))
 (define ((η/bot* f) j)
-  (astore-interp (>>>/bot (ref/bot 'snd) f)
-                 '()))
+  ((ref/bot 'snd) . >>>/bot . f))
 
 (: η/pre* (Pre-Arrow -> Pre*-Arrow))
 (define ((η/pre* h) j)
-  (astore-interp (>>>/pre (ref/pre 'snd) h)
-                 '()))
+  ((ref/pre 'snd) . >>>/pre . h))
 
-(: η (prim-arrow -> Arrow))
-(define ((η e) j)
-  (astore-interp (>>>/prim (ref/prim 'snd) e)
-                 '()))
-|#
+(: any/idx Idx-Arrow)
+(define (any/idx j) '())
 
 ;; ===================================================================================================
+;; Basic computable lifts
+
+(define fail/bot* (η/bot* fail/bot))
+(define fail/pre* (η/pre* fail/pre))
+(define fail/idx any/idx)
+
+(define id/bot* (η/bot* id/bot))
+(define id/pre* (η/pre* id/pre))
+(define id/idx any/idx)
+
+(define restrict/bot* (λ: ([X : Nonempty-Set]) (η/bot* (restrict/bot X))))
+(define restrict/pre* (λ: ([X : Nonempty-Set]) (η/pre* (restrict/pre X))))
+(define restrict/idx (λ: ([X : Nonempty-Set]) any/idx))
+
+(define const/bot* (λ: ([b : Value]) (η/bot* (const/bot b))))
+(define const/pre* (λ: ([b : Value]) (η/pre* (const/pre b))))
+(define const/idx (λ: ([b : Value]) any/idx))
+
+(define ref/bot* (λ: ([j : Pair-Index]) (η/bot* (ref/bot j))))
+(define ref/pre* (λ: ([j : Pair-Index]) (η/pre* (ref/pre j))))
+(define ref/idx (λ: ([j : Pair-Index]) any/idx))
+
+;; ===================================================================================================
+;; Arrow combinators
+
+;; ---------------------------------------------------------------------------------------------------
+;; Composition
+
+(: >>>/bot* (Bot*-Arrow Bot*-Arrow -> Bot*-Arrow))
+(define ((>>>/bot* k1 k2) j)
+  (((ref/bot 'fst) . &&&/bot . (k1 (left j))) . >>>/bot . (k2 (right j))))
 
 (: >>>/pre* (Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
 (define ((>>>/pre* k1 k2) j)
-  (>>>/pre (&&&/pre (ref/pre 'fst) (k1 (left j)))
-           (k2 (right j))))
+  (((ref/pre 'fst) . &&&/pre . (k1 (left j))) . >>>/pre . (k2 (right j))))
 
-(: >>>/rand (Arrow Arrow -> Arrow))
-(define ((>>>/rand k1 k2) j)
-  (>>>/prim (&&&/prim (ref/prim 'fst) (k1 (left j)))
-            (k2 (right j))))
+(: >>>/idx (Idx-Arrow Idx-Arrow -> Idx-Arrow))
+(define ((>>>/idx k1 k2) j)
+  (append (k1 (left j)) (k2 (right j))))
 
-#|
-(define check-rand-preimage-arguments? #t)
-
-
-(define-type Domain-Set (U Empty-Set nonempty-domain-set))
-
-(struct: nonempty-domain-set ([Ω : Nonempty-Omega-Set]
-                              [Z : Nonempty-Branches-Set]
-                              [A : Nonempty-Set])
-  #:transparent)
-
-(: domain-set-intersect (Domain-Set Domain-Set -> Domain-Set))
-(define (domain-set-intersect K1 K2)
-  (match-define (domain-set Ω1 Z1 A1) K1)
-  (match-define (domain-set Ω2 Z2 A2) K2)
-  (domain-set (omega-set-intersect Ω1 Ω2)
-              (branches-set-intersect Z1 Z2)
-              (set-intersect A1 A2)))
-
-(: domain-set-subseteq? (Domain-Set Domain-Set -> Boolean))
-(define (domain-set-subseteq? K1 K2)
-  (match-define (domain-set Ω1 Z1 A1) K1)
-  (match-define (domain-set Ω2 Z2 A2) K2)
-  (and (omega-set-subseteq? Ω1 Ω2)
-       (branches-set-subseteq? Z1 Z2)
-       (set-subseteq? A1 A2)))
-
-(: make-domain-set (Omega-Set Branches-Set Set -> Domain-Set))
-(define (make-domain-set Ω Z A)
-  (cond [(or (empty-tree-set? Ω) (empty-tree-set? Z) (empty-set? A))  empty-set]
-        [else  (nonempty-domain-set Ω Z A)]))
-
-(define-match-expander domain-set
-  (λ (stx)
-    (syntax-case stx ()
-      [(_ Ω Z A)
-       (syntax/loc stx
-         (or (nonempty-domain-set Ω Z A)
-             (and (? empty-set?)
-                  (app (λ (_) empty-tree-set) Ω)
-                  (app (λ (_) empty-tree-set) Z)
-                  (app (λ (_) empty-set) A))
-             (and (app (λ: ([_ : Domain-Set]) empty-tree-set) Ω)
-                  (app (λ (_) empty-tree-set) Z)
-                  (app (λ (_) empty-set) A))))]))
-  (make-head-form #'make-domain-set))
-
-(: domain-set-pair (Domain-Set Domain-Set -> Domain-Set))
-(define (domain-set-pair K1 K2)
-  (match-define (domain-set Ω1 Z1 A1) K1)
-  (match-define (domain-set Ω2 Z2 A2) K2)
-  (domain-set (omega-set-intersect Ω1 Ω2)
-              (branches-set-intersect Z1 Z2)
-              (set-pair A1 A2)))
-
-(: domain-set-pair-ref (Domain-Set Pair-Index -> Domain-Set))
-(define (domain-set-pair-ref K j)
-  (match-define (domain-set Ω Z A) K)
-  (domain-set Ω Z (set-pair-ref A j)))
-
-;; ===================================================================================================
-;; Random expressions
-
-(define-type Rand-Forward-Fun (Omega Branches Value -> Maybe-Value))
-
-;; Necessary property: computations and preimage functions never grow Ω or Z!
-
-(define-type Rand-Preimage-Fun (nonempty-domain-set nonempty-domain-set -> Domain-Set))
-
-;; A computation is a function from a domain and branches to its meaning
-(define-type Rand-Preimage (U Empty-Preimage nonempty-rand-preimage))
-(define-type Rand-Computation (nonempty-domain-set -> Rand-Preimage))
-
-(struct: nonempty-rand-preimage ([domain : nonempty-domain-set]
-                                 [range : nonempty-domain-set]
-                                 [fun : Rand-Preimage-Fun])
-  #:transparent)
-
-;; An expression is a function from a reversed index to the expression's meaning
-(struct: rand-expression ([fun : (Omega-Index -> rand-expression-meaning)])
-  #:transparent)
-
-;; Expressions are currently wrapped in a struct so they can be recognized by its predicate (see
-;; "language.rkt"), but this may not be necessary in the future
-
-;; An expression means:
-;;  1. Lazy indexes of random variables and branch points
-;;  2. A forward function
-;;  3. A computation, which is used to compute preimages
-(struct: rand-expression-meaning ([indexes : Indexes]
-                                  [forward : Rand-Forward-Fun]
-                                  [computation : Rand-Computation])
-  #:transparent)
-
-;; ===================================================================================================
-;; Convenience functions
-(: run-rand-expression (case-> (rand-expression -> rand-expression-meaning)
-                               (rand-expression Omega-Index -> rand-expression-meaning)))
-(define (run-rand-expression e [r empty])
-  ((rand-expression-fun e) r))
-
-(: run-rand-forward-fun (Rand-Forward-Fun Omega Branches Maybe-Value -> Maybe-Value))
-(define (run-rand-forward-fun f ω z γ)
-  (cond [(bottom? γ)  γ]
-        [else  (f ω z γ)]))
-
-(: run-rand-preimage-fun (Rand-Preimage-Fun Domain-Set Domain-Set -> Domain-Set))
-(define (run-rand-preimage-fun f Γ K)
-  (cond [(or (empty-set? Γ) (empty-set? K))  empty-set]
-        [else  (f Γ K)]))
-
-(: run-rand-preimage (Rand-Preimage Domain-Set Domain-Set -> Domain-Set))
-(define (run-rand-preimage f-pre Γ K)
-  (cond [(or (empty-preimage? f-pre) (empty-set? Γ) (empty-set? K))  empty-set]
-        [else
-         (match-define (rand-preimage Γf Kf f) f-pre)
-         (cond [(and check-rand-preimage-arguments? (not (domain-set-subseteq? Γ Γf)))
-                (raise-argument-error 'run-rand-preimage (format "domain subset of ~e" Γf)
-                                      1 f-pre Γ K)]
-               [(and check-rand-preimage-arguments? (not (domain-set-subseteq? K Kf)))
-                (raise-argument-error 'run-rand-preimage (format "range subset of ~e" Kf)
-                                      2 f-pre Γ K)]
-               [else
-                (f Γ K)])]))
-
-(: run-rand-computation (Rand-Computation Domain-Set -> Rand-Preimage))
-(define (run-rand-computation comp Γ)
-  (cond [(or (empty-set? Γ))  empty-preimage]
-        [else  (comp Γ)]))
-
-(: make-rand-preimage (Domain-Set Domain-Set Rand-Preimage-Fun -> Rand-Preimage))
-(define (make-rand-preimage Γ K f)
-  (cond [(or (empty-set? Γ) (empty-set? K))  empty-preimage]
-        [else  (nonempty-rand-preimage Γ K f)]))
-
-(: empty-rand-preimage-fun Rand-Preimage-Fun)
-(define (empty-rand-preimage-fun Γ K) empty-set)
-
-(define-match-expander rand-preimage
-  (λ (stx)
-    (syntax-case stx ()
-      [(_ Γ K f)
-       (syntax/loc stx
-         (or (nonempty-rand-preimage Γ K f)
-             (and (? empty-preimage?)
-                  (app (λ (_) empty-set) Γ)
-                  (app (λ (_) empty-set) K)
-                  (app (λ (_) empty-rand-preimage-fun) f))
-             (and (app (λ: ([_ : Rand-Preimage]) empty-set) Γ)
-                  (app (λ (_) empty-set) K)
-                  (app (λ (_) empty-rand-preimage-fun) f))))]))
-  (make-head-form #'make-rand-preimage))
-
-;; ===================================================================================================
-;; Caching wrappers
-#|
-(: rand-preimage (Nonempty-Omega-Set Nonempty-Set Nonempty-Branches-Set Nonempty-Set Rand-Preimage-Fun
-                             -> Rand-Preimage-Fun))
-;; Wraps a Rand-Preimage-Fun with code that ensures the argument is a subset of the range; also
-;; caches return values
-(define ((rand-preimage Ω Γ Z K pre) Zsub Ksub)
-  (let ([Zsub  (branches-set-intersect Z Zsub)]
-        [Ksub  (set-intersect K Ksub)])
-    (cond [(or (empty-set? Zsub) (empty-set? Ksub))
-           (values empty-set empty-set empty-set)]
-          [(not rand-cache-preimages?)
-           (pre Zsub Ksub)]
-          [(and (eq? Zsub Z) (eq? Ksub K))
-           (when rand-preimage-stats? (increment-cache-stat 'rand-preimage-hits))
-           (values Ω Z Γ)]
-          [else
-           (when rand-preimage-stats?
-             (increment-cache-stat 'rand-preimage-misses)
-             (when (and (not (eq? Zsub Z)) (equal? Zsub Z))
-               (increment-cache-stat 'rand-preimage-misses/bad-Z))
-             (when (and (not (eq? Ksub K)) (equal? Ksub K))
-               (increment-cache-stat 'rand-preimage-misses/bad-K)))
-           (pre Zsub Ksub)])))
-
-(: cached-rand-computation (Rand-Computation -> Rand-Computation))
-(define (cached-rand-computation comp)
-  (define: last-Ω : (U #f Nonempty-Omega-Set)  #f)
-  (define: last-Z : (U #f Nonempty-Branches-Set) #f)
-  (define: last-Γ : (U #f Nonempty-Set)  #f)
-  (define: last-m : (U #f Rand-Computation-Meaning)  #f)
-  (λ (Ω Z Γ)
-    (define cached-m last-m)
-    (cond
-      [(empty-tree-set? Ω)  empty-meaning]
-      [(empty-tree-set? Z)  empty-meaning]
-      [(empty-set? Γ)  empty-meaning]
-      [(not rand-cache-computations?)  (comp Ω Z Γ)]
-      [(and (eq? Ω last-Ω) (eq? Z last-Z) (eq? Γ last-Γ) cached-m)
-       (when rand-computation-stats? (increment-cache-stat 'rand-computation-hits))
-       cached-m]
-      [else
-       (when rand-computation-stats?
-         (increment-cache-stat 'rand-computation-misses)
-         (when (and (not (eq? Ω last-Ω)) (equal? Ω last-Ω))
-           (increment-cache-stat 'rand-computation-misses/bad-Ω))
-         (when (and (not (eq? Z last-Z)) (equal? Z last-Z))
-           (increment-cache-stat 'rand-computation-misses/bad-Z))
-         (when (and (not (eq? Γ last-Γ)) (equal? Γ last-Γ))
-           (increment-cache-stat 'rand-computation-misses/bad-Γ)))
-       (set! last-Ω Ω)
-       (set! last-Z Z)
-       (set! last-Γ Γ)
-       (let ([cached-m  (comp Ω Z Γ)])
-         (set! last-m cached-m)
-         cached-m)])))
-|#
-;; ===================================================================================================
-;; Arrow composition (reverse composition)
-
-(: rand-rcompose/fwd (Rand-Forward-Fun Rand-Forward-Fun -> Rand-Forward-Fun))
-(define ((rand-rcompose/fwd f-fwd g-fwd) ω z γ)
-  (run-rand-forward-fun g-fwd ω z (run-rand-forward-fun f-fwd ω z γ)))
-
-(: rand-rcompose/pre (Rand-Preimage Rand-Preimage Domain-Set -> Rand-Preimage-Fun))
-(define ((rand-rcompose/pre f-pre g-pre Γg) Γ K)
-  (run-rand-preimage f-pre Γ (run-rand-preimage g-pre Γg K)))
-
-(: rand-rcompose/comp (Rand-Computation Rand-Computation -> Rand-Computation))
-(define ((rand-rcompose/comp f-comp g-comp) Γ)
-  (match-define (and f-pre (rand-preimage Γf Kf f)) (f-comp Γ))
-  (match-define (and g-pre (rand-preimage Γg Kg g)) (run-rand-computation g-comp Kf))
-  (rand-preimage Γf Kg (rand-rcompose/pre f-pre g-pre Γg)))
-
-(: rand-rcompose/arr (rand-expression rand-expression -> rand-expression))
-(define (rand-rcompose/arr f-expr g-expr)
-  (rand-expression
-   (λ (r)
-     (match-define (rand-expression-meaning f-idxs f-fwd f-comp)
-       (run-rand-expression f-expr (cons 0 r)))
-     (match-define (rand-expression-meaning g-idxs g-fwd g-comp)
-       (run-rand-expression g-expr (cons 1 r)))
-     (rand-expression-meaning (append f-idxs g-idxs)
-                              (rand-rcompose/fwd f-fwd g-fwd)
-                              (rand-rcompose/comp f-comp g-comp)))))
-
-;; ===================================================================================================
+;; ---------------------------------------------------------------------------------------------------
 ;; Pairing
 
-(: rand-pair/fwd (Rand-Forward-Fun Rand-Forward-Fun -> Rand-Forward-Fun))
-(define ((rand-pair/fwd fst-fwd snd-fwd) ω z γ)
-  (define k1 (fst-fwd ω z γ))
-  (cond [(bottom? k1)  k1]
-        [else  (define k2 (snd-fwd ω z γ))
-               (cond [(bottom? k2)  k2]
-                     [else  (cons k1 k2)])]))
+(: &&&/bot* (Bot*-Arrow Bot*-Arrow -> Bot*-Arrow))
+(define ((&&&/bot* k1 k2) j)
+  ((k1 (left j)) . &&&/bot . (k2 (right j))))
 
-(: rand-pair/pre (Rand-Preimage Rand-Preimage -> Rand-Preimage-Fun))
-(define ((rand-pair/pre pre1 pre2) Γ K)
-  (define K1 (domain-set-pair-ref K 'fst))
-  (define K2 (domain-set-pair-ref K 'snd))
-  (run-rand-preimage pre1 (run-rand-preimage pre2 Γ K2) K1))
+(: &&&/pre* (Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
+(define ((&&&/pre* k1 k2) j)
+  ((k1 (left j)) . &&&/pre . (k2 (right j))))
+
+(: &&&/idx (Idx-Arrow Idx-Arrow -> Idx-Arrow))
+(define ((&&&/idx k1 k2) j)
+  (append (k1 (left j)) (k2 (right j))))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Partial if-then-else
+
+(: ifte/bot* (Bot*-Arrow Bot*-Arrow Bot*-Arrow -> Bot*-Arrow))
+(define ((ifte/bot* k1 k2 k3) j)
+  (ifte/bot (k1 (left j))
+            (k2 (left (right j)))
+            (k3 (right (right j)))))
+
+(: ifte/pre* (Pre*-Arrow Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
+(define ((ifte/pre* k1 k2 k3) j)
+  (ifte/pre (k1 (left j))
+            (k2 (left (right j)))
+            (k3 (right (right j)))))
+
+(: ifte/idx (Idx-Arrow Idx-Arrow Idx-Arrow -> Idx-Arrow))
+(define ((ifte/idx k1 k2 k3) j)
+  (append (k1 (left j))
+          (k2 (left (right j)))
+          (k3 (right (right j)))))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Laziness
+
+(: lazy/bot* ((-> Bot*-Arrow) -> Bot*-Arrow))
+(define ((lazy/bot* k) j)
+  (lazy/bot (λ () ((k) j))))
+
+(: lazy/pre* ((-> Pre*-Arrow) -> Pre*-Arrow))
+(define ((lazy/pre* k) j)
+  (lazy/pre (λ () ((k) j))))
+
+(: lazy/idx ((-> Idx-Arrow) -> Idx-Arrow))
+(define ((lazy/idx k) j)
+  ((k) j))
+
+;; ===================================================================================================
+;; Random source and branch trace projections
+
+(: proj-domain-fail (Symbol Value -> Bottom))
+(define (proj-domain-fail name a)
+  (bottom
+   (delay
+     (format
+      "~a: expected value in (set-pair (set-pair omegas traces) universe); given ~e" name a))))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Branch trace projections
+
+(: branch/bot* Bot*-Arrow)
+(define (branch/bot* j)
+  (let ([j  (reverse j)])
+    (λ (a)
+      (match a
+        [(cons (cons (? omega?) (? trace? t)) _)  (trace-ref t j)]
+        [_  (proj-domain-fail 'branch a)]))))
+
+(: branch/pre (Tree-Index -> Pre-Arrow))
+(define (branch/pre j)
+  (let ([j  (reverse j)])
+    (λ (A)
+      (define T (set-take-traces A))
+      (cond [(empty-set? T)  empty-pre-mapping]
+            [else  (define B (trace-set-proj T j))
+                   (cond [(empty-bool-set? B)  empty-pre-mapping]
+                         [else  (nonempty-pre-mapping
+                                 B (λ (B) (let ([T  (trace-set-unproj T j (set-take-bools B))])
+                                            (cond [(empty-trace-set? T)  empty-set]
+                                                  [else  T]))))])]))))
+
+(: branch/pre* Pre*-Arrow)
+(define (branch/pre* j)
+  ((ref/pre 'fst) . >>>/pre . ((ref/pre 'snd) . >>>/pre . (branch/pre j))))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Random source projections
+
+(: random/bot* Bot*-Arrow)
+(define (random/bot* j)
+  (let ([j  (reverse j)])
+    (λ (a) (match a
+             [(cons (cons (? omega? r) (? trace?)) _)  (omega-ref r j)]
+             [_  (proj-domain-fail 'random a)]))))
+
+(: random/pre (Tree-Index -> Pre-Arrow))
+(define (random/pre j)
+  (let ([j  (reverse j)])
+    (λ (A)
+      (define R (set-take-omegas A))
+      (cond [(empty-set? R)  empty-pre-mapping]
+            [else  (define B (omega-set-proj R j))
+                   (cond [(empty-real-set? B)  empty-pre-mapping]
+                         [else  (nonempty-pre-mapping
+                                 B (λ (B) (let ([R  (omega-set-unproj R j (set-take-reals B))])
+                                            (cond [(empty-omega-set? R)  empty-set]
+                                                  [else  R]))))])]))))
+
+(: random/pre* Pre*-Arrow)
+(define (random/pre* j)
+  ((ref/pre 'fst) . >>>/pre . ((ref/pre 'fst) . >>>/pre . (random/pre j))))
+
+(: random/idx Idx-Arrow)
+(define (random/idx j)
+  (list (random-index (reverse j) #f)))
+
+;; ---------------------------------------------------------------------------------------------------
+;; Random source boolean projections
+
+(: boolean/bot* (Flonum -> Bot*-Arrow))
+(define ((boolean/bot* p) j)
+  (define random (random/bot* j))
+  (λ (a) (let ([b  (random a)])
+           (and (flonum? b) (b . < . p)))))
+
+(: boolean-preimage (Flonum -> (Values Nonextremal-Interval Nonextremal-Interval)))
+;; Assumes p > 0.0 and p < 1.0
+(define (boolean-preimage p)
+  (values (Nonextremal-Interval 0.0 p #t #f)
+          (Nonextremal-Interval p 1.0 #t #t)))
+
+(: boolean/pre (Flonum Tree-Index -> Pre-Arrow))
+(define (boolean/pre p j)
+  (cond [(and (p . > . 0.0) (p . < . 1.0))
+         (define-values (It If) (boolean-preimage p))
+         (let ([j  (reverse j)])
+           (λ (A)
+             (define R (set-take-omegas A))
+             (define Rj (omega-set-proj R j))
+             (let ([It  (real-set-intersect It Rj)]
+                   [If  (real-set-intersect If Rj)])
+               (define-values (B I)
+                 (cond [(and (empty-real-set? It) (empty-real-set? If))
+                        (values empty-set empty-real-set)]
+                       [(empty-real-set? If)  (values trues It)]
+                       [(empty-real-set? It)  (values falses It)]
+                       [else  (values bools (real-set-union It If))]))
+               (pre-mapping B (λ (B)
+                                (let ([R  (cond [(eq? B trues)   (omega-set-unproj R j It)]
+                                                [(eq? B falses)  (omega-set-unproj R j If)]
+                                                [else  (omega-set-unproj R j I)])])
+                                  (if (empty-omega-set? R) empty-set R)))))))]
+        [else
+         (const/pre (p . >= . 1.0))]))
+
+(: boolean/pre* (Flonum -> Pre*-Arrow))
+(define ((boolean/pre* p) j)
+  ((ref/pre 'fst) . >>>/pre . ((ref/pre 'fst) . >>>/pre . (boolean/pre p j))))
+
+(: boolean/idx (Flonum -> Idx-Arrow))
+(define (boolean/idx p)
+  (cond [(and (p . > . 0.0) (p . < . 1.0))
+         (define-values (It If) (boolean-preimage p))
+         (define split (make-constant-splitter (list It If)))
+         (λ (j) (list (random-index (reverse j) split)))]
+        [else  any/idx]))
+
+;; ===================================================================================================
+;; Total if-then-else
+
+(: ifte*/bot* (Bot*-Arrow Bot*-Arrow Bot*-Arrow -> Bot*-Arrow))
+(define ((ifte*/bot* k1 k2 k3) j)
+  (define branch (branch/bot* j))
+  (define f1 (k1 (left j)))
+  (define f2 (k2 (left (right j))))
+  (define f3 (k3 (right (right j))))
+  (λ (a)
+    (define b* (branch a))
+    (define b (f1 a))
+    (cond [(not (eq? b* b))  (bottom (delay (format "ifte*: expected ~a condition; got ~e" b* b)))]
+          [(eq? b #t)  (f2 a)]
+          [(eq? b #f)  (f3 a)]
+          [else  (bottom (delay (format "ifte*: expected boolean condition; got ~e" b)))])))
+
+(: ifte*/pre* (Pre*-Arrow Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
 #;
-(define ((rand-pair/pre pre1 pre2) Γ K)
-  (match-define (nonempty-domain-set _1 _2 A) Γ)
-  (match-define (nonempty-domain-set Ω Z B) K)
-  (let ([Γ   (domain-set Ω Z A)]
-        [K2  (domain-set Ω Z (set-pair-ref B 'snd))])
-    (match-let ([(and Γ (domain-set Ω Z A))  (run-rand-preimage pre2 Γ K2)])
-      (define K1 (domain-set Ω Z (set-pair-ref B 'fst)))
-      (run-rand-preimage pre1 Γ K1))))
+(define ((ifte*/pre* k1 k2 k3) j)
+  (define hb (branch/pre* j))
+  (define h1 (k1 (left j)))
+  (define h2 (k2 (left (right j))))
+  (define h3 (k3 (right (right j))))
+  (λ (A)
+    (let ([hb  (hb A)]
+          [h1  (h1 A)])
+      (cond [(or (empty-pre-mapping? h1) (empty-pre-mapping? hb))  empty-pre-mapping]
+            [else
+             (match-define (nonempty-pre-mapping C1 p1) h1)
+             (match-define (nonempty-pre-mapping Cb pb) hb)
+             (define Ct (set-intersect (set-intersect C1 Cb) trues))
+             (define Cf (set-intersect (set-intersect C1 Cb) falses))
+             (define A2 (if (empty-set? Ct) empty-set (set-intersect (p1 Ct) (pb Ct))))
+             (define A3 (if (empty-set? Cf) empty-set (set-intersect (p1 Cf) (pb Cf))))
+             #;; This direct translation from the paper ensures termination, but doesn't allow
+             ;; ifte*/pre* to rule out branches using preimages computed by h1
+             (cond [(eq? Cb bools)
+                    (define A (set-join A2 A3))
+                    (nonempty-pre-mapping universe (λ (B) A))]
+                   [else
+                    (uplus/pre (run/pre h2 A2) (run/pre h3 A3))])
+             ;; This approximation *does* allow ifte*/pre* to rule out branches using preimages
+             ;; computed by h1, but doesn't always ensure termination
+             ;; Conjecture: if a program's interpretation as a bot* arrow terminates with probability
+             ;; 1, a pre* arrow interpretation that uses this approximation also terminates with
+             ;; probability 1
+             (cond [(and (empty-set? A2) (empty-set? A3))  empty-pre-mapping]
+                   [(empty-set? A3)  (h2 A2)]
+                   [(empty-set? A2)  (h3 A3)]
+                   [else  (define A (set-join A2 A3))
+                          (nonempty-pre-mapping universe (λ (B) A))])]))))
 
-(: rand-pair/comp (Rand-Computation Rand-Computation -> Rand-Computation))
-(define ((rand-pair/comp comp1 comp2) Γ)
-  (match-define (and pre1 (rand-preimage Γ1 K1 f1)) (comp1 Γ))
-  (match-define (and pre2 (rand-preimage Γ2 K2 f2)) (run-rand-computation comp2 Γ1))
-  (rand-preimage Γ2 (domain-set-pair K1 K2) (rand-pair/pre pre1 pre2)))
+;; An even better approximation that rules out branches using preimages computed by h1, but doesn't
+;; always ensure termination
+;; Conjecture is the same as above
+(define ((ifte*/pre* k1 k2 k3) j)
+  (define hb (branch/pre* j))
+  (define h1 (k1 (left j)))
+  (define h2 (k2 (left (right j))))
+  (define h3 (k3 (right (right j))))
+  (λ (A)
+    (let ([h1  (h1 A)])
+      (define A2 (ap/pre h1 trues))
+      (define A3 (ap/pre h1 falses))
+      (define hb2 (run/pre hb A2))
+      (define hb3 (run/pre hb A3))
+      (let ([A2  (set-intersect A2 (ap/pre hb2 trues))]
+            [A3  (set-intersect A3 (ap/pre hb3 falses))])
+        (cond [(and (empty-set? A2) (empty-set? A3))  empty-pre-mapping]
+              [(empty-set? A3)  (h2 A2)]
+              [(empty-set? A2)  (h3 A3)]
+              [else  (define A (set-join A2 A3))
+                     (nonempty-pre-mapping universe (λ (B) A))])))))
 
-(: rand-pair/arr (rand-expression rand-expression -> rand-expression))
-(define (rand-pair/arr expr1 expr2)
-  (rand-expression
-   (λ (r)
-     (match-define (rand-expression-meaning idxs1 fwd1 comp1) (run-rand-expression expr1 (cons 0 r)))
-     (match-define (rand-expression-meaning idxs2 fwd2 comp2) (run-rand-expression expr2 (cons 1 r)))
-     (rand-expression-meaning (append idxs1 idxs2)
-                              (rand-pair/fwd fwd1 fwd2)
-                              (rand-pair/comp comp1 comp2)))))
-
-;; ===================================================================================================
-;; Conditionals
-
-(: rand-c/fwd (Value -> Rand-Forward-Fun))
-(define ((rand-c/fwd x) ω z γ) (if (bottom? γ) γ x))
-
-(: rand-c/pre Rand-Preimage-Fun)
-(define (rand-c/pre Γ K) (if (empty-set? K) K Γ))
-
-(: rand-c/comp (Nonempty-Set -> Rand-Computation))
-(define ((rand-c/comp X) Γ)
-  (match-define (nonempty-domain-set Ω Z Ain) Γ)
-  (define K (nonempty-domain-set Ω Z X))
-  (rand-preimage Γ K rand-c/pre))
-
-(: rand-c/arr (Value -> rand-expression))
-(define (rand-c/arr x)
-  (define fwd (rand-c/fwd x))
-  (define X (value->singleton x))
-  (rand-expression (λ (r) (rand-expression-meaning empty fwd (rand-c/comp X)))))
-
-
-(: rand-switch/fwd (Omega-Index (-> Rand-Forward-Fun) (-> Rand-Forward-Fun) -> Rand-Forward-Fun))
-(define ((rand-switch/fwd idx t-fwd f-fwd) ω z γ)
-  (match-let ([(cons b γ)  γ])
-    (cond
-      [(not (boolean? b))  (bottom (delay (format "if: expected Boolean condition; given ~e" b)))]
-      [else
-       (define zb (branches-ref! z idx b))
-       (cond
-         [(and (eq? b #t) (or (eq? zb #t) (eq? zb 'either)))  ((t-fwd) ω z (cons #t γ))]
-         [(and (eq? b #f) (or (eq? zb #f) (eq? zb 'either)))  ((f-fwd) ω z (cons #f γ))]
-         [else  (bottom (delay (format "if: missed branch at index ~a" idx)))])])))
-
-(: rand-switch/comp (Omega-Index (-> Rand-Computation) (-> Rand-Computation) -> Rand-Computation))
-(define ((rand-switch/comp idx t-comp f-comp) Γ)
-  (match-define (nonempty-domain-set Ω Z A) Γ)
-  (let* ([A  (set-intersect A (set-pair (bot-basic (branches-set-ref Z idx)) universe))]
-         [Ab  (set-pair-ref A 'fst)]
-         [Atf  (set-pair-ref A 'snd)])
-    (cond [(and (not-empty-set? A) (not-empty-set? Ab) (not-empty-set? Atf))
-           (define t? (set-member? Ab #t))
-           (define f? (set-member? Ab #f))
-           (cond
-             [(and t? f?)
-              (define Γ (nonempty-domain-set Ω Z A))
-              (define K (nonempty-domain-set Ω Z universe))
-              (rand-preimage Γ K (λ (Γ K) Γ))]
-             [t?  (let ([Γ  (domain-set Ω (branches-set-restrict Z idx trues)
-                                        (set-pair trues Atf))])
-                    (if (empty-set? Γ) empty-preimage ((t-comp) Γ)))]
-             [f?  (let ([Γ  (domain-set Ω (branches-set-restrict Z idx falses)
-                                        (set-pair falses Atf))])
-                    (if (empty-set? Γ) empty-preimage ((f-comp) Γ)))]
-             [else  empty-preimage])]
-          [else  empty-preimage])))
-
-(: rand-switch/arr (rand-expression rand-expression -> rand-expression))
-(define (rand-switch/arr t-expr f-expr)
-  (rand-expression
-   (λ (r)
-     (define idx (reverse r))
-     (define t-meaning (delay (run-rand-expression t-expr (cons 0 r))))
-     (define f-meaning (delay (run-rand-expression f-expr (cons 1 r))))
-     (rand-expression-meaning
-      (list (if-indexes idx
-                        (λ () (rand-expression-meaning-indexes (force t-meaning)))
-                        (λ () (rand-expression-meaning-indexes (force f-meaning)))))
-      (rand-switch/fwd idx
-                       (λ () (rand-expression-meaning-forward (force t-meaning)))
-                       (λ () (rand-expression-meaning-forward (force f-meaning))))
-      (rand-switch/comp idx
-                        (λ () (rand-expression-meaning-computation (force t-meaning)))
-                        (λ () (rand-expression-meaning-computation (force f-meaning))))))))
-
-;; ===================================================================================================
-;; Random
-
-(: random/fwd (Omega-Index -> Rand-Forward-Fun))
-(define ((random/fwd idx) ω z γ)
-  (omega-ref ω idx))
-
-(: random/pre (Omega-Index -> Rand-Preimage-Fun))
-(define ((random/pre idx) Γ K)
-  (match-define (nonempty-domain-set Ωin  Zin  Ain)  Γ)
-  (match-define (nonempty-domain-set Ωout Zout Aout) K)
-  (let ([Aout  (real-set-intersect unit-interval (set-take-reals Aout))])
-    (cond [(empty-real-set? Aout)  empty-set]
-          [else  (domain-set (omega-set-intersect Ωin (omega-set-restrict Ωout idx Aout))
-                             (branches-set-intersect Zin Zout)
-                             Ain)])))
-
-(: random/comp (Omega-Index -> Rand-Computation))
-(define ((random/comp idx) Γ)
-  (match-define (nonempty-domain-set Ω Z A) Γ)
-  (define K (nonempty-domain-set Ω Z (bot-basic (omega-set-ref Ω idx))))
-  (rand-preimage Γ K (random/pre idx)))
-
-(: random/arr rand-expression)
-(define random/arr
-  (rand-expression
-   (λ (r)
-     (define idx (reverse r))
-     (rand-expression-meaning (list (interval-index idx #f))
-                              (random/fwd idx)
-                              (random/comp idx)))))
-|#
+(: ifte*/idx (Idx-Arrow Idx-Arrow Idx-Arrow -> Idx-Arrow))
+(define ((ifte*/idx k1 k2 k3) j)
+  (append (k1 (left j))
+          (list (ifte*-index (reverse j)
+                             (delay (k2 (left (right j))))
+                             (delay (k3 (right (right j))))))))

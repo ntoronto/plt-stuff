@@ -515,7 +515,7 @@
 
 (define-tree-set-sample trace-set-sample-point
   trace-rect-sig trace-children-rect-sig bool-set-sample random-trace)
-#|
+
 ;; ===================================================================================================
 ;; Measurement
 
@@ -599,4 +599,3 @@
                 (error 'omega-set->list "projection does not intersect unit-interval: ~e" B)]
                [else  C]))
        (omega-set->list* A)))
-|#

@@ -14,31 +14,19 @@
 
 ;; ===================================================================================================
 
-(define-type Omega-Pair (Pair Nonempty-Omega-Set Nonempty-Branches-Set))
-(define-type Maybe-Omega-Pair (U Empty-Set Omega-Pair))
-(define-type Omega-Search-Tree (Search-Tree Maybe-Omega-Pair))
+(: interval-max-splits (Parameterof Natural))
+(define interval-max-splits (make-parameter 5))
 
-(struct: omega-set-sample ([Ω : Nonempty-Omega-Set]
-                           [Z : Nonempty-Branches-Set]
-                           [measure : Flonum]
-                           [prob : Flonum])
-  #:transparent)
+(: interval-min-length (Parameterof Nonnegative-Flonum))
+(define interval-min-length (make-parameter 1e-14))
 
-(struct: omega-sample ([ω : Omega] [z : Branches] [prob : Flonum])
-  #:transparent)
-
-(define-type Ann-Index (U ann-interval-index ann-if-indexes))
+(define-type Ann-Index (U ann-random-index ann-ifte*-index))
 (define-type Ann-Indexes (Listof Ann-Index))
-
-(struct: ann-interval-index interval-index
-  ([num-splits : Natural]
-   [min-length : Flonum])
+(struct: ann-random-index random-index ([num-splits : Natural] [min-length : Flonum])
   #:transparent)
-
-(struct: ann-if-indexes
-  ([index : Omega-Index]
-   [true : (Promise Ann-Indexes)]
-   [false : (Promise Ann-Indexes)])
+(struct: ann-ifte*-index ([index : Tree-Index]
+                          [true : (Promise Ann-Indexes)]
+                          [false : (Promise Ann-Indexes)])
   #:transparent)
 
 (: annotate-indexes (Indexes -> Ann-Indexes))
@@ -46,18 +34,20 @@
   (define m (interval-max-splits))
   (define l (interval-min-length))
   (let loop ([idxs idxs])
-    (cond
-      [(empty? idxs)  idxs]
-      [(if-indexes? (first idxs))
-       (match-define (if-indexes i t-idxs f-idxs) (first idxs))
-       (cons (ann-if-indexes i (delay (loop (t-idxs))) (delay (loop (f-idxs))))
-             (loop (rest idxs)))]
-      [else
-       (match-define (interval-index i split) (first idxs))
-       (cons (ann-interval-index i split m l) (loop (rest idxs)))])))
+    (if (empty? idxs)
+        idxs
+        (let ([idx  (first idxs)]
+              [idxs  (rest idxs)])
+          (cond [(random-index? idx)
+                 (match-define (random-index i split) idx)
+                 (cons (ann-random-index i split m l) (loop idxs))]
+                [else
+                 (match-define (ifte*-index j t f) idx)
+                 (cons (ann-ifte*-index j (delay (loop (force t))) (delay (loop (force f))))
+                       (loop idxs))])))))
 
-(: interval-split (Nonextremal-Interval Flonum -> (Values (Listof Nonextremal-Interval)
-                                                          (Listof Flonum))))
+(: interval-split (Nonempty-Interval Flonum -> (Values (Listof Nonempty-Interval)
+                                                       (Listof Flonum))))
 (define (interval-split I p)
   (define-values (a b a? b?) (interval-fields I))
   (define c (fl* p (fl+ a b)))
@@ -72,100 +62,135 @@
 
 ;; ===================================================================================================
 
-(define-type Refiner (Nonempty-Omega-Set Nonempty-Branches-Set -> (Values Omega-Set Branches-Set)))
+(define-type Store (Pair Omega Trace))
 
-(: preimage-refiner (Rand-Computation Nonempty-Set -> Refiner))
-(define ((preimage-refiner e-comp B) Ω Z)
-  (define e-pre (e-comp (nonempty-domain-set Ω Z nulls)))
-  (match-define (rand-preimage (domain-set Ωin Zin Ain) (domain-set Ωout Zout Aout) f) e-pre)
-  (let ([Ω  (omega-set-intersect Ωin Ωout)]
-        [Z  (branches-set-intersect Zin Zout)])
-    (define Γ (domain-set Ω Z Ain))
-    (define K (domain-set Ω Z (set-intersect Aout B)))
-    (match-let ([(domain-set Ω Z N)  (run-rand-preimage-fun f Γ K)])
-      (cond [(not (or (empty-set? N) (nulls? N)))
-             (raise-result-error 'preimage-refiner "(U Empty-Set Null-Set)" N)]
-            [else  (values Ω Z)]))))
+(define-type Nonempty-Store-Rect (Pair Nonempty-Omega-Set Nonempty-Trace-Set))
+(define-type Store-Rect (U Empty-Set Nonempty-Store-Rect))
+(define-type Omega-Search-Tree (Search-Tree Store-Rect))
 
-(: refinement-sample* (Nonempty-Omega-Set Nonempty-Branches-Set Indexes Refiner Natural
-                                          -> (Listof omega-set-sample)))
-(define (refinement-sample* Ω Z idxs refine n)
-  (define t (build-search-tree Ω Z (annotate-indexes idxs) refine))
+(struct: store-rect-sample ([rect : Nonempty-Store-Rect]
+                            [measure : Flonum]
+                            [prob : Flonum])
+  #:transparent)
+
+(struct: store-sample ([s : Store] [prob : Flonum])
+  #:transparent)
+
+;; ===================================================================================================
+;; Preimage refinement
+
+(define-type Refiner (Nonempty-Store-Rect -> Store-Rect))
+
+(: store-rect->set (Nonempty-Store-Rect -> Nonempty-Set))
+(define (store-rect->set S)
+  (match-define (cons R T) S)
+  (set-pair R T))
+
+(: set->store-rect (Set -> Store-Rect))
+(define (set->store-rect S)
+  (cond [(empty-set? S)  empty-set]
+        [(not (pair-set? S))
+         (raise-argument-error 'set->store-rect "Pair-Set" S)]
+        [else
+         (define-values (R T) (set-projs S))
+         (cond [(or (empty-set? R) (empty-set? T))  empty-set]
+               [(not (omega-set? R))
+                (raise-argument-error 'set->store-rect "Omega-Set" R)]
+               [(not (trace-set? T))
+                (raise-argument-error 'set->store-rect "Trace-Set" T)]
+               [else
+                (cons R T)])]))
+
+(: preimage-refiner (Pre-Arrow Nonempty-Set -> Refiner))
+(define ((preimage-refiner h B) S)
+  (define A (ap/pre (h (set-pair (store-rect->set S) nulls)) B))
+  (define-values (S* N) (set-projs A))
+  (cond [(not (or (empty-set? N) (nulls? N)))
+         (raise-result-error 'preimage-refiner "(U Empty-Set Full-Null-Set)" N)]
+        [else
+         (set->store-rect S*)]))
+
+;; ===================================================================================================
+;; Refinement sampling
+
+(: refinement-sample* (Nonempty-Store-Rect Indexes Refiner Natural -> (Listof store-rect-sample)))
+(define (refinement-sample* S idxs refine n)
+  (define t (build-search-tree S (annotate-indexes idxs) refine))
   (define-values (ts ps _t _q) (sample-search-tree* t n))
   (let loop ([ts ts] [ps ps])
     (cond [(or (empty? ts) (empty? ps))  empty]
           [else
-           (match-define (search-leaf ΩZ m) (first ts))
+           (match-define (search-leaf S m) (first ts))
            (define p (first ps))
-           (cond [(empty-set? ΩZ)  (loop (rest ts) (rest ps))]
+           (cond [(empty-set? S)  (loop (rest ts) (rest ps))]
                  [else
-                  (match-define (cons Ω Z) ΩZ)
-                  (cons (omega-set-sample Ω Z m p) (loop (rest ts) (rest ps)))])])))
+                  (cons (store-rect-sample S m p) (loop (rest ts) (rest ps)))])])))
 
-(: expand-ann-indexes (Nonempty-Omega-Set Nonempty-Branches-Set Ann-Indexes Refiner -> Ann-Indexes))
-(define (expand-ann-indexes Ω Z idxs refine)
+(: expand-ann-indexes (Nonempty-Store-Rect Ann-Indexes Refiner -> Ann-Indexes))
+(define (expand-ann-indexes S idxs refine)
+  (match-define (cons R T) S)
   (let loop ([idxs idxs])
-    (cond
-      [(empty? idxs)  idxs]
-      [else
-       (define idx (first idxs))
-       (define rest-idxs (rest idxs))
-       (cond
-         [(ann-if-indexes? idx)
-          (match-define (ann-if-indexes i t-idxs f-idxs) idx)
-          (define b (branches-set-ref Z i))
-          (cond [(eq? b trues)   (append (force t-idxs) (loop rest-idxs))]
-                [(eq? b falses)  (append (force f-idxs) (loop rest-idxs))]
-                [else  (cons idx (loop rest-idxs))])]
-         [else
-          (cons idx (loop rest-idxs))])])))
+    (if (empty? idxs)
+        idxs
+        (let ([idx  (first idxs)]
+              [idxs  (rest idxs)])
+          (cond [(ann-ifte*-index? idx)
+                 (match-define (ann-ifte*-index j t-idxs f-idxs) idx)
+                 (define b (trace-set-proj T j))
+                 (cond [(eq? b trues)   (append (force t-idxs) (loop idxs))]
+                       [(eq? b falses)  (append (force f-idxs) (loop idxs))]
+                       [else  (cons idx (loop idxs))])]
+                [else
+                 (cons idx (loop idxs))])))))
 
-(: ann-index< (Nonempty-Omega-Set Nonempty-Branches-Set Refiner -> (Ann-Index Ann-Index -> Boolean)))
-(define ((ann-index< Ω Z refine) idx0 idx1)
-  (cond [(ann-if-indexes? idx0)  #f]
-        [(ann-if-indexes? idx1)  #t]
+(: ann-index< (Nonempty-Store-Rect Refiner -> (Ann-Index Ann-Index -> Boolean)))
+(define ((ann-index< S refine) idx0 idx1)
+  (match-define (cons R T) S)
+  (cond [(ann-ifte*-index? idx0)  #f]
+        [(ann-ifte*-index? idx1)  #t]
         [else
-         (match-define (ann-interval-index i0 split0 m0 l0) idx0)
-         (match-define (ann-interval-index i1 split1 m1 l1) idx1)
+         (match-define (ann-random-index j0 split0 m0 l0) idx0)
+         (match-define (ann-random-index j1 split1 m1 l1) idx1)
          #;
-         ((interval*-measure (omega-set-ref Ω i0)) . > . (interval*-measure (omega-set-ref Ω i1)))
+         ((interval*-measure (omega-set-proj R j0)) . > . (interval*-measure (omega-set-proj R j1)))
          
          (m0 . > . m1)]))
 
-(: choose-ann-index (Nonempty-Omega-Set Nonempty-Branches-Set Ann-Indexes Refiner
-                                        -> (Values Ann-Index Ann-Indexes)))
-(define (choose-ann-index Ω Z idxs refine)
-  (let ([idxs  (sort idxs (ann-index< Ω Z refine))])
+(: choose-ann-index (Nonempty-Store-Rect Ann-Indexes Refiner -> (Values Ann-Index Ann-Indexes)))
+(define (choose-ann-index S idxs refine)
+  (let ([idxs  (sort idxs (ann-index< S refine))])
     (values (first idxs) (rest idxs))))
 
-(: build-search-tree (Nonempty-Omega-Set Nonempty-Branches-Set
-                                         Ann-Indexes Refiner -> Omega-Search-Tree))
-(define (build-search-tree Ω Z idxs refine)
+(: build-search-tree (Nonempty-Store-Rect Ann-Indexes Refiner -> Omega-Search-Tree))
+(define (build-search-tree S idxs refine)
   (cond
-    [(or (empty-tree-set? Ω) (empty-tree-set? Z))  (search-leaf empty-set 0.0)]
+    [(empty-set? S)  (search-leaf empty-set 0.0)]
     [else
-     (let ([idxs  (expand-ann-indexes Ω Z idxs refine)])
-       (cond [(empty? idxs)  (search-leaf (cons Ω Z) (omega-set-measure Ω))]
+     (let ([idxs  (expand-ann-indexes S idxs refine)])
+       (cond [(empty? idxs)  (search-leaf S (omega-set-measure (car S)))]
              [else
-              (let-values ([(idx idxs)  (choose-ann-index Ω Z idxs refine)])
-                (if (ann-if-indexes? idx)
-                    (build-search-tree/if Ω Z idx idxs refine)
-                    (build-search-tree/ivl Ω Z idx idxs refine)))]))]))
+              (let-values ([(idx idxs)  (choose-ann-index S idxs refine)])
+                (if (ann-ifte*-index? idx)
+                    (build-search-tree/if S idx idxs refine)
+                    (build-search-tree/ivl S idx idxs refine)))]))]))
 
-(: build-search-tree/if (Nonempty-Omega-Set Nonempty-Branches-Set ann-if-indexes Ann-Indexes Refiner
-                                            -> Omega-Search-Tree))
-(define (build-search-tree/if Ω Z idx idxs refine)
-  (match-define (ann-if-indexes i t-idxs f-idxs) idx)
+(: build-search-tree/if (Nonempty-Store-Rect ann-ifte*-index Ann-Indexes Refiner
+                                             -> Omega-Search-Tree))
+(define (build-search-tree/if S idx idxs refine)
+  (match-define (cons R T) S)
+  (match-define (ann-ifte*-index j t-idxs f-idxs) idx)
   
   (: make-node (Nonempty-Bool-Set (Promise Ann-Indexes) -> Omega-Search-Tree))
-  (define (make-node b b-idxs)
-    (let-values ([(Ω Z)  (refine Ω (branches-set-set Z i b))])
-      (cond [(or (empty-tree-set? Ω) (empty-tree-set? Z))  (search-leaf empty-set 0.0)]
-            [else  (build-search-tree Ω Z (append (force b-idxs) idxs) refine)])))
+  (define (make-node B b-idxs)
+    (let ([T  (trace-set-unproj T j B)])
+      (cond [(empty-trace-set? T)  (search-leaf empty-set 0.0)]
+            [else  (let ([S  (refine (cons R T))])
+                     (cond [(empty-set? S)  (search-leaf empty-set 0.0)]
+                           [else  (build-search-tree S (append (force b-idxs) idxs) refine)]))])))
   
-  (define b (branches-set-ref Z i))
-  (cond [(eq? b trues)   (make-node trues t-idxs)]
-        [(eq? b falses)  (make-node falses f-idxs)]
+  (define B (trace-set-proj T j))
+  (cond [(eq? B trues)   (make-node trues t-idxs)]
+        [(eq? B falses)  (make-node falses f-idxs)]
         [else
          (search-node (list (delay (make-node trues t-idxs))
                             (delay (make-node falses f-idxs)))
@@ -173,17 +198,19 @@
                       'nondeterministic
                       'branches)]))
 
-(: proportional-split (Nonempty-Omega-Set Nonempty-Branches-Set
-                                          Refiner Omega-Index Nonextremal-Interval
-                                          -> (Values (Listof Nonextremal-Interval) (Listof Flonum))))
-(define (proportional-split Ω Z refine i I)
+(: proportional-split (Nonempty-Store-Rect Refiner Tree-Index Nonempty-Interval
+                                           -> (Values (Listof Nonempty-Interval) (Listof Flonum))))
+(define (proportional-split S refine i I)
+  (match-define (cons R T) S)
   (define-values (Is ls) (interval-split I 0.5))
   (match Is
     [(list I0 I1)
-     (define-values (Ω0 Z0) (refine (omega-set-set Ω i I0) Z))
-     (define-values (Ω1 Z1) (refine (omega-set-set Ω i I1) Z))
-     (define m0 (if (or (empty-tree-set? Ω0) (empty-tree-set? Z0)) 0.0 (omega-set-measure Ω0)))
-     (define m1 (if (or (empty-tree-set? Ω1) (empty-tree-set? Z1)) 0.0 (omega-set-measure Ω1)))
+     (define R0 (omega-set-unproj R i I0))
+     (define R1 (omega-set-unproj R i I1))
+     (define S0 (if (empty-omega-set? R0) empty-set (refine (cons R0 T))))
+     (define S1 (if (empty-omega-set? R1) empty-set (refine (cons R1 T))))
+     (define m0 (if (empty-set? S0) 0.0 (omega-set-measure (car S0))))
+     (define m1 (if (empty-set? S1) 0.0 (omega-set-measure (car S1))))
      (cond [(and (positive? m0) (positive? m1))
             #;(values Is (list m0 m1))
             (values Is (map + (normalize-probs ls) (normalize-probs (list m0 m1))))
@@ -193,41 +220,41 @@
            [else  (values Is ls)])]
     [_  (values Is ls)]))
 
-(: build-search-tree/ivl (Nonempty-Omega-Set Nonempty-Branches-Set
-                                             ann-interval-index Ann-Indexes Refiner
-                                             -> Omega-Search-Tree))
-(define (build-search-tree/ivl Ω Z idx idxs refine)
-  (match-define (ann-interval-index i split m min-length) idx)
+(: build-search-tree/ivl (Nonempty-Store-Rect ann-random-index Ann-Indexes Refiner
+                                              -> Omega-Search-Tree))
+(define (build-search-tree/ivl S idx idxs refine)
+  (match-define (ann-random-index j split m min-length) idx)
   (cond
-    [(zero? m)  (build-search-tree Ω Z idxs refine)]
+    [(zero? m)  (build-search-tree S idxs refine)]
     [else
-     (define I (omega-set-ref Ω i))
+     (match-define (cons R T) S)
+     (define I (omega-set-proj R j))
      (define-values (Is ls)
        (cond [(interval-list? I)  (define Is (interval-list-elements I))
                                   (values Is (map interval-measure Is))]
              [((interval-measure I) . < . min-length)  (values (list I) (list 1.0))]
              [split  (split I)]
              ;[else   (interval-split I 0.5)]
-             [else   (proportional-split Ω Z refine i I)]
+             [else   (proportional-split S refine j I)]
              ))
      (cond
        [(or (empty? Is) (empty? ls))
-        (build-search-tree Ω Z idxs refine)]
+        (build-search-tree S idxs refine)]
        [(or (empty? (rest Is)) (empty? (rest ls)))
-        (let-values ([(Ω Z)  (refine (omega-set-set Ω i (first Is)) Z)])
-          (cond [(or (empty-tree-set? Ω) (empty-tree-set? Z))  (search-leaf empty-set 0.0)]
-                [else
-                 (define idx (ann-interval-index i split (- m 1) min-length))
-                 (build-search-tree Ω Z (cons idx idxs) refine)]))]
+        (let* ([R  (omega-set-unproj R j (first Is))]
+               [S  (if (empty-omega-set? R) empty-set (refine (cons R T)))])
+          (cond [(empty-set? S)  (search-leaf empty-set 0.0)]
+                [else  (define idx (ann-random-index j split (- m 1) min-length))
+                       (build-search-tree S (cons idx idxs) refine)]))]
        [else
-        (: make-node (Nonextremal-Interval -> (Promise Omega-Search-Tree)))
+        (: make-node (Nonempty-Interval -> (Promise Omega-Search-Tree)))
         (define (make-node I)
           (delay
-            (let-values ([(Ω Z)  (refine (omega-set-set Ω i I) Z)])
-              (cond [(or (empty-tree-set? Ω) (empty-tree-set? Z))  (search-leaf empty-set 0.0)]
-                    [else
-                     (define idx (ann-interval-index i split (- m 1) min-length))
-                     (build-search-tree Ω Z (cons idx idxs) refine)]))))
+            (let* ([R  (omega-set-unproj R j I)]
+                   [S  (if (empty-omega-set? R) empty-set (refine (cons R T)))])
+              (cond [(empty-set? S)  (search-leaf empty-set 0.0)]
+                    [else  (define idx (ann-random-index j split (- m 1) min-length))
+                           (build-search-tree S (cons idx idxs) refine)]))))
         
         (search-node (map/+2 make-node Is)
                      (normalize-probs/+2 ls)
@@ -236,79 +263,80 @@
 
 ;; ===================================================================================================
 
-(: refinement-sample (Omega-Set Branches-Set Flonum Flonum Indexes Refiner
-                                -> (U #f omega-set-sample)))
-(define (refinement-sample Ω Z m p idxs refine)
-  (cond
-    [(or (empty-tree-set? Ω) (empty-tree-set? Z))  #f]
-    [(empty? idxs)  (omega-set-sample Ω Z m p)]
-    [(if-indexes? (first idxs))
-     (refinement-sample/if Ω Z m p (first idxs) (rest idxs) refine)]
-    [else
-     (refinement-sample/ivl Ω Z m p (first idxs) (rest idxs) refine)]))
+(: refinement-sample (Store-Rect Flonum Flonum Indexes Refiner -> (U #f store-rect-sample)))
+(define (refinement-sample S m p idxs refine)
+  (cond [(empty-set? S)  #f]
+        [(empty? idxs)  (store-rect-sample S m p)]
+        [else  (let ([idx  (first idxs)]
+                     [idxs  (rest idxs)])
+                 (if (ifte*-index? idx)
+                     (refinement-sample/if S m p idx idxs refine)
+                     (refinement-sample/ivl S m p idx idxs refine)))]))
 
-(: refinement-sample/if (Nonempty-Omega-Set Nonempty-Branches-Set
-                                            Flonum Flonum if-indexes Indexes Refiner
-                                            -> (U #f omega-set-sample)))
-(define (refinement-sample/if Ω Z m p idx idxs refine)
-  (match-define (if-indexes i t-idxs f-idxs) idx)
-  (define b (branches-set-ref Z i))
-  (cond [(eq? b trues)   (refinement-sample Ω Z m p (append (t-idxs) idxs) refine)]
-        [(eq? b falses)  (refinement-sample Ω Z m p (append (f-idxs) idxs) refine)]
-        [else
-         (define-values (b new-idxs q)
-           (cond [((random) . < . 0.5)  (values trues (t-idxs) 0.5)]
-                 [else                  (values falses (f-idxs) 0.5)]))
-         (let-values ([(Ω Z)  (refine Ω (branches-set-set Z i b))])
-           (refinement-sample Ω Z m (* p q) (append new-idxs idxs) refine))]))
+(: refinement-sample/if (Nonempty-Store-Rect Flonum Flonum ifte*-index Indexes Refiner
+                                             -> (U #f store-rect-sample)))
+(define (refinement-sample/if S m p idx idxs refine)
+  (match-define (cons R T) S)
+  (match-define (ifte*-index j t-idxs f-idxs) idx)
+  (define B (trace-set-proj T j))
+  (cond [(eq? B trues)   (refinement-sample S m p (append (force t-idxs) idxs) refine)]
+        [(eq? B falses)  (refinement-sample S m p (append (force f-idxs) idxs) refine)]
+        [else  (define-values (B new-idxs q)
+                 (cond [((random) . < . 0.5)  (values trues (force t-idxs) 0.5)]
+                       [else                  (values falses (force f-idxs) 0.5)]))
+               (let* ([T  (trace-set-unproj T j B)]
+                      [S  (if (empty-trace-set? T) empty-set (refine (cons R T)))])
+                 (refinement-sample S m (* p q) (append new-idxs idxs) refine))]))
 
-(: refinement-sample/ivl (Nonempty-Omega-Set Nonempty-Branches-Set
-                                             Flonum Flonum interval-index Indexes Refiner
-                                             -> (U #f omega-set-sample)))
-(define (refinement-sample/ivl Ω Z m p idx idxs refine)
-  (match-define (interval-index i split) idx)
-  (define I (omega-set-ref Ω i))
-  (define x (real-set-sample-point I))
+(: refinement-sample/ivl (Nonempty-Store-Rect Flonum Flonum random-index Indexes Refiner
+                                              -> (U #f store-rect-sample)))
+(define (refinement-sample/ivl S m p idx idxs refine)
+  (match-define (cons R T) S)
+  (match-define (random-index j split) idx)
+  (define I (omega-set-proj R j))
+  (define x (if (reals? I) +nan.0 (real-set-sample-point I)))
   (define J (Nonextremal-Interval x x #t #t))
   (define q (real-set-measure I))
-  (let-values ([(Ω Z)  (refine (omega-set-set Ω i J) Z)])
-    (refinement-sample Ω Z (* m q) p idxs refine)))
+  (let* ([R  (omega-set-unproj R j J)]
+         [S  (if (empty-omega-set? R) empty-set (refine (cons R T)))])
+    (refinement-sample S (* m q) p idxs refine)))
 
 ;; ===================================================================================================
 
-(: refinement-sample-point (Nonempty-Omega-Set Nonempty-Branches-Set Indexes Refiner
-                                               -> (U #f omega-sample)))
-(define (refinement-sample-point Ω Z idxs refine)
-  (match (refinement-sample Ω Z 1.0 1.0 idxs refine)
-    [(omega-set-sample Ω Z m p)
-     (define ω (omega-set-sample-point Ω))
-     (define z (branches-set-sample-point Z))
-     (omega-sample ω z (/ m p))]
+(: refinement-sample-point (Nonempty-Store-Rect Indexes Refiner -> (U #f store-sample)))
+(define (refinement-sample-point S idxs refine)
+  (match (refinement-sample S 1.0 1.0 idxs refine)
+    [(store-rect-sample S m p)
+     (match-define (cons R T) S)
+     (define r (omega-set-sample-point R))
+     (define t (trace-set-sample-point T))
+     (store-sample (cons r t) (/ m p))]
     [_  #f]))
 
 ;; ===================================================================================================
 ;; Front end to sampler
 
-(: drbayes-sample (case-> (Expression Natural -> (Values (Listof Value) (Listof Flonum)))
-                          (Expression Natural Set -> (Values (Listof Value) (Listof Flonum)))))
-(define (drbayes-sample f n [K universe])
-  (match-define (rand-expression-meaning idxs f-fwd f-comp) (run-rand-expression (->rand f)))
+(: drbayes-sample (case-> (meaning Natural -> (Values (Listof Value) (Listof Flonum)))
+                          (meaning Natural Set -> (Values (Listof Value) (Listof Flonum)))))
+(define (drbayes-sample e n [B universe])
+  (define-values (f h idxs)
+    (match-let ([(meaning f h k)  e])
+      (values (f '()) (h '()) (k '()))))
   
   (define (empty-set-error)
     (error 'drbayes-sample "cannot sample from the empty set"))
   
   (define refine
-    (cond [(empty-set? K)  (empty-set-error)]
-          [else  (preimage-refiner f-comp K)]))
+    (if (empty-set? B) (empty-set-error) (preimage-refiner h B)))
   
-  (define-values (Ω Z)
-    (let-values ([(Ω Z)  (refine full-tree-set full-tree-set)])
-      (if (or (empty-tree-set? Ω) (empty-tree-set? Z)) (empty-set-error) (values Ω Z))))
+  (define S
+    (let ([S  (refine (cons omegas traces))])
+      (if (empty-set? S) (empty-set-error) S)))
   
-  (define t (build-search-tree Ω Z (annotate-indexes idxs) refine))
+  (define t (build-search-tree S (annotate-indexes idxs) refine))
   
   (let: loop ([i : Natural  0]
-              [ks : (Listof Value)   empty]
+              [bs : (Listof Value)   empty]
               [ws : (Listof Flonum)  empty]
               [t : Omega-Search-Tree  t]
               [q : Flonum  1.0])
@@ -321,42 +349,42 @@
          (let-values ([(leaf-ts leaf-ps t q)  (sample-search-tree t q)])
            (let: inner-loop ([leaf-ts leaf-ts]
                              [leaf-ps leaf-ps]
-                             [ks : (Listof Value)   ks]
+                             [bs : (Listof Value)   bs]
                              [ws : (Listof Flonum)  ws])
              (cond
                [(or (empty? leaf-ts) (empty? leaf-ps))
-                (loop i ks ws t q)]
+                (loop i bs ws t q)]
                [else
                 (define leaf-t (first leaf-ts))
                 (define leaf-p (first leaf-ps))
-                (match-define (search-leaf ΩZ m) leaf-t)
+                (match-define (search-leaf S m) leaf-t)
                 (cond
-                  [(or (empty-set? ΩZ) (m . <= . 0.0))
+                  [(or (empty-set? S) (m . <= . 0.0))
                    (printf "sample-search-tree returned failure~n")
-                   (inner-loop (rest leaf-ts) (rest leaf-ps) ks ws)]
+                   (inner-loop (rest leaf-ts) (rest leaf-ps) bs ws)]
                   [else
-                   (match-define (cons Ω Z) ΩZ)
-                   (define pt (refinement-sample-point Ω Z idxs refine))
-                   ;(define ω (omega-set-sample-point Ω))
-                   ;(define z (branches-set-sample-point Z))
-                   ;(define pt (omega-sample ω z m))
+                   (define pt (refinement-sample-point S idxs refine))
+                   ;(match-define (cons R T) S)
+                   ;(define r (omega-set-sample-point R))
+                   ;(define t (trace-set-sample-point T))
+                   ;(define pt (store-sample (cons r t) m))
                    (match pt
-                     [(omega-sample ω z m)
-                      (define k (f-fwd ω z null))
-                      (cond [(and (not (bottom? k)) (set-member? K k))
-                             (printf "success!~n")
+                     [(store-sample s m)
+                      (define b (f (cons s null)))
+                      (cond [(and (not (bottom? b)) (set-member? B b))
+                             ;(printf "success!~n")
                              (inner-loop (rest leaf-ts) (rest leaf-ps)
-                                         (cons k ks) (cons (/ m leaf-p) ws))]
-                            [(bottom? k)
-                             (printf "k = bottom: ~a~n" (force (bottom-message k)))
-                             (inner-loop (rest leaf-ts) (rest leaf-ps) ks ws)]
+                                         (cons b bs) (cons (/ m leaf-p) ws))]
+                            [(bottom? b)
+                             (printf "b = bottom: ~a~n" (force (bottom-message b)))
+                             (inner-loop (rest leaf-ts) (rest leaf-ps) bs ws)]
                             [else
-                             (printf "k not in K~n")
-                             (inner-loop (rest leaf-ts) (rest leaf-ps) ks ws)])]
+                             (printf "b not in B~n")
+                             (inner-loop (rest leaf-ts) (rest leaf-ps) bs ws)])]
                      [_
                       (printf "refinement-sample-point returned #f~n")
-                      (inner-loop (rest leaf-ts) (rest leaf-ps) ks ws)])])]))))]
+                      (inner-loop (rest leaf-ts) (rest leaf-ps) bs ws)])])]))))]
       [else
        (when (q . <= . 0.0)
          (printf "bailing because top probability is zero~n"))
-       (values ks ws)])))
+       (values bs ws)])))
