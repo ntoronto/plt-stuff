@@ -274,7 +274,7 @@
   
   (define B (set-list reals reals (real-set 0.99 1.01))))
 
-#;; Test: random square, with obviously repeated variable in condition
+;; Test: random square, with obviously repeated variable in condition
 (begin
   (interval-max-splits 2)
   
@@ -429,7 +429,7 @@
       (list (untag x0 t0) x1 (sqrt (+ (sqr (untag x0 t0)) (sqr x1))))))
   (define B (set-list reals reals (real-set 0.95 1.05))))
 
-;; Test: Normal-Normal with circular condition and first variable tagged with probability 0.5
+#;; Test: Normal-Normal with circular condition and first variable tagged with probability 0.5
 (begin
   (interval-max-splits 0)
   (define t0 (make-set-tag 't0))
@@ -445,7 +445,7 @@
 ;; ===================================================================================================
 
 (define-values (f h idxs)
-  (match-let ([(meaning f h k)  e])
+  (match-let ([(meaning _ f h k)  e])
     (values (f '()) (h '()) (k '()))))
 
 (define (empty-set-error)

@@ -320,7 +320,7 @@
                           (meaning Natural Set -> (Values (Listof Value) (Listof Flonum)))))
 (define (drbayes-sample e n [B universe])
   (define-values (f h idxs)
-    (match-let ([(meaning f h k)  e])
+    (match-let ([(meaning _ f h k)  e])
       (values (f '()) (h '()) (k '()))))
   
   (define (empty-set-error)

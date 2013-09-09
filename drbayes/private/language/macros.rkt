@@ -23,7 +23,7 @@
          "../set.rkt"
          "../arrow.rkt")
 
-(provide define/drbayes struct/drbayes drbayes
+(provide define/drbayes struct/drbayes drbayes drbayes-run
          fail random random-std-normal random-std-cauchy
          quote null empty
          and or not
@@ -43,20 +43,12 @@
 (module typed-defs typed/racket/base
   (provide (all-defined-out))
   
-  (require racket/promise
-           "../arrow.rkt"
-           "../set.rkt"
-           "drbayes-dispatcher.rkt")
-  
-  (: run/bot* (Bot*-Arrow -> Value))
-  (define (run/bot* e)
-    (define v ((e '()) (cons (cons (random-omega) (random-trace)) null)))
-    (cond [(bottom? v)  (error 'drbayes (force (bottom-message v)))]
-          [else  v]))
+  (require "../arrow.rkt"
+           "../set.rkt")
   
   (: drbayes-run (meaning -> Value))
   (define (drbayes-run e)
-    (run/bot* (meaning-bot e)))
+    ((meaning-proc e) null))
   )
 
 (require (submod "." typed-defs))
@@ -374,7 +366,9 @@
   (syntax-case stx ()
     [(_ e)
      (syntax/loc stx
-       (meaning (syntax-parameterize ([drbayes-dispatcher  bot*-dispatcher])
+       (meaning (syntax-parameterize ([drbayes-dispatcher  proc-dispatcher])
+                  (interp e))
+                (syntax-parameterize ([drbayes-dispatcher  bot*-dispatcher])
                   (interp e))
                 (syntax-parameterize ([drbayes-dispatcher  pre*-dispatcher])
                   (interp e))
@@ -406,8 +400,9 @@
          
          (: name-racket (Values ... -> Value))
          (define (name-racket arg ...)
-           (run/bot* (apply/bot* (meaning-bot (name-body))
-                                 (list (const/bot* (const arg)) ...))))
+           ((apply/proc (meaning-proc (name-body))
+                        (list (const/proc (const arg)) ...))
+            null))
          
          (define-syntax name
            (first-order-function
