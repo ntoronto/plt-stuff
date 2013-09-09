@@ -68,10 +68,12 @@
 ;; ===================================================================================================
 ;; Membership
 
-(: set-member? (Set Value -> Boolean))
+(: set-member? (Set Maybe-Value -> Boolean))
 (define (set-member? A x)
-  (cond [(empty-set? A)   #f]
-        [(universe? A)    #t]
+  (cond [(bottom? x)       #f]
+        [(empty-set? A)    #f]
+        [(not (value? x))  #f]
+        [(universe? A)     #t]
         [(bot-set? A)
          (cond [(bot-basic? A)  (bot-basic-member? A x)]
                [(bot-tagged? A)  (bot-tagged-member? A x)]
@@ -116,8 +118,8 @@
 ;; Join
 
 (: set-join (case-> (Set Nonempty-Set -> Nonempty-Set)
-                     (Nonempty-Set Set -> Nonempty-Set)
-                     (Set Set -> Set)))
+                    (Nonempty-Set Set -> Nonempty-Set)
+                    (Set Set -> Set)))
 (define (set-join A B)
   (cond
     [(empty-set? A)  B]

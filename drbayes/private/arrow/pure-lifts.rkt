@@ -1,7 +1,6 @@
 #lang typed/racket/base
 
-(require racket/match
-         racket/promise
+(require racket/promise
          (only-in racket/math pi)
          math/flonum
          math/distributions
@@ -17,13 +16,17 @@
 
 (: monotone/bot (Symbol Nonempty-Real-Set Nonempty-Real-Set (Flonum -> Flonum) -> Bot-Arrow))
 (define ((monotone/bot name X Y f) a)
-  (cond [(or (not (flonum? a)) (not (real-set-member? X a)))
-         (bottom (delay (format "~a: expected argument in ~e; given ~e" name X a)))]
-        [else
+  (define (arg-error)
+    (bottom (delay (format "~a: expected argument in ~e; given ~e" name X a))))
+  
+  (define res-error
+    (λ: ([b : Flonum])
+      (bottom (delay (format "~a: expected result in ~e; produced ~e" name Y b)))))
+  
+  (cond [(and (flonum? a) (real-set-member? X a))
          (define b (f a))
-         (cond [(not (real-set-member? Y b))
-                (bottom (delay (format "~a: expected result in ~e; produced ~e" name Y b)))]
-               [else  b])]))
+         (if (real-set-member? Y b) b (res-error b))]
+        [else  (arg-error)]))
 
 (: monotone-apply (Boolean (Flonum -> Flonum) (Flonum -> Flonum) Set -> Set))
 (define (monotone-apply inc? f/rndd f/rndu A)
@@ -42,7 +45,7 @@
                  (Flonum -> Flonum) (Flonum -> Flonum)
                  -> Pre-Arrow))
 (define ((monotone/pre X Y inc? f/rndd f/rndu g/rndd g/rndu) A)
-  (pre-mapping (set-intersect Y (monotone-apply inc? f/rndd f/rndu A))
+  (pre-mapping (set-intersect Y (monotone-apply inc? f/rndd f/rndu (set-intersect X A)))
                (λ (B) (set-intersect X (monotone-apply inc? g/rndd g/rndu B)))))
 
 (: monotone/prim (Symbol
@@ -64,13 +67,21 @@
                    Nonempty-Real-Set Nonempty-Real-Set Nonempty-Real-Set (Flonum Flonum -> Flonum)
                    -> Bot-Arrow))
 (define ((monotone2d/bot name X1 X2 Y f) a)
-  (define (fail)
+  (define (arg-error)
     (bottom (delay (format "~a: expected argument in ~e; given ~e" name (set-pair X1 X2) a))))
-  (match a
-    [(cons (? flonum? a1) (? flonum? a2))
-     (cond [(and (real-set-member? X1 a1) (real-set-member? X2 a2))  (f a1 a2)]
-           [else  (fail)])]
-    [_  (fail)]))
+  
+  (define res-error
+    (λ: ([b : Flonum])
+      (bottom (delay (format "~a: expected result in ~e; produced ~e" name Y b)))))
+  
+  (cond [(pair? a)
+         (define a1 (car a))
+         (define a2 (cdr a))
+         (cond [(and (flonum? a1) (flonum? a2) (real-set-member? X1 a1) (real-set-member? X2 a2))
+                (define b (f a1 a2))
+                (if (real-set-member? Y b) b (res-error b))]
+               [else  (arg-error)])]
+        [else  (arg-error)]))
 
 (: monotone2d-apply (Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                              Nonempty-Interval Nonempty-Interval -> Interval))
@@ -101,7 +112,7 @@
                                 Nonempty-Set Nonempty-Set -> Set))
 (define (monotone2d-preimage gz? gy? g/rndd g/rndu hz? hx? h/rndd h/rndu X B)
   (define-values (X1 X2) (set-projs X))
-  (let ([B  (set-take-reals B)]
+  (let ([B   (set-take-reals B)]
         [X1  (set-take-reals X1)]
         [X2  (set-take-reals X2)])
     (define A1
@@ -541,15 +552,15 @@
                        nonnegative-interval
                        negative-interval))
 
-(define lt/bot (>>>/bot -/bot negative?/bot))
-(define gt/bot (>>>/bot -/bot positive?/bot))
-(define lte/bot (>>>/bot -/bot nonpositive?/bot))
-(define gte/bot (>>>/bot -/bot nonnegative?/bot))
+(define </bot (>>>/bot -/bot negative?/bot))
+(define >/bot (>>>/bot -/bot positive?/bot))
+(define <=/bot (>>>/bot -/bot nonpositive?/bot))
+(define >=/bot (>>>/bot -/bot nonnegative?/bot))
 
-(define lt/pre (>>>/pre -/pre negative?/pre))
-(define gt/pre (>>>/pre -/pre positive?/pre))
-(define lte/pre (>>>/pre -/pre nonpositive?/pre))
-(define gte/pre (>>>/pre -/pre nonnegative?/pre))
+(define </pre (>>>/pre -/pre negative?/pre))
+(define >/pre (>>>/pre -/pre positive?/pre))
+(define <=/pre (>>>/pre -/pre nonpositive?/pre))
+(define >=/pre (>>>/pre -/pre nonnegative?/pre))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Nonmonotone functions
@@ -607,10 +618,10 @@
               fail)))
 
 (define */bot (make-* >>>/bot ifte/bot ref/bot
-                      pos-pos-mul/bot pos-neg-mul/bot neg-pos-mul/bot pos-neg-mul/bot
+                      pos-pos-mul/bot pos-neg-mul/bot neg-pos-mul/bot neg-neg-mul/bot
                       positive?/bot negative?/bot const/bot restrict/bot))
 (define */pre (make-* >>>/pre ifte/pre ref/pre
-                      pos-pos-mul/pre pos-neg-mul/pre neg-pos-mul/pre pos-neg-mul/pre
+                      pos-pos-mul/pre pos-neg-mul/pre neg-pos-mul/pre neg-neg-mul/pre
                       positive?/pre negative?/pre const/pre restrict/pre))
 
 (define //bot (make-/ >>>/bot ifte/bot ref/bot

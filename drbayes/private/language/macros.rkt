@@ -139,10 +139,10 @@
     (pattern - #:attr computation #'-/arr)
     (pattern * #:attr computation #'*/arr)
     (pattern / #:attr computation #'//arr)
-    (pattern < #:attr computation #'lt/arr)
-    (pattern <= #:attr computation #'lte/arr)
-    (pattern > #:attr computation #'gt/arr)
-    (pattern >= #:attr computation #'gte/arr)
+    (pattern < #:attr computation #'</arr)
+    (pattern > #:attr computation #'>/arr)
+    (pattern <= #:attr computation #'<=/arr)
+    (pattern >= #:attr computation #'>=/arr)
     )
   
   (define-syntax-class n+1-ary-primitive

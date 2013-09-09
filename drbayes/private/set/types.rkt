@@ -2,6 +2,8 @@
 
 (provide (all-defined-out))
 
+(struct: Base-Value () #:transparent)
+
 (struct: Base-Set () #:transparent)
 (define set? Base-Set?)
 

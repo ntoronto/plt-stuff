@@ -143,7 +143,7 @@
 (define/drbayes (trace-light ps d)
   (let* ([p0  (car ps)]
          [c   (closer-collision
-               (closer-collision 
+               (closer-collision
                 (ray-plane-intersect p0 d (const plane1-n) (const plane1-d))
                 (ray-plane-intersect p0 d (const plane2-n) (const plane2-d)))
                (closer-collision
@@ -154,8 +154,7 @@
                  (ray-plane-intersect p0 d (const plane5-n) (const plane5-d))
                  (ray-plane-intersect p0 d (const plane6-n) (const plane6-d)))))])
     (if (collision? c)
-        #;(cons (collision-point c) ps)
-        
+        ;(cons (collision-point c) ps)
         (let* ([p0  (collision-point c)]
                [n  (collision-normal c)]
                [d  (uniform-vec/dir n)]
@@ -193,17 +192,15 @@
   (trace-light (list (start-p)) (uniform-vec)))
 
 (define H
-  #;
   (set-list reals reals reals)
-  
+  #;
   (set-list (real-set 0.49 0.51)
             (real-set -0.001 0.001)
             (real-set 0.49 0.51)))
 
-(define K
+(define B
   ;universe
   ;(set-list* H universe universe)
-  
   (set-list* H
              universe
              universe
@@ -213,8 +210,8 @@
 (match-define (rand-expression-meaning idxs f-fwd f-comp) (run-rand-expression (->rand f-expr)))
 
 (define refine
-  (cond [(empty-set? K)  (error 'refine "K is empty-set")]
-        [else  (preimage-refiner f-comp K)]))
+  (cond [(empty-set? B)  (error 'refine "B is empty-set")]
+        [else  (preimage-refiner f-comp B)]))
 |#
 
 (define-values (pss ws)
@@ -223,7 +220,7 @@
       (time
        ;profile-expr
        (let ()
-         (define-values (ps ws) (drbayes-sample e n K))
+         (define-values (ps ws) (drbayes-sample e n B))
          (map (inst cons Value Flonum) ps ws))))
     (values (cast (map (inst car Value Flonum) pws)
                   (Listof (Listof (List Flonum Flonum Flonum))))

@@ -156,21 +156,21 @@
 (define nonnegative?/pre* (η/pre* nonnegative?/pre))
 (define nonnegative?/idx any/idx)
 
-(define lt/bot* (η/bot* lt/bot))
-(define lt/pre* (η/pre* lt/pre))
-(define lt/idx any/idx)
+(define </bot* (η/bot* </bot))
+(define </pre* (η/pre* </pre))
+(define </idx any/idx)
 
-(define gt/bot* (η/bot* gt/bot))
-(define gt/pre* (η/pre* gt/pre))
-(define gt/idx any/idx)
+(define >/bot* (η/bot* >/bot))
+(define >/pre* (η/pre* >/pre))
+(define >/idx any/idx)
 
-(define lte/bot* (η/bot* lte/bot))
-(define lte/pre* (η/pre* lte/pre))
-(define lte/idx any/idx)
+(define <=/bot* (η/bot* <=/bot))
+(define <=/pre* (η/pre* <=/pre))
+(define <=/idx any/idx)
 
-(define gte/bot* (η/bot* gte/bot))
-(define gte/pre* (η/pre* gte/pre))
-(define gte/idx any/idx)
+(define >=/bot* (η/bot* >=/bot))
+(define >=/pre* (η/pre* >=/pre))
+(define >=/idx any/idx)
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Nonmonotone functions

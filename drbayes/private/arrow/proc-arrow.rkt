@@ -16,24 +16,12 @@
   (define b (f a))
   (if (bottom? b) (error 'drbayes (force (bottom-message b))) b))
 
-(: lift-R/proc (Symbol (Flonum -> Value) -> Proc-Arrow))
-(define ((lift-R/proc name f) a)
-  (cond [(flonum? a)  (f a)]
-        [else  (error 'drbayes (format "~a: expected argument in reals; given ~e" name a))]))
-
-(: lift-RxR/proc (Symbol (Flonum Flonum -> Value) -> Proc-Arrow))
-(define ((lift-RxR/proc name f) a)
-  (match a
-    [(cons (? flonum? a1) (? flonum? a2))  (f a1 a2)]
-    [_
-     (error 'drbayes (format "~a: expected argument in (set-pair reals reals); given ~e" name a))]))
-
 ;; ===================================================================================================
 ;; Basic lifts
 
-(define id/proc (λ: ([a : Value]) a))
-(define const/proc (λ: ([b : Value]) (λ: ([a : Value]) b)))
 (define fail/proc (lower/proc fail/bot))
+(define id/proc (lower/proc id/bot))
+(define const/proc (λ: ([b : Value]) (lower/proc (const/bot b))))
 (define restrict/proc (λ: ([X : Nonempty-Set]) (lower/proc (restrict/bot X))))
 (define ref/proc (λ: ([j : Pair-Index]) (lower/proc (ref/bot j))))
 
@@ -92,10 +80,10 @@
 (define pair?/proc pair?)
 (define boolean?/proc boolean?)
 
-(define scale/proc (λ: ([y : Flonum]) (lift-R/proc 'scale (λ: ([x : Flonum]) (fl* x y)))))
-(define translate/proc (λ: ([y : Flonum]) (lift-R/proc 'translate (λ: ([x : Flonum]) (fl+ x y)))))
-(define neg/proc (lift-R/proc 'neg flneg))
-(define exp/proc (lift-R/proc 'exp flexp))
+(define scale/proc (λ: ([y : Flonum]) (lower/proc (scale/bot y))))
+(define translate/proc (λ: ([y : Flonum]) (lower/proc (translate/bot y))))
+(define neg/proc (lower/proc neg/bot))
+(define exp/proc (lower/proc exp/bot))
 (define log/proc (lower/proc log/bot))
 (define sqrt/proc (lower/proc sqrt/bot))
 (define asin/proc (lower/proc asin/bot))
@@ -104,24 +92,24 @@
 (define cauchy/proc (lower/proc cauchy/bot))
 (define normal/proc (lower/proc normal/bot))
 
-(define +/proc (lift-RxR/proc '+ fl+))
-(define -/proc (lift-RxR/proc '- fl-))
+(define +/proc (lower/proc +/bot))
+(define -/proc (lower/proc -/bot))
 
-(define negative?/proc (lift-R/proc 'negative? negative?))
-(define positive?/proc (lift-R/proc 'positive? positive?))
+(define negative?/proc (lower/proc negative?/bot))
+(define positive?/proc (lower/proc positive?/bot))
 (define nonpositive?/proc (lower/proc nonpositive?/bot))
 (define nonnegative?/proc (lower/proc nonnegative?/bot))
 
-(define lt/proc (lift-RxR/proc '< fl<))
-(define gt/proc (lift-RxR/proc '> fl>))
-(define lte/proc (lift-RxR/proc '<= fl<=))
-(define gte/proc (lift-RxR/proc '>= fl>=))
+(define </proc (lower/proc </bot))
+(define >/proc (lower/proc >/bot))
+(define <=/proc (lower/proc <=/bot))
+(define >=/proc (lower/proc >=/bot))
 
-(define abs/proc (lift-R/proc 'abs flabs))
-(define sqr/proc (lift-R/proc 'sqr (λ: ([x : Flonum]) (fl* x x))))
+(define abs/proc (lower/proc abs/bot))
+(define sqr/proc (lower/proc sqr/bot))
 (define recip/proc (lower/proc recip/bot))
 
-(define */proc (lift-RxR/proc '* fl*))
+(define */proc (lower/proc */bot))
 (define //proc (lower/proc //bot))
 
 (define partial-cos/proc (lower/proc partial-cos/bot))

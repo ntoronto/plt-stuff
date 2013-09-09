@@ -172,14 +172,14 @@
       ))
   (define B (set-list reals reals trues)))
 
-#;; Test: arithmetic
+;; Test: arithmetic
 (begin
   (interval-max-splits 4)
   
   (define/drbayes e
     (let* ([x  (random-std-cauchy)]
            [y  (random-std-cauchy)])
-      (list x y (/ x y))))
+      (list x y (* x y))))
   
   (define B (set-list reals reals (real-set -0.1 0.2))))
 
@@ -274,7 +274,7 @@
   
   (define B (set-list reals reals (real-set 0.99 1.01))))
 
-;; Test: random square, with obviously repeated variable in condition
+#;; Test: random square, with obviously repeated variable in condition
 (begin
   (interval-max-splits 2)
   

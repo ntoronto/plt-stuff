@@ -50,7 +50,7 @@
 (define-drbayes-arrow-comps cauchy normal)
 (define-drbayes-arrow-comps + -)
 (define-drbayes-arrow-comps negative? positive? nonpositive? nonnegative?)
-(define-drbayes-arrow-comps lt lte gt gte)
+(define-drbayes-arrow-comps < > <= >=)
 (define-drbayes-arrow-comps abs sqr recip)
 (define-drbayes-arrow-comps * /)
 (define-drbayes-arrow-comps partial-cos partial-sin)

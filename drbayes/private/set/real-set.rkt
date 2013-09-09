@@ -162,7 +162,8 @@
   
   (: interval-member? (Interval Flonum -> Boolean))
   (define (interval-member? I x)
-    (cond [(empty-real-set? I)  #f]
+    (cond [(not (< -inf.0 x +inf.0))  #f]
+          [(empty-real-set? I)  #f]
           [(reals? I)   #t]
           [else
            (match-define (Nonextremal-Interval a b a? b?) I)
@@ -512,7 +513,8 @@
   
   (: real-set-member? (Real-Set Flonum -> Boolean))
   (define (real-set-member? I x)
-    (cond [(empty-real-set? I)  #f]
+    (cond [(not (< -inf.0 x +inf.0))  #f]
+          [(empty-real-set? I)  #f]
           [(reals? I)  #t]
           [(Nonextremal-Interval? I)   (interval-member? I x)]
           [else  (ormap (λ: ([I : Interval]) (interval-member? I x))

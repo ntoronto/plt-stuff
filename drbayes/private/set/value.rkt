@@ -5,6 +5,7 @@
 (require (for-syntax racket/base)
          racket/match
          racket/promise
+         "types.rkt"
          "real-set.rkt"
          "bool-set.rkt"
          "null-set.rkt"
@@ -22,19 +23,30 @@
 (define-type Value (Rec Value (U Flonum Boolean Null (Pair Value Value) Omega Trace tagged-value)))
 (define-type Maybe-Value (U Value Bottom))
 
-(struct: tagged-value ([tag : Symbol] [value : Value]) #:transparent)
+(struct: tagged-value Base-Value ([tag : Symbol] [value : Value]) #:transparent)
+
+(: value? (Value -> Boolean))
+(define (value? v)
+  (cond [(flonum? v)        (< -inf.0 v +inf.0)]
+        [(boolean? v)       #t]
+        [(null? v)          #t]
+        [(pair? v)          (and (value? (car v)) (value? (cdr v)))]
+        [(omega? v)         #t]
+        [(trace? v)         #t]
+        [(tagged-value? v)  (value? (tagged-value-value v))]))
 
 ;; ===================================================================================================
+;; Tagged values
 
 (: value-tag (Value -> Tag))
 (define (value-tag v)
-  (cond [(flonum? v)   real-tag]
-        [(boolean? v)  bool-tag]
-        [(null? v)     null-tag]
-        [(pair? v)     pair-tag]
-        [(omega? v)    omega-tag]
-        [(trace? v)    trace-tag]
-        [else          (tagged-value-tag v)]))
+  (cond [(flonum? v)        real-tag]
+        [(boolean? v)       bool-tag]
+        [(null? v)          null-tag]
+        [(pair? v)          pair-tag]
+        [(omega? v)         omega-tag]
+        [(trace? v)         trace-tag]
+        [(tagged-value? v)  (tagged-value-tag v)]))
 
 ;; ===================================================================================================
 ;; Ref

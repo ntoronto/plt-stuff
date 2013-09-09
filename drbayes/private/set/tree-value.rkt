@@ -3,6 +3,7 @@
 (require racket/promise
          racket/list
          racket/match
+         "types.rkt"
          "../untyped-utils.rkt")
 
 (provide (all-defined-out))
@@ -56,7 +57,7 @@
 
 ;; ===================================================================================================
 
-(struct: Omega ([tree : (Tree Flonum)]) #:transparent)
+(struct: Omega Base-Value ([tree : (Tree Flonum)]) #:transparent)
 
 (define omega? Omega?)
 
@@ -101,7 +102,7 @@
 
 ;; ===================================================================================================
 
-(struct: Trace ([tree : (Tree Boolean)]) #:transparent)
+(struct: Trace Base-Value ([tree : (Tree Boolean)]) #:transparent)
 
 (define trace? Trace?)
 
