@@ -24,15 +24,14 @@
   (define (res-error b)
     (bottom (delay (format "~a: expected result in ~e; produced ~e" name Y b))))
   
-  (Bot-Arrow
-   (λ (a)
-     (cond [(and (flonum? a) (real-set-member? X a))
-            (define b (f a))
-            (cond [(real-set-member? Y b)  b]
-                  [else
-                   (res-error b)])]
-           [else
-            (arg-error a)]))))
+  (λ (a)
+    (cond [(and (flonum? a) (real-set-member? X a))
+           (define b (f a))
+           (cond [(real-set-member? Y b)  b]
+                 [else
+                  (res-error b)])]
+          [else
+           (arg-error a)])))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Strictly monotone (i.e. invertible)
@@ -53,12 +52,10 @@
                         (Flonum -> Flonum) (Flonum -> Flonum)
                         (Flonum -> Flonum) (Flonum -> Flonum)
                         -> Pre-Arrow))
-(define (strict-monotone/pre X Y inc? f/rndd f/rndu g/rndd g/rndu)
-  (Pre-Arrow
-   (λ (A)
-     (let ([A  (set-intersect A X)])
-       (pre-mapping (set-intersect Y (strict-monotone-apply inc? f/rndd f/rndu A))
-                    (λ (B) (set-intersect A (strict-monotone-apply inc? g/rndd g/rndu B))))))))
+(define ((strict-monotone/pre X Y inc? f/rndd f/rndu g/rndd g/rndu) A)
+  (let ([A  (set-intersect A X)])
+    (pre-mapping (set-intersect Y (strict-monotone-apply inc? f/rndd f/rndu A))
+                 (λ (B) (set-intersect A (strict-monotone-apply inc? g/rndd g/rndu B))))))
 
 (: strict-monotone/prim (Symbol
                          Nonempty-Real-Set
@@ -85,12 +82,10 @@
                  (Nonempty-Interval -> Real-Set)
                  (Nonempty-Interval -> Real-Set)
                  -> Pre-Arrow))
-(define (monotone/pre X Y img pre)
-  (Pre-Arrow
-   (λ (A)
-     (let ([A  (set-intersect A X)])
-       (pre-mapping (set-intersect Y (monotone-apply img A))
-                    (λ (B) (set-intersect A (monotone-apply pre B))))))))
+(define ((monotone/pre X Y img pre) A)
+  (let ([A  (set-intersect A X)])
+    (pre-mapping (set-intersect Y (monotone-apply img A))
+                 (λ (B) (set-intersect A (monotone-apply pre B))))))
 
 (: monotone/prim (Symbol
                   Nonempty-Real-Set
@@ -117,23 +112,22 @@
   (define (res-error b)
     (bottom (delay (format "~a: expected result in ~e; produced ~e" name Y b))))
   
-  (Bot-Arrow
-   (λ (a)
-     (cond [(pair? a)
-            (define a1 (car a))
-            (define a2 (cdr a))
-            (cond [(and (flonum? a1) (flonum? a2) (real-set-member? X1 a1) (real-set-member? X2 a2))
-                   (define b (f a1 a2))
-                   (cond [(real-set-member? Y b)  b]
-                         [else
-                          (res-error b)])]
-                  [else
-                   (arg-error a)])]
-           [else
-            (arg-error a)]))))
+  (λ (a)
+    (cond [(pair? a)
+           (define a1 (car a))
+           (define a2 (cdr a))
+           (cond [(and (flonum? a1) (flonum? a2) (real-set-member? X1 a1) (real-set-member? X2 a2))
+                  (define b (f a1 a2))
+                  (cond [(real-set-member? Y b)  b]
+                        [else
+                         (res-error b)])]
+                 [else
+                  (arg-error a)])]
+          [else
+           (arg-error a)])))
 
 ;; ---------------------------------------------------------------------------------------------------
-;; Strictly monotone (i.e. invertible)
+;; Strictly monotone
 
 (: strict-monotone2d-apply (Boolean Boolean (Flonum Flonum -> Flonum) (Flonum Flonum -> Flonum)
                                     Nonempty-Interval Nonempty-Interval -> Interval))
@@ -190,14 +184,13 @@
                                gz? gy? g/rndd g/rndu
                                hz? hx? h/rndd h/rndu)
   (define X (set-pair X1 X2))
-  (Pre-Arrow
-   (λ (A)
-     (let ([A  (set-intersect A X)])
-       (cond [(empty-set? A)  empty-pre-mapping]
-             [else  (pre-mapping (strict-monotone2d-image fx? fy? f/rndd f/rndu A Y)
-                                 (λ (B) (strict-monotone2d-preimage gz? gy? g/rndd g/rndu
-                                                                    hz? hx? h/rndd h/rndu
-                                                                    A B)))])))))
+  (λ (A)
+    (let ([A  (set-intersect A X)])
+      (cond [(empty-set? A)  empty-pre-mapping]
+            [else  (pre-mapping (strict-monotone2d-image fx? fy? f/rndd f/rndu A Y)
+                                (λ (B) (strict-monotone2d-preimage gz? gy? g/rndd g/rndu
+                                                                   hz? hx? h/rndd h/rndu
+                                                                   A B)))]))))
 
 (: strict-monotone2d/prim (Symbol
                            Nonempty-Real-Set Nonempty-Real-Set Nonempty-Real-Set
@@ -221,32 +214,28 @@
 ;; Predicate lifts
 
 (: predicate/bot (Symbol (Value -> (U Bottom Boolean)) Nonempty-Set Nonempty-Set -> Bot-Arrow))
-(define (predicate/bot name f Xt Xf)
-  (Bot-Arrow
-   (λ (a)
-     (define b (f a))
-     (cond [(bottom? b)  b]
-           [(eq? b #t)  (cond [(set-member? Xt a)  #t]
-                              [else  (bottom (delay (format "~a: expected argument in ~e; given ~e"
-                                                            name Xt a)))])]
-           [(eq? b #f)  (cond [(set-member? Xf a)  #f]
-                              [else  (bottom (delay (format "~a: expected argument in ~e; given ~e"
-                                                            name Xf a)))])]
-           [else  (bottom (delay (format "~a: expected Boolean condition; given ~e" name b)))]))))
+(define ((predicate/bot name f Xt Xf) a)
+  (define b (f a))
+  (cond [(bottom? b)  b]
+        [(eq? b #t)  (cond [(set-member? Xt a)  #t]
+                           [else  (bottom (delay (format "~a: expected argument in ~e; given ~e"
+                                                         name Xt a)))])]
+        [(eq? b #f)  (cond [(set-member? Xf a)  #f]
+                           [else  (bottom (delay (format "~a: expected argument in ~e; given ~e"
+                                                         name Xf a)))])]
+        [else  (bottom (delay (format "~a: expected Boolean condition; given ~e" name b)))]))
 
 (: predicate/pre (Nonempty-Set Nonempty-Set -> Pre-Arrow))
-(define (predicate/pre Xt Xf)
-  (Pre-Arrow
-   (λ (A)
-     (define At (set-intersect A Xt))
-     (define Af (set-intersect A Xf))
-     (cond [(and (empty-set? At) (empty-set? Af))  empty-pre-mapping]
-           [(empty-set? Af)  (nonempty-pre-mapping trues  (λ (B) At))]
-           [(empty-set? At)  (nonempty-pre-mapping falses (λ (B) Af))]
-           [else   (define A (delay (set-join At Af)))
-                   (nonempty-pre-mapping bools (λ (B) (cond [(trues? B)  At]
-                                                            [(falses? B)  Af]
-                                                            [else  (force A)])))]))))
+(define ((predicate/pre Xt Xf) A)
+  (define At (set-intersect A Xt))
+  (define Af (set-intersect A Xf))
+  (cond [(and (empty-set? At) (empty-set? Af))  empty-pre-mapping]
+        [(empty-set? Af)  (nonempty-pre-mapping trues  (λ (B) At))]
+        [(empty-set? At)  (nonempty-pre-mapping falses (λ (B) Af))]
+        [else   (define A (delay (set-join At Af)))
+                (nonempty-pre-mapping bools (λ (B) (cond [(trues? B)  At]
+                                                         [(falses? B)  Af]
+                                                         [else  (force A)])))]))
 
 (: predicate/prim (Symbol (Value -> (U Bottom Boolean)) Nonempty-Set Nonempty-Set
                           -> (Values Bot-Arrow Pre-Arrow)))
@@ -261,38 +250,32 @@
 ;; Tag predicate lifts
 
 (: tag?/bot (Tag -> Bot-Arrow))
-(define (tag?/bot tag)
-  (Bot-Arrow (λ (a) (and (tagged-value? a) (eq? tag (tagged-value-tag a))))))
+(define ((tag?/bot tag) a) (and (tagged-value? a) (eq? tag (tagged-value-tag a))))
 
 (: tag?/pre (Tag -> Pre-Arrow))
-(define (tag?/pre tag)
-  (predicate/pre (bot-tagged tag universe) (top-tagged tag empty-set)))
+(define (tag?/pre tag) (predicate/pre (bot-tagged tag universe) (top-tagged tag empty-set)))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Tagging lifts
 
 (: tag/bot (Tag -> Bot-Arrow))
-(define (tag/bot tag)
-  (Bot-Arrow (λ (a) (tagged-value tag a))))
+(define ((tag/bot tag) a) (tagged-value tag a))
 
 (: tag/pre (Tag -> Pre-Arrow))
-(define (tag/pre tag)
-  (Pre-Arrow (λ (A) (nonempty-pre-mapping (set-tag A tag) (λ (B) (set-untag B tag))))))
+(define ((tag/pre tag) A) (nonempty-pre-mapping (set-tag A tag) (λ (B) (set-untag B tag))))
 
 ;; ---------------------------------------------------------------------------------------------------
 ;; Untagging lifts
 
 (: untag/bot (Tag -> Bot-Arrow))
-(define (untag/bot tag)
-  (Bot-Arrow
-   (λ (a)
-     (if (and (tagged-value? a) (eq? tag (tagged-value-tag a)))
-         (tagged-value-value a)
-         (bottom (delay (format "expected ~a; given ~e" tag a)))))))
+(define ((untag/bot tag) a)
+  (if (and (tagged-value? a) (eq? tag (tagged-value-tag a)))
+      (tagged-value-value a)
+      (bottom (delay (format "expected ~a; given ~e" tag a)))))
 
 (: untag/pre (Tag -> Pre-Arrow))
-(define (untag/pre tag)
-  (Pre-Arrow (λ (A) (pre-mapping (set-untag A tag) (λ (B) (set-tag B tag))))))
+(define ((untag/pre tag) A)
+  (pre-mapping (set-untag A tag) (λ (B) (set-tag B tag))))
 
 ;; ===================================================================================================
 ;; Computable lifts

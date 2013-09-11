@@ -510,7 +510,7 @@
         ;(define pt (store-sample (cons r t) m))
         (match pt
           [(store-sample s q)
-           (define b (run/bot f (cons s null)))
+           (define b (f (cons s null)))
            (cons (domain-sample S s b m p q (/ q p)) (loop (rest orig-samples)))]
           [_
            (define r (omega-set-sample-point R))

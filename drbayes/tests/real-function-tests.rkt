@@ -40,10 +40,10 @@
   (time
    (for: ([_  (in-range n)])
      (define X (random-domain-set))
-     (define h* (run/pre h X))
+     (define h* (h X))
      (define Y (range/pre h*))
      (define a (random-domain-value X))
-     (define b (run/bot f a))
+     (define b (f a))
      
      (unless (bottom? b)
        (check-prop (set-member? Y b)

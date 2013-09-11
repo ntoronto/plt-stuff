@@ -137,25 +137,23 @@
 (: branch/bot* Bot*-Arrow)
 (define (branch/bot* j)
   (let ([j  (reverse j)])
-    (Bot-Arrow
-     (λ (a)
-       (match a
-         [(cons (cons (? omega?) (? trace? t)) _)  (trace-ref t j)]
-         [_  (proj-domain-fail 'branch a)])))))
+    (λ (a)
+      (match a
+        [(cons (cons (? omega?) (? trace? t)) _)  (trace-ref t j)]
+        [_  (proj-domain-fail 'branch a)]))))
 
 (: branch/pre (Tree-Index -> Pre-Arrow))
 (define (branch/pre j)
   (let ([j  (reverse j)])
-    (Pre-Arrow
-     (λ (A)
-       (define T (set-take-traces A))
-       (cond [(empty-set? T)  empty-pre-mapping]
-             [else  (define B (trace-set-proj T j))
-                    (cond [(empty-bool-set? B)  empty-pre-mapping]
-                          [else  (nonempty-pre-mapping
-                                  B (λ (B) (let ([T  (trace-set-unproj T j (set-take-bools B))])
-                                             (cond [(empty-trace-set? T)  empty-set]
-                                                   [else  T]))))])])))))
+    (λ (A)
+      (define T (set-take-traces A))
+      (cond [(empty-set? T)  empty-pre-mapping]
+            [else  (define B (trace-set-proj T j))
+                   (cond [(empty-bool-set? B)  empty-pre-mapping]
+                         [else  (nonempty-pre-mapping
+                                 B (λ (B) (let ([T  (trace-set-unproj T j (set-take-bools B))])
+                                            (cond [(empty-trace-set? T)  empty-set]
+                                                  [else  T]))))])]))))
 
 (: branch/pre* Pre*-Arrow)
 (define (branch/pre* j)
@@ -167,25 +165,23 @@
 (: random/bot* Bot*-Arrow)
 (define (random/bot* j)
   (let ([j  (reverse j)])
-    (Bot-Arrow
-     (λ (a)
-       (match a
-         [(cons (cons (? omega? r) (? trace?)) _)  (omega-ref r j)]
-         [_  (proj-domain-fail 'random a)])))))
+    (λ (a)
+      (match a
+        [(cons (cons (? omega? r) (? trace?)) _)  (omega-ref r j)]
+        [_  (proj-domain-fail 'random a)]))))
 
 (: random/pre (Tree-Index -> Pre-Arrow))
 (define (random/pre j)
   (let ([j  (reverse j)])
-    (Pre-Arrow
-     (λ (A)
-       (define R (set-take-omegas A))
-       (cond [(empty-set? R)  empty-pre-mapping]
-             [else  (define B (omega-set-proj R j))
-                    (cond [(empty-real-set? B)  empty-pre-mapping]
-                          [else  (nonempty-pre-mapping
-                                  B (λ (B) (let ([R  (omega-set-unproj R j (set-take-reals B))])
-                                             (cond [(empty-omega-set? R)  empty-set]
-                                                   [else  R]))))])])))))
+    (λ (A)
+      (define R (set-take-omegas A))
+      (cond [(empty-set? R)  empty-pre-mapping]
+            [else  (define B (omega-set-proj R j))
+                   (cond [(empty-real-set? B)  empty-pre-mapping]
+                         [else  (nonempty-pre-mapping
+                                 B (λ (B) (let ([R  (omega-set-unproj R j (set-take-reals B))])
+                                            (cond [(empty-omega-set? R)  empty-set]
+                                                  [else  R]))))])]))))
 
 (: random/pre* Pre*-Arrow)
 (define (random/pre* j)
@@ -201,10 +197,8 @@
 (: boolean/bot* (Flonum -> Bot*-Arrow))
 (define ((boolean/bot* p) j)
   (define random (random/bot* j))
-  (Bot-Arrow
-   (λ (a)
-     (let ([b  (run/bot random a)])
-       (and (flonum? b) (b . < . p))))))
+  (λ (a) (let ([b  (random a)])
+           (and (flonum? b) (b . < . p)))))
 
 (: boolean-preimage (Flonum -> (Values Nonextremal-Interval Nonextremal-Interval)))
 ;; Assumes p > 0.0 and p < 1.0
@@ -217,23 +211,22 @@
   (cond [(and (p . > . 0.0) (p . < . 1.0))
          (define-values (It If) (boolean-preimage p))
          (let ([j  (reverse j)])
-           (Pre-Arrow
-            (λ (A)
-              (define R (set-take-omegas A))
-              (define Rj (omega-set-proj R j))
-              (let ([It  (real-set-intersect It Rj)]
-                    [If  (real-set-intersect If Rj)])
-                (define-values (B I)
-                  (cond [(and (empty-real-set? It) (empty-real-set? If))
-                         (values empty-set empty-real-set)]
-                        [(empty-real-set? If)  (values trues It)]
-                        [(empty-real-set? It)  (values falses It)]
-                        [else  (values bools (real-set-union It If))]))
-                (pre-mapping B (λ (B)
-                                 (let ([R  (cond [(eq? B trues)   (omega-set-unproj R j It)]
-                                                 [(eq? B falses)  (omega-set-unproj R j If)]
-                                                 [else  (omega-set-unproj R j I)])])
-                                   (if (empty-omega-set? R) empty-set R))))))))]
+           (λ (A)
+             (define R (set-take-omegas A))
+             (define Rj (omega-set-proj R j))
+             (let ([It  (real-set-intersect It Rj)]
+                   [If  (real-set-intersect If Rj)])
+               (define-values (B I)
+                 (cond [(and (empty-real-set? It) (empty-real-set? If))
+                        (values empty-set empty-real-set)]
+                       [(empty-real-set? If)  (values trues It)]
+                       [(empty-real-set? It)  (values falses It)]
+                       [else  (values bools (real-set-union It If))]))
+               (pre-mapping B (λ (B)
+                                (let ([R  (cond [(eq? B trues)   (omega-set-unproj R j It)]
+                                                [(eq? B falses)  (omega-set-unproj R j If)]
+                                                [else  (omega-set-unproj R j I)])])
+                                  (if (empty-omega-set? R) empty-set R)))))))]
         [else
          (const/pre (p . >= . 1.0))]))
 
@@ -258,14 +251,13 @@
   (define f1 (k1 (left j)))
   (define f2 (k2 (left (right j))))
   (define f3 (k3 (right (right j))))
-  (Bot-Arrow
-   (λ (a)
-     (define b* (run/bot branch a))
-     (define b (run/bot f1 a))
-     (cond [(not (eq? b* b))  (bottom (delay (format "ifte*: expected ~a condition; got ~e" b* b)))]
-           [(eq? b #t)  (run/bot f2 a)]
-           [(eq? b #f)  (run/bot f3 a)]
-           [else  (bottom (delay (format "ifte*: expected boolean condition; got ~e" b)))]))))
+  (λ (a)
+    (define b* (branch a))
+    (define b (f1 a))
+    (cond [(not (eq? b* b))  (bottom (delay (format "ifte*: expected ~a condition; got ~e" b* b)))]
+          [(eq? b #t)  (f2 a)]
+          [(eq? b #f)  (f3 a)]
+          [else  (bottom (delay (format "ifte*: expected boolean condition; got ~e" b)))])))
 
 (: ifte*/pre* (Pre*-Arrow Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
 #;
@@ -274,35 +266,34 @@
   (define h1 (k1 (left j)))
   (define h2 (k2 (left (right j))))
   (define h3 (k3 (right (right j))))
-  (Pre-Arrow
-   (λ (A)
-     (let ([hb  (run/pre hb A)]
-           [h1  (run/pre h1 A)])
-       (cond [(or (empty-pre-mapping? h1) (empty-pre-mapping? hb))  empty-pre-mapping]
-             [else
-              (match-define (nonempty-pre-mapping C1 p1) h1)
-              (match-define (nonempty-pre-mapping Cb pb) hb)
-              (define Ct (set-intersect (set-intersect C1 Cb) trues))
-              (define Cf (set-intersect (set-intersect C1 Cb) falses))
-              (define A2 (if (empty-set? Ct) empty-set (set-intersect (p1 Ct) (pb Ct))))
-              (define A3 (if (empty-set? Cf) empty-set (set-intersect (p1 Cf) (pb Cf))))
-              #;; This direct translation from the paper ensures termination, but doesn't allow
-              ;; ifte*/pre* to rule out branches using preimages computed by h1
-              (cond [(eq? Cb bools)
-                     (define A (set-join A2 A3))
-                     (nonempty-pre-mapping universe (λ (B) A))]
-                    [else
-                     (uplus/pre (run/pre h2 A2) (run/pre h3 A3))])
-              ;; This approximation *does* allow ifte*/pre* to rule out branches using preimages
-              ;; computed by h1, but doesn't always ensure termination
-              ;; Conjecture: if a program's interpretation as a bot* arrow terminates with probability
-              ;; 1, a pre* arrow interpretation that uses this approximation also terminates with
-              ;; probability 1
-              (cond [(and (empty-set? A2) (empty-set? A3))  empty-pre-mapping]
-                    [(empty-set? A3)  (run/pre h2 A2)]
-                    [(empty-set? A2)  (run/pre h3 A3)]
-                    [else  (define A (set-join A2 A3))
-                           (nonempty-pre-mapping universe (λ (B) A))])])))))
+  (λ (A)
+    (let ([hb  (hb A)]
+          [h1  (h1 A)])
+      (cond [(or (empty-pre-mapping? h1) (empty-pre-mapping? hb))  empty-pre-mapping]
+            [else
+             (match-define (nonempty-pre-mapping C1 p1) h1)
+             (match-define (nonempty-pre-mapping Cb pb) hb)
+             (define Ct (set-intersect (set-intersect C1 Cb) trues))
+             (define Cf (set-intersect (set-intersect C1 Cb) falses))
+             (define A2 (if (empty-set? Ct) empty-set (set-intersect (p1 Ct) (pb Ct))))
+             (define A3 (if (empty-set? Cf) empty-set (set-intersect (p1 Cf) (pb Cf))))
+             #;; This direct translation from the paper ensures termination, but doesn't allow
+             ;; ifte*/pre* to rule out branches using preimages computed by h1
+             (cond [(eq? Cb bools)
+                    (define A (set-join A2 A3))
+                    (nonempty-pre-mapping universe (λ (B) A))]
+                   [else
+                    (uplus/pre (run/pre h2 A2) (run/pre h3 A3))])
+             ;; This approximation *does* allow ifte*/pre* to rule out branches using preimages
+             ;; computed by h1, but doesn't always ensure termination
+             ;; Conjecture: if a program's interpretation as a bot* arrow terminates with probability
+             ;; 1, a pre* arrow interpretation that uses this approximation also terminates with
+             ;; probability 1
+             (cond [(and (empty-set? A2) (empty-set? A3))  empty-pre-mapping]
+                   [(empty-set? A3)  (h2 A2)]
+                   [(empty-set? A2)  (h3 A3)]
+                   [else  (define A (set-join A2 A3))
+                          (nonempty-pre-mapping universe (λ (B) A))])]))))
 
 ;; An even better approximation that rules out branches using preimages computed by h1, but doesn't
 ;; always ensure termination
@@ -312,20 +303,19 @@
   (define h1 (k1 (left j)))
   (define h2 (k2 (left (right j))))
   (define h3 (k3 (right (right j))))
-  (Pre-Arrow
-   (λ (A)
-     (let ([h1  (run/pre h1 A)])
-       (define A2 (ap/pre h1 trues))
-       (define A3 (ap/pre h1 falses))
-       (define hb2 (run/pre hb A2))
-       (define hb3 (run/pre hb A3))
-       (let ([A2  (set-intersect A2 (ap/pre hb2 trues))]
-             [A3  (set-intersect A3 (ap/pre hb3 falses))])
-         (cond [(and (empty-set? A2) (empty-set? A3))  empty-pre-mapping]
-               [(empty-set? A3)  (run/pre h2 A2)]
-               [(empty-set? A2)  (run/pre h3 A3)]
-               [else  (define A (set-join A2 A3))
-                      (nonempty-pre-mapping universe (λ (B) A))]))))))
+  (λ (A)
+    (let ([h1  (h1 A)])
+      (define A2 (ap/pre h1 trues))
+      (define A3 (ap/pre h1 falses))
+      (define hb2 (run/pre hb A2))
+      (define hb3 (run/pre hb A3))
+      (let ([A2  (set-intersect A2 (ap/pre hb2 trues))]
+            [A3  (set-intersect A3 (ap/pre hb3 falses))])
+        (cond [(and (empty-set? A2) (empty-set? A3))  empty-pre-mapping]
+              [(empty-set? A3)  (h2 A2)]
+              [(empty-set? A2)  (h3 A3)]
+              [else  (define A (set-join A2 A3))
+                     (nonempty-pre-mapping universe (λ (B) A))])))))
 
 (: ifte*/idx (Idx-Arrow Idx-Arrow Idx-Arrow -> Idx-Arrow))
 (define ((ifte*/idx k1 k2 k3) j)
