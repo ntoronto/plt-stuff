@@ -25,18 +25,18 @@
 
 (check-equal? (halt-on-true/bot #t) #t)
 
-(check-equal? ((halt-on-true/bot* '()) (random-domain-cons #t)) #t)
+(check-equal? ((run/bot* halt-on-true/bot* '()) (random-domain-cons #t)) #t)
+
+(define f (run/bot* halt-on-true*/bot* '()))
 
 (check-equal? (remove-duplicates
                (filter (compose not bottom?)
-                       (build-list 100 (λ: ([_ : Index])
-                                         ((halt-on-true*/bot* '()) (random-domain-cons #t))))))
+                       (build-list 100 (λ: ([_ : Index]) (f (random-domain-cons #t))))))
               '(#t))
 
 (check-equal? (remove-duplicates
                (filter (compose not bottom?)
-                       (build-list 100 (λ: ([_ : Index])
-                                         ((halt-on-true*/bot* '()) (random-domain-cons #f))))))
+                       (build-list 100 (λ: ([_ : Index]) (f (random-domain-cons #f))))))
               '())
 
 ;; ===================================================================================================
@@ -64,13 +64,15 @@
 (check-equal? (ap/pre (halt-on-true/pre trues) falses)
               empty-set)
 
-(check-equal? (ap/pre ((halt-on-true/pre* '()) (set-pair (set-pair omegas traces) trues)) trues)
+(check-equal? (ap/pre ((run/pre* halt-on-true/pre* '()) (set-pair (set-pair omegas traces) trues))
+                      trues)
               (set-pair (set-pair omegas traces) trues))
 
-(check-equal? (ap/pre ((halt-on-true/pre* '()) (set-pair (set-pair omegas traces) trues)) falses)
+(check-equal? (ap/pre ((run/pre* halt-on-true/pre* '()) (set-pair (set-pair omegas traces) trues))
+                      falses)
               empty-set)
 
-(define h (halt-on-true*/pre* '()))
+(define h (run/pre* halt-on-true*/pre* '()))
 
 (define true-traces (trace-set-unproj traces '() trues))
 (define false-traces (trace-set-unproj traces '() falses))

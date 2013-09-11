@@ -321,7 +321,7 @@
 (define (drbayes-sample e n [B universe])
   (define-values (f h idxs)
     (match-let ([(meaning _ f h k)  e])
-      (values (f '()) (h '()) (k '()))))
+      (values (run/bot* f '()) (run/pre* h '()) (k '()))))
   
   (define (empty-set-error)
     (error 'drbayes-sample "cannot sample from the empty set"))

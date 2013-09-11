@@ -74,7 +74,7 @@
 (define (test-binary-pred name f h n)
   (test-soundness name f h random-nonempty-real-pair-set random-nonempty-bool-set random-real-pair n))
 
-(define n 100000)
+(define n 50000)
 
 (test-unary-op 'neg neg/bot neg/pre n)
 (test-unary-op 'exp exp/bot exp/pre n)

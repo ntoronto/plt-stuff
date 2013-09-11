@@ -193,15 +193,6 @@
       (list x y (- y (sqr x)))))
   (define B (set-list reals reals (real-set -0.1 0.1))))
 
-;; Test: normal-normal with first variable floored
-(begin
-  (interval-max-splits 2)
-  (define/drbayes e
-    (let* ([x  (normal 0 8)]
-           [y  (normal (floor x) 1)])
-      (list x y)))
-  (define B (set-list reals (real-set -0.1 0.1))))
-
 #;;; Test: sine and cosine restricted to [-π,π]
 ;; Looked at top-down, the plots should look like the graphs of the functions
 (begin
@@ -250,6 +241,15 @@
       (list x y)))
   (define B (set-list reals (real-set 0.9 1.1)))
   (normal-normal/lw 0 1 '(1.0) '(1.0)))
+
+#;; Test: Normal-Normal with first variable floored
+(begin
+  (interval-max-splits 2)
+  (define/drbayes e
+    (let* ([x  (normal 0 8)]
+           [y  (normal (floor x) 1)])
+      (list x y)))
+  (define B (set-list reals (real-set -0.1 0.1))))
 
 #;; Test: thermometer that goes to 100
 (begin
@@ -377,7 +377,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-#;; Test: Normal-Normal model with more observations
+;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 2)
@@ -453,7 +453,7 @@
 
 (define-values (f h idxs)
   (match-let ([(meaning _ f h k)  e])
-    (values (f '()) (h '()) (k '()))))
+    (values (run/bot* f '()) (run/pre* h '()) (k '()))))
 
 (define (empty-set-error)
   (error 'drbayes-sample "cannot sample from the empty set"))
