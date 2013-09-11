@@ -43,7 +43,7 @@
      (define h* (run/pre h X))
      (define Y (range/pre h*))
      (define a (random-domain-value X))
-     (define b (f a))
+     (define b (run/bot f a))
      
      (unless (bottom? b)
        (check-prop (set-member? Y b)

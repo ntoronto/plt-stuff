@@ -9,6 +9,7 @@
 ;; Floating-point pi is a little smaller than actual pi, so we bump it a bit to use it as a bound
 (define -pi/2/rndd (flprev* (/ pi -2.0)))
 (define pi/2/rndu (flnext* (/ pi 2.0)))
+(define -pi/rndd (flprev* (- pi)))
 (define pi/rndu (flnext* pi))
 
 (: flstep* (Flonum Fixnum -> Flonum))

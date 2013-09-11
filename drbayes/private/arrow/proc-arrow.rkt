@@ -13,7 +13,7 @@
 
 (: lower/proc (Bot-Arrow -> Proc-Arrow))
 (define ((lower/proc f) a)
-  (define b (f a))
+  (define b (run/bot f a))
   (if (bottom? b) (error 'drbayes (force (bottom-message b))) b))
 
 ;; ===================================================================================================

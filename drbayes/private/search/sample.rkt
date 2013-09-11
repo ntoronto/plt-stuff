@@ -103,7 +103,7 @@
 
 (: preimage-refiner (Pre-Arrow Nonempty-Set -> Refiner))
 (define ((preimage-refiner h B) S)
-  (define A (ap/pre (h (set-pair (store-rect->set S) nulls)) B))
+  (define A (ap/pre (run/pre h (set-pair (store-rect->set S) nulls)) B))
   (define-values (S* N) (set-projs A))
   (cond [(not (or (empty-set? N) (nulls? N)))
          (raise-result-error 'preimage-refiner "(U Empty-Set Full-Null-Set)" N)]
@@ -370,7 +370,7 @@
                    ;(define pt (store-sample (cons r t) m))
                    (match pt
                      [(store-sample s m)
-                      (define b (f (cons s null)))
+                      (define b (run/bot f (cons s null)))
                       (cond [(and (not (bottom? b)) (set-member? B b))
                              ;(printf "success!~n")
                              (inner-loop (rest leaf-ts) (rest leaf-ps)
