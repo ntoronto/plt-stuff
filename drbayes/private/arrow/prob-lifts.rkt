@@ -118,6 +118,22 @@
 (define acos/pre* (η/pre* acos/pre))
 (define acos/idx any/idx)
 
+(define floor/bot* (η/bot* floor/bot))
+(define floor/pre* (η/pre* floor/pre))
+(define floor/idx any/idx)
+
+(define ceiling/bot* (η/bot* ceiling/bot))
+(define ceiling/pre* (η/pre* ceiling/pre))
+(define ceiling/idx any/idx)
+
+(define round/bot* (η/bot* round/bot))
+(define round/pre* (η/pre* round/pre))
+(define round/idx any/idx)
+
+(define truncate/bot* (η/bot* truncate/bot))
+(define truncate/pre* (η/pre* truncate/pre))
+(define truncate/idx any/idx)
+
 (define cauchy/bot* (η/bot* cauchy/bot))
 (define cauchy/pre* (η/pre* cauchy/pre))
 (define cauchy/idx any/idx)

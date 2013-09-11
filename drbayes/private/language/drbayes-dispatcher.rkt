@@ -47,6 +47,7 @@
 (define-drbayes-arrow-comps real? null? pair? boolean?)
 (define-drbayes-arrow-comps scale translate)
 (define-drbayes-arrow-comps neg exp log sqrt asin acos)
+(define-drbayes-arrow-comps floor ceiling round truncate)
 (define-drbayes-arrow-comps cauchy normal)
 (define-drbayes-arrow-comps + -)
 (define-drbayes-arrow-comps negative? positive? nonpositive? nonnegative?)

@@ -172,7 +172,7 @@
       ))
   (define B (set-list reals reals trues)))
 
-;; Test: arithmetic
+#;; Test: arithmetic
 (begin
   (interval-max-splits 4)
   
@@ -187,13 +187,20 @@
 ;; Preimage should look like the graph of the function
 (begin
   (interval-max-splits 1)
-  
   (define/drbayes e
     (let ([x  (uniform -1 1)]
           [y  (uniform 0 1)])
       (list x y (- y (sqr x)))))
-  
   (define B (set-list reals reals (real-set -0.1 0.1))))
+
+;; Test: normal-normal with first variable floored
+(begin
+  (interval-max-splits 2)
+  (define/drbayes e
+    (let* ([x  (normal 0 8)]
+           [y  (normal (floor x) 1)])
+      (list x y)))
+  (define B (set-list reals (real-set -0.1 0.1))))
 
 #;;; Test: sine and cosine restricted to [-π,π]
 ;; Looked at top-down, the plots should look like the graphs of the functions

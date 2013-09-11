@@ -28,9 +28,10 @@
          quote null empty
          and or not
          car cdr real? null? pair? boolean?
-         exp log abs sqr sqrt
+         exp log abs sqr sqrt acos asin
+         floor ceiling
          negative? positive? nonnegative? nonpositive?
-         acos asin partial-cos partial-sin
+         partial-cos partial-sin
          cons + * - / < <= > >=
          list uniform normal cauchy
          const
@@ -103,9 +104,9 @@
     #:attributes (computation)
     #:literals (+ - * /
                   car cdr real? null? pair? boolean?
-                  exp log abs sqr sqrt
+                  exp log abs sqr sqrt acos asin floor ceiling round truncate
                   negative? positive? nonnegative? nonpositive?
-                  acos asin partial-cos partial-sin)
+                  partial-cos partial-sin)
     (pattern + #:attr computation #'(restrict/arr reals))
     (pattern - #:attr computation #'neg/arr)
     (pattern * #:attr computation #'(restrict/arr reals))
@@ -121,12 +122,16 @@
     (pattern abs #:attr computation #'abs/arr)
     (pattern sqr #:attr computation #'sqr/arr)
     (pattern sqrt #:attr computation #'sqrt/arr)
+    (pattern acos #:attr computation #'acos/arr)
+    (pattern asin #:attr computation #'asin/arr)
+    (pattern floor #:attr computation #'floor/arr)
+    (pattern ceiling #:attr computation #'ceiling/arr)
+    (pattern round #:attr computation #'round/arr)
+    (pattern truncate #:attr computation #'truncate/arr)
     (pattern negative? #:attr computation #'negative?/arr)
     (pattern positive? #:attr computation #'positive?/arr)
     (pattern nonnegative? #:attr computation #'nonnegative?/arr)
     (pattern nonpositive? #:attr computation #'nonpositive?/arr)
-    (pattern acos #:attr computation #'acos/arr)
-    (pattern asin #:attr computation #'asin/arr)
     (pattern partial-cos #:attr computation #'partial-cos/arr)
     (pattern partial-sin #:attr computation #'partial-sin/arr)
     )

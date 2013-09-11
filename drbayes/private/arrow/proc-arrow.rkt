@@ -88,6 +88,10 @@
 (define sqrt/proc (lower/proc sqrt/bot))
 (define asin/proc (lower/proc asin/bot))
 (define acos/proc (lower/proc acos/bot))
+(define floor/proc (lower/proc floor/bot))
+(define ceiling/proc (lower/proc ceiling/bot))
+(define round/proc (lower/proc round/bot))
+(define truncate/proc (lower/proc truncate/bot))
 
 (define cauchy/proc (lower/proc cauchy/bot))
 (define normal/proc (lower/proc normal/bot))

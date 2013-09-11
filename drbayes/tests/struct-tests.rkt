@@ -44,24 +44,33 @@
         (* (list-ref lst (const 1)) s)
         (* (list-ref lst (const 2)) s)))
 
+(define/drbayes (min a b)
+  (strict-if (a . < . b) a b))
+
+(define/drbayes (max a b)
+  (strict-if (a . > . b) a b))
+
 #;; This implementation results in awful image approximations when the denominator in the
 ;; normalization may be zero
 (define/drbayes (uniform-vec)
-  (vec-norm (list (normal) (normal) (normal))))
+  (vec-norm (list (random-std-normal) (random-std-normal) (random-std-normal))))
 
 (define/drbayes (kinda-normal)
   (let ([x  (random-std-normal)])
-    (strict-if (and (x . > . -3) (x . < . 3)) x (fail))))
+    (strict-if (and (x . > . -4) (x . < . 4)) x (fail))))
 
+;; Unnormalized uniform direction
 (define/drbayes (uniform-vec)
-  (list (kinda-normal) (kinda-normal) (kinda-normal))
-  #;
-  (list (normal) (normal) (normal)))
+  ;(list (kinda-normal) (kinda-normal) (kinda-normal))
+  (list (max -2 (min 2 (random-std-normal)))
+        (max -2 (min 2 (random-std-normal)))
+        (max -2 (min 2 (random-std-normal))))
+  )
 
 #;; Polar coordinate sampling uses fewer random variables than above, and doesn't do division
 (define/drbayes (uniform-vec)
   (let ([θ  (uniform (const (- pi)) (const pi))]
-        [φ  (* 2 (asin (sqrt (uniform))))])
+        [φ  (* 2 (asin (sqrt (random))))])
     (let ([sin-φ  (partial-sin φ)])
       (list (* sin-φ (partial-cos θ))
             (* sin-φ (partial-sin θ))
@@ -69,14 +78,14 @@
 
 (define/drbayes (uniform-vec/dir n)
   (let ([v  (uniform-vec)])
-    (if ((vec-dot n v) . > . 0) v (vec-neg v))))
+    (strict-if (positive? (vec-dot n v)) v (vec-neg v))))
 
 (struct/drbayes collision (time point normal))
 
 (define/drbayes (closer-collision c1 c2)
-  (if (and (collision? c1) (collision? c2))
-      (if ((collision-time c2) . < . (collision-time c1)) c2 c1)
-      (if (collision? c1) c1 c2)))
+  (strict-if (and (collision? c1) (collision? c2))
+      (strict-if ((collision-time c2) . < . (collision-time c1)) c2 c1)
+      (strict-if (collision? c1) c1 c2)))
 
 (define/drbayes (ray-reflect d n)
   (vec- d (vec-scale n (* 2.0 (vec-dot d n)))))
@@ -96,9 +105,9 @@
 
 (define/drbayes (ray-plane-intersect p0 v n d)
   (let ([denom  (- (vec-dot v n))])
-    (if (positive? denom)
+    (strict-if (positive? denom)
         (let ([t  (/ (+ d (vec-dot p0 n)) denom)])
-          (if (positive? t)
+          (strict-if (positive? t)
               (collision t (vec+ p0 (vec-scale v t)) n)
               #f))
         #f)))
@@ -139,20 +148,22 @@
         (cons (collision-point c) ps)
         ps)))
 
+(define/drbayes (box-intersect p0 d)
+  (closer-collision
+   (closer-collision
+     (ray-plane-intersect p0 d (const plane3-n) (const plane3-d))
+     (ray-plane-intersect p0 d (const plane4-n) (const plane4-d)))
+   (closer-collision
+    (closer-collision
+     (ray-plane-intersect p0 d (const plane1-n) (const plane1-d))
+     (ray-plane-intersect p0 d (const plane2-n) (const plane2-d)))
+    (closer-collision
+     (ray-plane-intersect p0 d (const plane5-n) (const plane5-d))
+     (ray-plane-intersect p0 d (const plane6-n) (const plane6-d))))))
 
 (define/drbayes (trace-light ps d)
   (let* ([p0  (car ps)]
-         [c   (closer-collision
-               (closer-collision
-                (ray-plane-intersect p0 d (const plane1-n) (const plane1-d))
-                (ray-plane-intersect p0 d (const plane2-n) (const plane2-d)))
-               (closer-collision
-                (closer-collision
-                 (ray-plane-intersect p0 d (const plane3-n) (const plane3-d))
-                 (ray-plane-intersect p0 d (const plane4-n) (const plane4-d)))
-                (closer-collision
-                 (ray-plane-intersect p0 d (const plane5-n) (const plane5-d))
-                 (ray-plane-intersect p0 d (const plane6-n) (const plane6-d)))))])
+         [c   (box-intersect p0 d)])
     (if (collision? c)
         ;(cons (collision-point c) ps)
         (let* ([p0  (collision-point c)]
@@ -160,7 +171,7 @@
                [d  (uniform-vec/dir n)]
                [ps  (cons p0 ps)]
                [c   (ray-plane-intersect p0 d (const plane1-n) (const plane1-d))])
-          (if (collision? c)
+          (strict-if (collision? c)
               (cons (collision-point c) ps)
               ps))
         ps)))
@@ -186,14 +197,13 @@
 (interval-max-splits 0)
 ;(interval-min-length (expt 0.5 5.0))
 
-(define n 1000)
+(define n 20000)
 
 (define/drbayes e
   (trace-light (list (start-p)) (uniform-vec)))
 
 (define H
-  (set-list reals reals reals)
-  #;
+  ;(set-list reals reals reals)
   (set-list (real-set 0.49 0.51)
             (real-set -0.001 0.001)
             (real-set 0.49 0.51)))
@@ -219,6 +229,11 @@
     (define pws
       (time
        ;profile-expr
+       #;
+       (let ()
+         (define ps (build-list n (λ: ([_ : Index]) (drbayes-run e))))
+         (define ws (build-list n (λ: ([_ : Index]) 1.0)))
+         (map (inst cons Value Flonum) ps ws))
        (let ()
          (define-values (ps ws) (drbayes-sample e n B))
          (map (inst cons Value Flonum) ps ws))))
@@ -265,6 +280,7 @@
 (define height 256)
 (define fm (make-flomap 1 width height))
 (define vs (flomap-values fm))
+
 (for: ([xy  (in-list xys)]
        [w  (in-list ws)])
   (match-define (list orig-x orig-y) xy)
@@ -277,73 +293,15 @@
 
 (flomap->bitmap (flomap-normalize (flomap-blur fm 1.0)))
 
-#|
-(begin
-  (interval-max-splits 5)
-  
-  (define f-expr
-    (drbayes (trace-light (list (const p0)) (uniform-vec))))
-  
-  (define B
-    (set-list* #;(set-list (interval 0.0 1.0)
-                        (interval 0.0 0.55)
-                        (interval 0.0 1.0))
-               
-               (set-list (interval 0.4 0.6)
-                         (interval -0.001 0.001)
-                         (interval 0.4 0.6))
-               universe
-               universe
-               universe)))
-#;
-(begin
-  (interval-max-splits 2)
-  
-  (define f-expr
-    (drbayes
-     (let* ([p0  (const sphere0-pc)]
-            [p1  (vec+ (vec-scale (uniform-vec) 0.25) p0)]
-            [p2  (vec+ (vec-scale (uniform-vec) 0.25) p1)])
-       (list p2 p1 p0))))
-  
-  (define B
-    (set-list (set-list (interval 0.0 1.0)
-                        (interval 0.0 0.2)
-                        (interval 0.0 1.0))
-              universe
-              universe)))
+(define fm2 (make-flomap 1 width height))
+(define vs2 (flomap-values fm2))
+(for: ([xy  (in-list xys)])
+  (match-define (list orig-x orig-y) xy)
+  (define x (exact-round (* width orig-x)))
+  (define y (exact-round (* height (- 1.0 orig-y))))
+  (when (and (<= 0 x) (< x width)
+             (<= 0 y) (< y height))
+    (define i (coords->index 1 width 0 x y))
+    (flvector-set! vs2 i (+ 1.0 (flvector-ref vs2 i)))))
 
-(match-define (expression-meaning idxs f-fwd f-comp) (run-expression f-expr))
-
-(define (empty-set-error)
-  (error 'drbayes-sample "cannot sample from the empty set"))
-
-(define refine
-  (if (empty-set? B) (empty-set-error) (preimage-refiner f-comp B)))
-
-(define-values (Ω Z)
-  (let-values ([(Ω Z)  (refine omega-rect branches-rect)])
-    (if (or (empty-set? Ω) (empty-set? Z)) (empty-set-error) (values Ω Z))))
-
-(match-define (list (omega-sample Ω1 Z1 m1 p1))
-  (refinement-sample* Ω Z idxs refine 1))
-
-(define traces
-  (filter
-   (make-predicate (Listof (List Flonum Flonum Flonum)))
-   (build-list
-    100
-    (λ (_)
-      (define ω (omega-rect-sample-point Ω1))
-      (define z (branches-rect-sample-point Z1))
-      (with-handlers ([forward-fail?  (λ: ([e : forward-fail]) e)])
-        (f-fwd ω z null))))))
-
-(plot3d (ann (map (λ: ([ps : (Listof (Listof Flonum))])
-                    (lines3d ps))
-                  traces)
-             (Listof renderer3d))
-        #:x-min 0.0 #:x-max 1.0
-        #:y-min 0.0 #:y-max 1.0
-        #:z-min 0.0 #:z-max 1.0)
-|#
+(flomap->bitmap (flomap-normalize (flomap-blur fm2 1.0)))
