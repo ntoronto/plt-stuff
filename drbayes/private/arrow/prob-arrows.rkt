@@ -19,21 +19,29 @@
 (define-type Pre*-Arrow (U pre-wrapper (Tree-Index -> Pre-Arrow)))
 (define-type Idx-Arrow (Tree-Index -> Indexes))
 
-(: run/bot* (Bot*-Arrow Tree-Index -> Bot-Arrow))
-(define (run/bot* k j)
-  (cond [(bot-wrapper? k)  ((ref/bot 'snd) . >>>/bot . (bot-wrapper-arrow k))]
-        [else  (k j)]))
-
-(: run/pre* (Pre*-Arrow Tree-Index -> Pre-Arrow))
-(define (run/pre* k j)
-  (cond [(pre-wrapper? k)  ((ref/pre 'snd) . >>>/pre . (pre-wrapper-arrow k))]
-        [else  (k j)]))
-                             
 (: η/bot* (Bot-Arrow -> Bot*-Arrow))
 (define η/bot* bot-wrapper)
 
 (: η/pre* (Pre-Arrow -> Pre*-Arrow))
 (define η/pre* pre-wrapper)
+
+(: force-η/bot* (Bot*-Arrow -> (Tree-Index -> Bot-Arrow)))
+(define (force-η/bot* k)
+  (cond [(bot-wrapper? k)  (λ (j) ((ref/bot 'snd) . >>>/bot . (bot-wrapper-arrow k)))]
+        [else  k]))
+
+(: force-η/pre* (Pre*-Arrow -> (Tree-Index -> Pre-Arrow)))
+(define (force-η/pre* k)
+  (cond [(pre-wrapper? k)  (λ (j) ((ref/pre 'snd) . >>>/pre . (pre-wrapper-arrow k)))]
+        [else  k]))
+
+(: run/bot* (Bot*-Arrow Tree-Index -> Bot-Arrow))
+(define (run/bot* k j)
+  ((force-η/bot* k) j))
+
+(: run/pre* (Pre*-Arrow Tree-Index -> Pre-Arrow))
+(define (run/pre* k j)
+  ((force-η/pre* k) j))
 
 (: any/idx Idx-Arrow)
 (define (any/idx j) '())
@@ -68,14 +76,24 @@
 ;; Composition
 
 (: >>>/bot* (Bot*-Arrow Bot*-Arrow -> Bot*-Arrow))
-(define (>>>/bot* k1 k2)
-  (λ: ([j : Tree-Index])
-    (((ref/bot 'fst) . &&&/bot . (run/bot* k1 (left j))) . >>>/bot . (run/bot* k2 (right j)))))
+(define (k1 . >>>/bot* . k2)
+  (cond [(and (bot-wrapper? k1) (bot-wrapper? k2))
+         (bot-wrapper ((bot-wrapper-arrow k1) . >>>/bot . (bot-wrapper-arrow k2)))]
+        [else
+         (let ([k1  (force-η/bot* k1)]
+               [k2  (force-η/bot* k2)])
+           (λ: ([j : Tree-Index])
+             (((ref/bot 'fst) . &&&/bot . (k1 (left j))) . >>>/bot . (k2 (right j)))))]))
 
 (: >>>/pre* (Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
-(define (>>>/pre* k1 k2)
-  (λ: ([j : Tree-Index])
-    (((ref/pre 'fst) . &&&/pre . (run/pre* k1 (left j))) . >>>/pre . (run/pre* k2 (right j)))))
+(define (k1 . >>>/pre* . k2)
+  (cond [(and (pre-wrapper? k1) (pre-wrapper? k2))
+         (pre-wrapper ((pre-wrapper-arrow k1) . >>>/pre . (pre-wrapper-arrow k2)))]
+        [else
+         (let ([k1  (force-η/pre* k1)]
+               [k2  (force-η/pre* k2)])
+           (λ: ([j : Tree-Index])
+             (((ref/pre 'fst) . &&&/pre . (k1 (left j))) . >>>/pre . (k2 (right j)))))]))
 
 (: >>>/idx (Idx-Arrow Idx-Arrow -> Idx-Arrow))
 (define ((>>>/idx k1 k2) j)
@@ -85,14 +103,24 @@
 ;; Pairing
 
 (: &&&/bot* (Bot*-Arrow Bot*-Arrow -> Bot*-Arrow))
-(define (&&&/bot* k1 k2)
-  (λ: ([j : Tree-Index])
-    ((run/bot* k1 (left j)) . &&&/bot . (run/bot* k2 (right j)))))
+(define (k1 . &&&/bot* . k2)
+  (cond [(and (bot-wrapper? k1) (bot-wrapper? k2))
+         (bot-wrapper ((bot-wrapper-arrow k1) . &&&/bot . (bot-wrapper-arrow k2)))]
+        [else
+         (let ([k1  (force-η/bot* k1)]
+               [k2  (force-η/bot* k2)])
+           (λ: ([j : Tree-Index])
+             ((k1 (left j)) . &&&/bot . (k2 (right j)))))]))
 
 (: &&&/pre* (Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
-(define (&&&/pre* k1 k2)
-  (λ: ([j : Tree-Index])
-    ((run/pre* k1 (left j)) . &&&/pre . (run/pre* k2 (right j)))))
+(define (k1 . &&&/pre* . k2)
+  (cond [(and (pre-wrapper? k1) (pre-wrapper? k2))
+         (pre-wrapper ((pre-wrapper-arrow k1) . &&&/pre . (pre-wrapper-arrow k2)))]
+        [else
+         (let ([k1  (force-η/pre* k1)]
+               [k2  (force-η/pre* k2)])
+           (λ: ([j : Tree-Index])
+             ((k1 (left j)) . &&&/pre . (k2 (right j)))))]))
 
 (: &&&/idx (Idx-Arrow Idx-Arrow -> Idx-Arrow))
 (define ((&&&/idx k1 k2) j)
@@ -103,17 +131,33 @@
 
 (: ifte/bot* (Bot*-Arrow Bot*-Arrow Bot*-Arrow -> Bot*-Arrow))
 (define (ifte/bot* k1 k2 k3)
-  (λ: ([j : Tree-Index])
-    (ifte/bot (run/bot* k1 (left j))
-              (run/bot* k2 (left (right j)))
-              (run/bot* k3 (right (right j))))))
+  (cond [(and (bot-wrapper? k1) (bot-wrapper? k2) (bot-wrapper? k3))
+         (bot-wrapper (ifte/bot (bot-wrapper-arrow k1)
+                                (bot-wrapper-arrow k2)
+                                (bot-wrapper-arrow k3)))]
+        [else
+         (let ([k1  (force-η/bot* k1)]
+               [k2  (force-η/bot* k2)]
+               [k3  (force-η/bot* k3)])
+           (λ: ([j : Tree-Index])
+             (ifte/bot (k1 (left j))
+                       (k2 (left (right j)))
+                       (k3 (right (right j))))))]))
 
 (: ifte/pre* (Pre*-Arrow Pre*-Arrow Pre*-Arrow -> Pre*-Arrow))
 (define (ifte/pre* k1 k2 k3)
-  (λ: ([j : Tree-Index])
-    (ifte/pre (run/pre* k1 (left j))
-              (run/pre* k2 (left (right j)))
-              (run/pre* k3 (right (right j))))))
+  (cond [(and (pre-wrapper? k1) (pre-wrapper? k2) (pre-wrapper? k3))
+         (pre-wrapper (ifte/pre (pre-wrapper-arrow k1)
+                                (pre-wrapper-arrow k2)
+                                (pre-wrapper-arrow k3)))]
+        [else
+         (let ([k1  (force-η/pre* k1)]
+               [k2  (force-η/pre* k2)]
+               [k3  (force-η/pre* k3)])
+           (λ: ([j : Tree-Index])
+             (ifte/pre (k1 (left j))
+                       (k2 (left (right j)))
+                       (k3 (right (right j))))))]))
 
 (: ifte/idx (Idx-Arrow Idx-Arrow Idx-Arrow -> Idx-Arrow))
 (define ((ifte/idx k1 k2 k3) j)
@@ -124,19 +168,19 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; Laziness
 
-(: lazy/bot* ((-> Bot*-Arrow) -> Bot*-Arrow))
+(: lazy/bot* ((Promise Bot*-Arrow) -> Bot*-Arrow))
 (define (lazy/bot* k)
   (λ: ([j : Tree-Index])
-    (lazy/bot (λ () (run/bot* (k) j)))))
+    (lazy/bot (delay (run/bot* (force k) j)))))
 
-(: lazy/pre* ((-> Pre*-Arrow) -> Pre*-Arrow))
+(: lazy/pre* ((Promise Pre*-Arrow) -> Pre*-Arrow))
 (define (lazy/pre* k)
   (λ: ([j : Tree-Index])
-    (lazy/pre (λ () (run/pre* (k) j)))))
+    (lazy/pre (delay (run/pre* (force k) j)))))
 
-(: lazy/idx ((-> Idx-Arrow) -> Idx-Arrow))
+(: lazy/idx ((Promise Idx-Arrow) -> Idx-Arrow))
 (define ((lazy/idx k) j)
-  ((k) j))
+  ((force k) j))
 
 ;; ===================================================================================================
 ;; Random source and branch trace projections

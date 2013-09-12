@@ -202,35 +202,40 @@
 
 (define-syntax-parameter let-depth 0)
 
+(define-for-syntax make-bound-local-identifier
+  (case-lambda
+    [(old-d)
+     (bound-local-identifier
+      (λ (inner-stx)
+        (cond [(current-dispatcher-id #'drbayes-dispatcher)
+               (define d (syntax-parameter-value #'let-depth))
+               (define i (quasisyntax/loc inner-stx (ref/arr #,(- d old-d))))
+               (syntax-case inner-stx () [(_ . args)  #`(#,i . args)] [_  i])]
+              [else
+               (raise-syntax-error 'drbayes "reference to DrBayes binding in Racket code"
+                                   inner-stx)])))]
+    [(old-d idx)
+     (bound-local-identifier
+      (λ (inner-stx)
+        (cond [(current-dispatcher-id #'drbayes-dispatcher)
+               (define d (syntax-parameter-value #'let-depth))
+               (define i (quasisyntax/loc inner-stx
+                           ((ref/arr #,(- d old-d)) . >>>/arr . (ref/arr #,idx))))
+               (syntax-case inner-stx () [(_ . args)  #`(#,i . args)] [_  i])]
+              [else
+               (raise-syntax-error 'drbayes "reference to DrBayes binding in Racket code"
+                                   inner-stx)])))]))
+
 ;; A `let' is transformed (partly) into a `let-syntax' with the result of calling this function as
 ;; its value
 (define-for-syntax make-binding-transformer
   (case-lambda
     [(stx old-d)
-     (with-syntax ([old-d old-d])
-       (syntax/loc stx
-         (bound-local-identifier
-          (λ (inner-stx)
-            (cond [(current-dispatcher-id #'drbayes-dispatcher)
-                   (define d (syntax-parameter-value #'let-depth))
-                   (define i (quasisyntax/loc inner-stx (ref/arr #,(- d old-d))))
-                   (syntax-case inner-stx () [(_ . args)  #`(#,i . args)] [_  i])]
-                  [else
-                   (raise-syntax-error 'drbayes "reference to DrBayes binding in Racket code"
-                                       inner-stx)])))))]
+     (quasisyntax/loc stx
+       (make-bound-local-identifier #,old-d))]
     [(stx old-d idx)
-     (with-syntax ([old-d old-d] [idx idx])
-       (syntax/loc stx
-         (bound-local-identifier
-          (λ (inner-stx)
-            (cond [(current-dispatcher-id #'drbayes-dispatcher)
-                   (define d (syntax-parameter-value #'let-depth))
-                   (define i (quasisyntax/loc inner-stx
-                               ((ref/arr #,(- d old-d)) . >>>/arr . (ref/arr idx))))
-                   (syntax-case inner-stx () [(_ . args)  #`(#,i . args)] [_  i])]
-                  [else
-                   (raise-syntax-error 'drbayes "reference to DrBayes binding in Racket code"
-                                       inner-stx)])))))]))
+     (quasisyntax/loc stx
+       (make-bound-local-identifier #,old-d #,idx))]))
 
 (define-syntax (interp stx)
   ;; Make sure `stx' has the source location of the inner expression; without this, there would be a
@@ -269,13 +274,13 @@
        (syntax/loc stx (const/arr (const e #'e)))]
       
       [(_ (lazy e:expr))
-       (syntax/loc stx (lazy/arr (λ () (interp e))))]
+       (syntax/loc stx (lazy/arr (delay (interp e))))]
       
       [(_ (~and (if . _) ~! e:if-expr))
        (syntax/loc stx (ifte*/arr (interp e.cond) (interp (lazy e.then)) (interp (lazy e.else))))]
       
       [(_ (~and (strict-if . _) ~! e:if-expr))
-       (syntax/loc stx (ifte/arr (interp e.cond) (interp (lazy e.then)) (interp (lazy e.else))))]
+       (syntax/loc stx (ifte/arr (interp e.cond) (interp e.then) (interp e.else)))]
       
       [(_ (~and (cond _) ~! (cond e:cond-else)))
        (syntax/loc stx (interp e.expr))]
@@ -289,26 +294,38 @@
       [(_ (~and (strict-cond . _) ~! (strict-cond c0:cond-case c:cond-case ... ~! e:cond-else)))
        (syntax/loc stx (interp (strict-if c0.cond c0.then (strict-cond c ... e))))]
       
+      [(_ (list-ref e:expr i:exact-nonnegative-integer))
+       (syntax/loc stx ((interp e) . >>>/arr . (ref/arr i)))]
+      
       [(_ (list-ref ~! e:expr (const i:expr)))
        (syntax/loc stx ((interp e) . >>>/arr . (ref/arr (assert i exact-nonnegative-integer?))))]
+      
+      [(_ (scale e:expr x:real))
+       (syntax/loc stx ((interp e) . >>>/arr . (scale/arr (const x #'x))))]
       
       [(_ (scale ~! e:expr (const x:expr)))
        (syntax/loc stx ((interp e) . >>>/arr . (scale/arr (assert (const x #'x) flonum?))))]
       
+      [(_ (translate e:expr x:real))
+       (syntax/loc stx ((interp e) . >>>/arr . (translate/arr (const x #'x))))]
+      
       [(_ (translate ~! e:expr (const x:expr)))
        (syntax/loc stx ((interp e) . >>>/arr . (translate/arr (assert (const x #'x) flonum?))))]
+      
+      [(_ (boolean p:real))
+       (syntax/loc stx (boolean/arr (const p #'p)))]
       
       [(_ (boolean ~! (const p:expr)))
        (syntax/loc stx (boolean/arr (assert (const p #'p) flonum?)))]
       
       [(_ (tag? ~! e:expr t:expr))
-       (syntax/loc stx ((interp e) . >>>/arr . (tag?/arr (assert t symbol?))))]
+       (syntax/loc stx ((interp e) . >>>/arr . (tag?/arr t)))]
       
       [(_ (tag ~! e:expr t:expr))
-       (syntax/loc stx ((interp e) . >>>/arr . (tag/arr (assert t symbol?))))]
+       (syntax/loc stx ((interp e) . >>>/arr . (tag/arr t)))]
       
       [(_ (untag ~! e:expr t:expr))
-       (syntax/loc stx ((interp e) . >>>/arr . (untag/arr (assert t symbol?))))]
+       (syntax/loc stx ((interp e) . >>>/arr . (untag/arr t)))]
       
       [(_ (let () body:expr))
        (syntax/loc stx (interp body))]
@@ -384,6 +401,25 @@
   (define arguments (if (= arity 1) "argument" "arguments"))
   (raise-syntax-error name (format "expected ~a ~a" arity arguments) stx))
 
+(define-for-syntax (make-first-order-function name-body name-racket arity)
+  (first-order-function
+   (λ (inner-stx)
+     (define id (current-dispatcher-id #'drbayes-dispatcher))
+     (if (identifier? id)
+         (syntax-case inner-stx ()
+           [(_ arg ...)
+            (= arity (length (syntax->list #'(arg ...))))
+            (quasisyntax/loc inner-stx
+              (apply/arr (meaning-arr #,name-body) (list (interp arg) ...)))]
+           [(_ . _)  (raise-syntax-arity-error 'drbayes arity inner-stx)]
+           [_        (raise-syntax-error 'drbayes "expected application" inner-stx)])
+         (syntax-case inner-stx ()
+           [(_ arg ...)
+            (= arity (length (syntax->list #'(arg ...))))
+            (quasisyntax/loc inner-stx (#,name-racket arg ...))]
+           [(_ . _)  (raise-syntax-arity-error 'drbayes arity inner-stx)]
+           [_        (quasisyntax/loc inner-stx #,name-racket)])))))
+
 (define-syntax (define/drbayes stx)
   (syntax-parse stx
     [(_ name:id body:expr)
@@ -397,33 +433,18 @@
      (define/with-syntax (Values ...) (build-list arity (λ (_) #'Value)))
      (quasisyntax/loc stx
        (begin
-         (: name-body (-> meaning))
-         (define (name-body)
+         (: name-body meaning)
+         (define name-body
            (let-syntax ([arg value] ...)
              (syntax-parameterize ([let-depth 1])
                (drbayes body))))
          
          (: name-racket (Values ... -> Value))
          (define (name-racket arg ...)
-           ((apply/proc (meaning-proc (name-body))
-                        (list (const/proc (const arg)) ...))
-            null))
+           ((apply/proc (meaning-proc name-body) (list (const/proc (const arg)) ...)) null))
          
          (define-syntax name
-           (first-order-function
-            (λ (inner-stx)
-              (define id (current-dispatcher-id #'drbayes-dispatcher))
-              (if (identifier? id)
-                  (syntax-case inner-stx ()
-                    [(_ arg ...)
-                     (syntax/loc inner-stx
-                       (apply/arr (meaning-arr (name-body)) (list (interp arg) ...)))]
-                    [(_ . _)  (raise-syntax-arity-error 'drbayes #,arity inner-stx)]
-                    [_        (raise-syntax-error 'drbayes "expected application" inner-stx)])
-                  (syntax-case inner-stx ()
-                    [(_ arg ...)  (syntax/loc inner-stx (name-racket arg ...))]
-                    [(_ . _)  (raise-syntax-arity-error 'drbayes #,arity inner-stx)]
-                    [_        (syntax/loc inner-stx name-racket)])))))))]))
+           (make-first-order-function #'name-body #'name-racket #,arity))))]))
 
 (define-syntax (struct/drbayes stx)
   (syntax-case stx ()
@@ -440,5 +461,5 @@
                 (define/drbayes (name? x)
                   (tag? x name-tag))
                 (define/drbayes (name-field x)
-                  (list-ref (untag x name-tag) (const index)))
+                  (list-ref (untag x name-tag) index))
                 ...)))]))

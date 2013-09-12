@@ -40,8 +40,8 @@
 (define ((ifte/proc f1 f2 f3) a)
   (if (f1 a) (f2 a) (f3 a)))
 
-(: lazy/proc ((-> Proc-Arrow) -> Proc-Arrow))
-(define ((lazy/proc f) a) ((f) a))
+(: lazy/proc ((Promise Proc-Arrow) -> Proc-Arrow))
+(define ((lazy/proc f) a) ((force f) a))
 
 (define ifte*/proc ifte/proc)
 

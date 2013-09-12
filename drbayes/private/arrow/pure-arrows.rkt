@@ -128,8 +128,8 @@
 ;; ---------------------------------------------------------------------------------------------------
 ;; Laziness
 
-(: lazy/bot ((-> Bot-Arrow) -> Bot-Arrow))
-(define ((lazy/bot f) a) ((f) a))
+(: lazy/bot ((Promise Bot-Arrow) -> Bot-Arrow))
+(define ((lazy/bot f) a) ((force f) a))
 
-(: lazy/pre ((-> Pre-Arrow) -> Pre-Arrow))
-(define ((lazy/pre h) A) ((h) A))
+(: lazy/pre ((Promise Pre-Arrow) -> Pre-Arrow))
+(define ((lazy/pre h) A) ((force h) A))

@@ -489,14 +489,14 @@
 
 (: orig-samples (Listof store-rect-sample))
 (define orig-samples
-  (time
-   ;profile-expr
+  (;time
+   profile-expr
    (refinement-sample* S idxs refine n)))
 
 (: all-samples (Listof domain-sample))
 (define all-samples
-  (time
-   ;profile-expr
+  (;time
+   profile-expr
    (let: loop : (Listof domain-sample) ([orig-samples : (Listof store-rect-sample)  orig-samples])
      (cond
        [(empty? orig-samples)  empty]

@@ -9,40 +9,40 @@
 (printf "starting...~n")
 
 (define/drbayes (vec+ lst1 lst2)
-  (list (+ (list-ref lst1 (const 0)) (list-ref lst2 (const 0)))
-        (+ (list-ref lst1 (const 1)) (list-ref lst2 (const 1)))
-        (+ (list-ref lst1 (const 2)) (list-ref lst2 (const 2)))))
+  (list (+ (list-ref lst1 0) (list-ref lst2 0))
+        (+ (list-ref lst1 1) (list-ref lst2 1))
+        (+ (list-ref lst1 2) (list-ref lst2 2))))
 
 (define/drbayes (vec- lst1 lst2)
-  (list (- (list-ref lst1 (const 0)) (list-ref lst2 (const 0)))
-        (- (list-ref lst1 (const 1)) (list-ref lst2 (const 1)))
-        (- (list-ref lst1 (const 2)) (list-ref lst2 (const 2)))))
+  (list (- (list-ref lst1 0) (list-ref lst2 0))
+        (- (list-ref lst1 1) (list-ref lst2 1))
+        (- (list-ref lst1 2) (list-ref lst2 2))))
 
 (define/drbayes (vec-neg lst)
-  (list (- (list-ref lst (const 0)))
-        (- (list-ref lst (const 1)))
-        (- (list-ref lst (const 2)))))
+  (list (- (list-ref lst 0))
+        (- (list-ref lst 1))
+        (- (list-ref lst 2))))
 
 (define/drbayes (vec-mag^2 lst)
-  (+ (+ (sqr (list-ref lst (const 0)))
-        (sqr (list-ref lst (const 1))))
-     (sqr (list-ref lst (const 2)))))
+  (+ (+ (sqr (list-ref lst 0))
+        (sqr (list-ref lst 1)))
+     (sqr (list-ref lst 2))))
 
 (define/drbayes (vec-dot lst1 lst2)
-  (+ (+ (* (list-ref lst1 (const 0)) (list-ref lst2 (const 0)))
-        (* (list-ref lst1 (const 1)) (list-ref lst2 (const 1))))
-     (* (list-ref lst1 (const 2)) (list-ref lst2 (const 2)))))
+  (+ (+ (* (list-ref lst1 0) (list-ref lst2 0))
+        (* (list-ref lst1 1) (list-ref lst2 1)))
+     (* (list-ref lst1 2) (list-ref lst2 2))))
 
 (define/drbayes (vec-norm lst)
   (let ([z  (sqrt (vec-mag^2 lst))])
-    (list (/ (list-ref lst (const 0)) z)
-          (/ (list-ref lst (const 1)) z)
-          (/ (list-ref lst (const 2)) z))))
+    (list (/ (list-ref lst 0) z)
+          (/ (list-ref lst 1) z)
+          (/ (list-ref lst 2) z))))
 
 (define/drbayes (vec-scale lst s)
-  (list (* (list-ref lst (const 0)) s)
-        (* (list-ref lst (const 1)) s)
-        (* (list-ref lst (const 2)) s)))
+  (list (* (list-ref lst 0) s)
+        (* (list-ref lst 1) s)
+        (* (list-ref lst 2) s)))
 
 (define/drbayes (min a b)
   (strict-if (a . < . b) a b))
@@ -197,7 +197,7 @@
 (interval-max-splits 0)
 ;(interval-min-length (expt 0.5 5.0))
 
-(define n 20000)
+(define n 2000)
 
 (define/drbayes e
   (trace-light (list (start-p)) (uniform-vec)))
@@ -258,7 +258,7 @@
 
 (plot3d (ann (map (λ: ([ps : (Listof (Listof Flonum))])
                     (lines3d ps))
-                  (if ((length pss) . > . 2000) (take pss 2000) pss))
+                  (if ((length pss) . > . 500) (take pss 500) pss))
              (Listof renderer3d))
         #:x-min -0.1 #:x-max 1.1
         #:y-min -0.1 #:y-max 1.1
