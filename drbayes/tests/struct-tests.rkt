@@ -55,17 +55,11 @@
 (define/drbayes (uniform-vec)
   (vec-norm (list (random-std-normal) (random-std-normal) (random-std-normal))))
 
-(define/drbayes (kinda-normal)
-  (let ([x  (random-std-normal)])
-    (strict-if (and (x . > . -4) (x . < . 4)) x (fail))))
-
 ;; Unnormalized uniform direction
 (define/drbayes (uniform-vec)
-  ;(list (kinda-normal) (kinda-normal) (kinda-normal))
   (list (max -2 (min 2 (random-std-normal)))
         (max -2 (min 2 (random-std-normal)))
-        (max -2 (min 2 (random-std-normal))))
-  )
+        (max -2 (min 2 (random-std-normal)))))
 
 #;; Polar coordinate sampling uses fewer random variables than above, and doesn't do division
 (define/drbayes (uniform-vec)
@@ -197,7 +191,7 @@
 (interval-max-splits 0)
 ;(interval-min-length (expt 0.5 5.0))
 
-(define n 2000)
+(define n 200)
 
 (define/drbayes e
   (trace-light (list (start-p)) (uniform-vec)))

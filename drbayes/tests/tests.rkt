@@ -22,6 +22,13 @@
   (define e (drbayes #f))
   (define B falses))
 
+(begin
+  (define/drbayes e
+    (let* ([x  (normal 0 1)]
+           [y  x])
+      (list x y (and (x . >= . y) (x . <= . y)))))
+  (define B (set-list reals reals trues)))
+
 #;; Test: random
 ;; Preimage is [0.25,0.5]
 (begin
@@ -377,7 +384,7 @@
     (printf "E[x] = ~v~n" (mean xs (ann ws (Sequenceof Real))))
     (printf "sd[x] = ~v~n" (stddev xs (ann ws (Sequenceof Real))))))
 
-;; Test: Normal-Normal model with more observations
+#;; Test: Normal-Normal model with more observations
 ;; Density plot, mean, and stddev should be similar to those produced by `normal-normal/lw'
 (begin
   (interval-max-splits 2)
